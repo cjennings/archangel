@@ -1,0 +1,360 @@
+#+TITLE: Claude Code Protocols
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-05
+
+* About This File
+
+This file contains instructions and protocols for how Claude should behave when working with Craig. These protocols are consistent across all projects.
+
+**When to read this:**
+- At the start of EVERY session (before NOTES.org)
+- Before making any significant decisions
+- When unclear about user preferences or conventions
+
+**What's in this file:**
+- Session management protocols (context files, compacting)
+- Terminology and trigger phrases
+- User information and preferences
+- Git commit requirements
+- File format and naming conventions
+
+**What's NOT in this file:**
+- Project-specific context (see NOTES.org)
+- Session history (see NOTES.org)
+- Active reminders (see NOTES.org)
+- Pending decisions (see NOTES.org)
+
+* IMPORTANT - MUST DO
+
+** CRITICAL: Session Context File (docs/session-context.org)
+
+***THIS IS NON-NEGOTIABLE. FAILURE TO MAINTAIN THIS FILE CAUSES LOST WORK.***
+
+The session context file is your lifeline for crash recovery. Without it, interrupted sessions lose all context.
+
+*** Location
+=docs/session-context.org= (always this exact path)
+
+*** When to Update - EVERY OTHER EXCHANGE
+After every other interaction with Craig, update the session context file. This is not optional. Set a mental counter: respond, respond, UPDATE FILE, respond, respond, UPDATE FILE.
+
+*** What to Include
+- Current task/goal being worked on
+- Key decisions made this session
+- Data collected (vitals, measurements, etc.)
+- Files modified
+- Next steps planned
+- Any context needed to resume if session crashes
+
+*** Why This Matters
+If the power goes out, the network drops, or Claude crashes, the ONLY way to recover context is this file. Session history in NOTES.org is written at wrap-up - if we never reach wrap-up, that context is LOST unless it's in session-context.org.
+
+*** At Session Start - CHECK FOR THIS FILE
+If =docs/session-context.org= exists when starting a new session, it means the previous session was interrupted. Read it immediately to recover context.
+
+** Before Compacting
+If you know you're about to compact, update the session context file FIRST, with enough detail that you can pick up the discussion without having lost any essential information.
+
+** After Compacting
+Review the session context file to make sure you aren't forgetting key aspects of our discussion or plan, then continue working with the user.
+
+** When Session Ends (Wrap-Up Workflow)
+Write your session summary to NOTES.org, leveraging the session context file. Delete session-context.org ONLY AFTER you've written the session history entry. The file's existence indicates an interrupted session, so it must be deleted at the end of each successful wrap-up.
+
+* Important Terminology
+
+** "Let's run the [X] workflow" vs "I want to create an [X] workflow"
+
+These phrases mean DIFFERENT things!
+
+*** "Let's run/do the [workflow name] workflow"
+This means: **Execute the existing workflow** for that process.
+
+*Example:*
+- "Let's run the refactor workflow" -> Read docs/workflows/refactor.org and guide through workflow
+- "Let's do a refactor workflow" -> Same as above
+
+*** "I want to create an [X] workflow"
+This means: **CREATE a new workflow definition** for doing X (meta-work).
+This does **NOT** mean "let's DO X right now."
+
+*Example:*
+- "I want to create a refactor workflow" -> Create docs/workflows/refactor.org using create-workflow process
+
+When Craig uses this phrasing, trigger the create-workflow process from docs/workflows/create-workflow.org.
+
+** "Wrap it up" / "That's a wrap" / "Let's call it a wrap"
+
+Execute the wrap-up workflow (details in Session Protocols section below):
+1. Write session notes to NOTES.org
+2. Git commit and push all changes
+3. Valediction summary
+
+* User Information
+
+** Calendar Location
+Craig's calendar is available at: =/home/cjennings/sync/org/gcal.org=
+
+Use this to:
+- Check meeting times and schedules
+- Verify when events occurred
+- See what's upcoming
+
+If there are tasks or events to schedule, put them in the todo.org file in the project root, not in Craig's calendar.
+
+** Task List Location
+Craig's global task list is available at: =/home/cjennings/sync/org/roam/inbox.org=
+
+Use this to:
+- See all the tasks that he's working on outside of projects like this one
+
+**Note:** Some projects may have a project-specific task file (e.g., =todo.org= at project root). Check NOTES.org for project-specific task locations.
+
+** Working Style
+
+*** General Preferences
+- Prefers detailed preparation before high-stakes meetings
+- Values practice/role-play for negotiations and general learning
+- Makes decisions based on principles and timeline arguments
+- Prefers written documentation over verbal agreements
+
+*** Emacs as a Primary Working Tool
+- Craig uses Emacs as his primary tool (most everything Craig does is inside Emacs)
+- Consider Emacs packages along with other software when recommending software solutions
+- Look for ways to streamline routine work with Emacs custom code if no packages exist
+
+** Miscellaneous Information
+- Craig currently lives in New Orleans, LA
+- Craig's phone number: 510-316-9357
+- Craig maintains a remote server at the cjennings.net domain
+- This project is in a git repository which is associated with a remote repository on cjennings.net
+
+** Shell Functions - Alarms
+
+Craig has a shell function for setting reminders.
+
+**IMPORTANT:** Always check the current date and time (=date=) before setting alarms to ensure accurate calculations.
+
+*** alarm (PERSISTENT - use for reminders)
+Sets an alarm at a specific time using the =at= daemon. Persists after session ends.
+#+begin_example
+alarm 10:10am "Take BP reading"
+alarm 2:00pm "Leave for PT"
+#+end_example
+
+*** Managing alarms
+- =atq= - list all scheduled alarms
+- =atrm [number]= - remove an alarm by its queue number
+
+* Session Protocols
+
+** CRITICAL: Git Commit Requirements
+
+***IMPORTANT: ALL commits must be made as Craig, NOT as Claude.***
+
+***CRITICAL: NO Claude Code or Anthropic attribution ANYWHERE in commits.***
+
+When creating commits:
+
+1. **Author Identity**: NEVER commit as Claude. All commits must use Craig's identity.
+   - Git will use the configured user.name and user.email
+   - Do NOT modify git config
+   - **ABSOLUTELY NO** Co-Authored-By lines
+   - **ABSOLUTELY NO** "Generated with Claude Code" text
+   - **ABSOLUTELY NO** Anthropic attribution of any kind
+   - Write commits AS CRAIG, not as Claude Code
+
+2. **Commit Message Format**:
+   - Use project-specific commit format if defined
+   - Otherwise: concise subject line and terse description only
+   - **ONLY subject line and terse description - NO Claude Code attribution**
+   - Keep messages clear and informative
+
+3. **Validation**:
+   - Claude should validate commit message format before committing
+   - Ensure no AI attribution appears anywhere in commit
+
+** IMPORTANT: Reminders Protocol
+
+When starting a new session:
+- Check "Active Reminders" section in NOTES.org
+- Remind Craig of outstanding tasks he's asked to be reminded about
+- This ensures important follow-up actions aren't forgotten between sessions
+
+When Craig says "remind me" about something:
+1. Add it to Active Reminders section in NOTES.org
+2. If it's something he needs to DO, also add to the todo.org file in the project root as an org-mode task (e.g., =* TODO [description]=). If this project does not have a todo.org at the project root, alert Craig and offer to create it.
+3. If not already provided, ask for the priority and a date for scheduled or deadline.
+
+** Workflows: "Let's run/do the [workflow name] workflow"
+
+When Craig says this phrase:
+
+1. **Check for exact match** in docs/workflows/ directory
+   - If exact match found: Read =docs/workflows/[workflow-name].org= and guide through process
+   - Example: "refactor workflow" -> read docs/workflows/refactor.org
+
+2. **If no exact match but similar word exists:** Ask for clarification
+   - Example: User says "empty inbox" but we have "inbox-zero.org"
+   - Ask: "Did you mean the 'inbox zero' workflow, or create new 'empty inbox'?"
+
+3. **If no match at all:** Offer to create it
+   - Say: "I don't see '[workflow-name]' yet. Create it using create-workflow process?"
+   - If yes: Run create-workflow to define it, then use immediately (validates new workflow)
+
+** "Wrap it up" / "That's a wrap" / "Let's call it a wrap"
+
+When Craig says any of these phrases (or variations), execute wrap-up workflow:
+
+1. **Write session notes** to NOTES.org (Session History section)
+   - Key decisions made
+   - Work completed
+   - Context needed for next session
+   - Any pending issues or blockers
+   - New conventions or preferences learned
+   - Critical reminders for tomorrow go in Active Reminders section
+
+2. **Git commit and push** (if project is in git repository)
+   - Check git status and diff
+   - Create commit message following requirements (see "Git Commit Requirements" above)
+   - **ONLY subject line and terse description - NO Claude Code attribution**
+   - Commit as Craig (NOT as Claude)
+   - **ABSOLUTELY NO** Co-Authored-By, Claude Code, or Anthropic attribution
+   - Push to ALL remotes (check with =git remote -v=)
+   - Ensure working tree is clean
+   - Confirm push succeeded to all remotes
+
+3. **Valediction** - Brief, warm goodbye
+   - Acknowledge the day's work
+   - What was accomplished
+   - What's ready for next session
+   - Any important reminders
+   - Keep it warm but concise
+
+This ensures clean handoff between sessions and nothing gets lost.
+
+** The docs/ Directory
+
+Claude needs to add information to NOTES.org. For large amounts of information:
+
+- Create separate document in docs/ directory
+- Link it in NOTES.org with explanation of document's purpose
+- **Project-specific decision:** Should docs/ be committed to git or added to .gitignore?
+  - Ask Craig on first session if not specified
+  - Some projects keep docs/ private, others commit it
+- Unless specified otherwise, all Claude-generated documents go in docs/ folder
+
+**When to break out documents:**
+- If NOTES.org gets very large (> 1500 lines)
+- If information isn't all relevant anymore
+- Example: Keep only last 3-4 months of session history here, move rest to separate file
+
+* File Format Preferences
+
+** ALWAYS Use Org-Mode Format
+
+Craig uses Emacs as primary tool. **ALWAYS** create new documentation files in =.org= format, not =.md= (markdown).
+
+*Rationale:*
+- Org-mode files are well-supported in Emacs
+- Can be easily exported to any other format (HTML, PDF, Markdown, etc.)
+- Better integration with user's workflow
+
+*Exception:* Only use .md if specifically requested or if file is intended for GitHub/web display where markdown is expected.
+
+** NEVER Use Spaces in Filenames
+
+**ALWAYS** use hyphens (=-=) to separate words in filenames. Underscores (=_=) are also acceptable.
+
+*Rationale:*
+- Spaces cause problems with links across different operating systems
+- User works with Mac, Windows, Linux, and potentially other systems
+- Hyphens create more reliable, portable filenames
+- Easier to work with in command-line tools
+
+*Examples:*
+- Good: =project-meeting-notes.org=
+- Good: =change-log-2025-11-04.md=
+- Bad: =project meeting notes.org=
+- Bad: =change log 2025.11.04.md=
+
+* File Naming Conventions
+
+** Files Too Large to Read
+
+PDFs or other files that are too large for Claude to read should be prefixed with =TOOLARGE-= to prevent read errors that halt the session.
+
+Example:
+- Original: =assets/large-architectural-plans.pdf=
+- Renamed: =assets/TOOLARGE-large-architectural-plans.pdf=
+
+** Unreadable Binary Files (.docx Format)
+
+Binary .docx files cannot be read directly by Claude. When encountering these:
+- Convert to markdown format using pandoc: =pandoc file.docx -o file.md=
+- Keep the original .docx file for reference
+- Work with the converted .md file for analysis and editing
+
+** CRITICAL: Always Keep Links Current
+
+Many documents are linked in org files using org-mode =file:= links. Craig relies on these links being valid at all times.
+
+**MANDATORY WORKFLOW - When renaming or moving ANY file:**
+
+1. **BEFORE renaming:** Search ALL org files for references to that file
+   - Use grep or search tools to find both filename and partial matches
+   - Check in TODO items and event log sections
+
+2. **Rename or move the file**
+
+3. **IMMEDIATELY AFTER:** Update ALL =file:= links to new path/filename
+   - Update links in task files
+   - Update links in event logs
+   - Update links in reference sections
+
+4. **Verify:** Test a few updated links to ensure they point to valid files
+
+Example workflow:
+#+begin_example
+# Step 1: Search before renaming
+grep -rn "2025-10-15-invoice.pdf" *.org
+
+# Step 2: Rename the file
+mv documents/2025-10-15-invoice.pdf documents/2025-10-15-vendor-invoice.pdf
+
+# Step 3: Update all references in affected .org files
+# Edit to change:
+#   file:documents/2025-10-15-invoice.pdf
+# to:
+#   file:documents/2025-10-15-vendor-invoice.pdf
+
+# Step 4: Verify links work
+#+end_example
+
+*Why This is Critical:*
+- Org files are primary task tracking and reference system
+- Event logs document complete history with file references
+- Craig depends on clicking links to access documents quickly
+- Broken links disrupt workflow and make documentation unreliable
+
+**NEVER rename or move files without updating links in the same session.**
+
+* Session Start - AUTOMATIC
+
+**IMPORTANT: At the start of EVERY session, Claude MUST:**
+
+1. **Read this file (protocols.org)** - You're doing this now
+2. **Read NOTES.org** - For project-specific context, reminders, and history
+3. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
+
+**Do NOT ask** if Craig wants to run the session-start workflow. Just do it automatically and report the results.
+
+The session-start workflow includes:
+- Checking for interrupted previous sessions
+- Syncing with templates
+- Scanning available workflows
+- Processing inbox
+- Surfacing active reminders
+- Asking about priorities
+
+See [[file:workflows/session-start.org][session-start.org]] for full details.

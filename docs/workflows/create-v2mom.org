@@ -1,0 +1,691 @@
+#+TITLE: Creating a V2MOM Strategic Framework
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-05
+
+* Overview
+
+This session creates a V2MOM (Vision, Values, Methods, Obstacles, Metrics) strategic framework for any project or goal. V2MOM provides clarity for decision-making, ruthless prioritization, and measuring progress. It transforms vague intentions into concrete action plans.
+
+The framework originated at Salesforce and works for any domain: personal projects, business strategy, health goals, financial planning, software development, or life planning.
+
+* Problem We're Solving
+
+Without a strategic framework, projects suffer from:
+
+** Unclear Direction
+- "Get healthier" or "improve my finances" is too vague to act on
+- Every idea feels equally important
+- No principled way to say "no" to distractions
+- Difficult to know what to work on next
+
+** Priority Inflation
+- Everything feels urgent or important
+- Research and planning without execution
+- Hard to distinguish signal from noise
+- Active todo list grows beyond manageability
+
+** No Decision Framework
+- When faced with choice between A and B, no principled way to decide
+- Debates about approach waste time
+- Second-guessing decisions after making them
+- Perfectionism masquerading as thoroughness
+
+** Unmeasurable Progress
+- Can't tell if work is actually making things better
+- No objective way to know when you're "done"
+- Metrics are either absent or vanity metrics
+- Difficult to celebrate wins or identify blockers
+
+*Impact:* Unfocused work, slow progress, frustration, and the nagging feeling that you're always working on the wrong thing.
+
+* Exit Criteria
+
+The V2MOM is complete when:
+
+1. **All 5 sections are filled with concrete content:**
+   - Vision: Clear, aspirational picture of success
+   - Values: 2-4 principles that guide decisions
+   - Methods: 4-7 concrete approaches with specific actions
+   - Obstacles: Honest personal/technical challenges
+   - Metrics: Measurable outcomes (not vanity metrics)
+
+2. **You can use it for decision-making:**
+   - Can answer "does X fit this V2MOM?" quickly
+   - Provides clarity on priorities (Method 1 > Method 2 > etc.)
+   - Identifies what NOT to do
+
+3. **Both parties agree it's ready:**
+   - Feels complete, not rushed
+   - Actionable enough to start execution
+   - Honest about obstacles (not sugar-coated)
+
+*Measurable validation:*
+- Can you articulate the vision in one sentence?
+- Do the values help you say "no" to things?
+- Are methods ordered by priority?
+- Can you immediately identify 3-5 tasks from Method 1?
+- Do metrics tell you if you're succeeding?
+
+* When to Use This Session
+
+Trigger this V2MOM creation workflow when:
+
+- Starting a significant project (new business, new habit, new system)
+- Existing project has accumulated many competing priorities without clear focus
+- You find yourself constantly context-switching between ideas
+- Someone asks "what are you trying to accomplish?" and answer is vague
+- You want to apply ruthless prioritization but lack framework
+- Annual/quarterly planning for ongoing projects or life goals
+
+*V2MOM is particularly valuable for:*
+- Personal infrastructure projects (tooling, systems, workflows)
+- Health and fitness goals
+- Financial planning and wealth building
+- Software package development
+- Business strategy
+- Career development
+- Any long-running project where you're making the decisions
+
+* Approach: How We Work Together
+
+** Phase 1: Understand the V2MOM Framework
+
+Before starting, ensure both parties understand what each section means:
+
+- *Vision:* What you want to achieve (aspirational, clear picture of success)
+- *Values:* Principles that guide decisions (2-4 values, defined concretely)
+- *Methods:* How you'll achieve the vision (4-7 approaches, ordered by priority)
+- *Obstacles:* What's in your way (honest, personal, specific)
+- *Metrics:* How you'll measure success (objective, not vanity metrics)
+
+*Important:* V2MOM sections are completed IN ORDER. Vision informs Values. Values inform Methods. Methods reveal Obstacles. Everything together defines Metrics.
+
+** Phase 2: Create the Document Structure
+
+1. Create file: =docs/[project-name]-v2mom.org= or appropriate location
+2. Add metadata: #+TITLE, #+AUTHOR, #+DATE, #+FILETAGS
+3. Create section headings for all 5 components
+4. Add "What is V2MOM?" overview section at top
+
+*Save incrementally:* V2MOM discussions can be lengthy. Save after completing each section to prevent data loss.
+
+** Phase 3: Define the Vision
+
+*Ask:* "What do you want to achieve? What does success look like?"
+
+*Goal:* Get a clear, aspirational picture. Should be 1-3 paragraphs describing the end state.
+
+*Claude's role:*
+- Help articulate what's described
+- Push for specificity ("works great" → what specifically works?)
+- Identify scope (what's included, what's explicitly out of scope)
+- Capture concrete examples mentioned
+
+*Good vision characteristics:*
+- Paints a picture you can visualize
+- Describes outcomes, not implementation
+- Aspirational but grounded in reality
+- Specific enough to know what's included
+
+*Examples across domains:*
+- Health: "Wake up with energy, complete a 5K without stopping, feel strong in daily activities, and have stable mood throughout the day"
+- Finance: "Six months emergency fund, debt-free except mortgage, automatic retirement savings, and financial decisions that don't cause anxiety"
+- Software: "A package that integrates seamlessly, has comprehensive documentation, handles edge cases gracefully, and maintainers of other packages want to depend on"
+
+*Time estimate:* 15-30 minutes if vision is mostly clear; 45-60 minutes if needs exploration
+
+** Phase 4: Define the Values
+
+*Ask:* "What principles guide your decisions? When faced with choice A vs B, what values help you decide?"
+
+*Goal:* Identify 2-4 values with concrete definitions and examples.
+
+*Claude's role:*
+- Suggest values based on vision discussion
+- Push for concrete definitions (not just the word, but what it MEANS)
+- Help distinguish between overlapping values
+- Identify when examples contradict stated values
+
+*Common pitfall:* Listing generic words without defining them.
+- Bad: "Quality, Speed, Innovation"
+- Good: "Sustainable means can maintain this for 10+ years without burning out. No crash diets, no 80-hour weeks, no technical debt I can't service."
+
+*For each value, capture:*
+1. **The value name** (1-2 words)
+2. **Definition** (what this means in context of this project)
+3. **Concrete examples** (how this manifests)
+4. **What breaks this value** (anti-patterns)
+
+*Method:*
+- Start with 3-5 candidate values
+- For each one, ask: "What does [value] mean to you in this context?"
+- Discuss until definition is concrete
+- Write definition with examples
+- Refine/merge/remove until 2-4 remain
+
+*Examples across domains:*
+- Health V2MOM: "Sustainable: Can do this at 80 years old. No extreme diets. Focus on habits that compound over decades."
+- Finance V2MOM: "Automatic: Set up once, runs forever. Don't rely on willpower for recurring decisions. Automate savings and investments."
+- Software V2MOM: "Boring: Use proven patterns. No clever code. Maintainable by intermediate developers. Boring is reliable."
+
+*Time estimate:* 30-45 minutes
+
+** Phase 5: Define the Methods
+
+*Ask:* "How will you achieve the vision? What approaches will you take?"
+
+*Goal:* Identify 4-7 methods (concrete approaches) ordered by priority.
+
+*Claude's role:*
+- Extract methods from vision and values discussion
+- Help order by priority (what must happen first?)
+- Ensure methods are actionable (not just categories)
+- Push for concrete actions under each method
+- Watch for method ordering that creates dependencies
+
+*Structure for each method:*
+1. **Method name** (verb phrase: "Build X", "Eliminate Y", "Establish Z")
+2. **Aspirational description** (1-2 sentences: why this matters)
+
+*Method ordering matters:*
+- Method 1 should be highest priority (blocking everything else)
+- Lower-numbered methods should enable higher-numbered ones
+- Common patterns:
+  - Fix → Stabilize → Build → Enhance → Sustain
+  - Eliminate → Replace → Optimize → Automate → Maintain
+  - Learn → Practice → Apply → Teach → Systematize
+
+*Examples across domains:*
+
+Health V2MOM:
+- Method 1: Eliminate Daily Energy Drains (fix sleep, reduce inflammatory foods, address vitamin deficiencies)
+- Method 2: Build Baseline Strength (3x/week resistance training, progressive overload, focus on compound movements)
+- Method 3: Establish Sustainable Nutrition (meal prep system, protein targets, vegetable servings)
+
+Finance V2MOM:
+- Method 1: Stop the Bleeding (identify and eliminate wasteful subscriptions, high-interest debt, impulse purchases)
+- Method 2: Build the Safety Net (automate savings, reach $1000 emergency fund, then 3 months expenses)
+- Method 3: Invest for the Future (max employer 401k match, open IRA, set automatic contributions)
+
+Software Package V2MOM:
+- Method 1: Nail the Core Use Case (solve one problem extremely well, clear documentation, handles errors gracefully)
+- Method 2: Ensure Quality and Stability (comprehensive test suite, CI/CD, semantic versioning)
+- Method 3: Build Community and Documentation (contribution guide, examples, responsive to issues)
+
+*Method Ordering is Flexible:* After defining all methods, you may realize the ordering is wrong. For example, security (Method 5) might be more important than tool modernization (Method 4). Methods can be swapped - the order represents priority, so getting it right matters more than preserving the initial order.
+
+*Time estimate:* 45-90 minutes (longest section)
+
+** Phase 5.6: Brainstorm Additional Tasks for Each Method
+
+Brainstorm what's missing to achieve the method.
+
+*Ask:* "What else would help achieve this method's goal?"
+
+*Claude's role:*
+- Suggest additional tasks based on method's aspirational description
+- Consider edge cases and error scenarios
+- Identify automation opportunities
+- Propose monitoring/visibility improvements
+- Challenge if list feels incomplete, meaning the list isn't sufficient to reach the goal
+- Challenge if the list feels too much, meaning items on the list aren't necessary to reach the goal
+- Create sub-tasks using *** for items with multiple steps
+- Ensure priorities reflect contribution to method goal
+
+*For each brainstormed task:*
+- Describe what it does and why it matters
+- Assign priority based on contribution to method
+- Add technical details if known
+- Get user agreement before adding
+
+
+*Priority System:*
+- [#A]: Critical blockers - must be done first, blocks everything else
+- [#B]: High-impact reliability - directly enables method goal
+- [#C]: Quality improvements - valuable but not blocking
+- [#D]: Nice-to-have - low priority, can defer
+   
+
+*Time estimate:* 10-15 minutes per method (50-75 minutes for 5 methods)
+
+** Phase 6: Identify the Obstacles
+
+*Ask:* "What's in your way? What makes this hard?"
+
+*Goal:* Honest, specific obstacles (both personal and technical/external).
+
+*Claude's role:*
+- Encourage honesty (obstacles are not failures, they're reality)
+- Help distinguish between symptoms and root causes
+- Identify patterns in behavior that create obstacles
+- Acknowledge challenges without judgment
+
+*Good obstacle characteristics:*
+- Honest about personal patterns
+- Specific, not generic
+- Acknowledges both internal and external obstacles
+- States real stakes (not just "might happen")
+
+*Common obstacle categories:*
+- Personal: perfectionism, hard to say no, gets bored, procrastinates
+- Knowledge: missing skills, unclear how to proceed, need to learn
+- External: limited time, limited budget, competing priorities
+- Systemic: environmental constraints, lack of tools, dependencies on others
+
+*For each obstacle:*
+- Name it clearly
+- Describe how it manifests in this project
+- Acknowledge the stakes (what happens because of this obstacle)
+
+*Examples across domains:*
+
+Health V2MOM obstacles:
+- "I get excited about new workout programs and switch before seeing results (pattern: 6 weeks into a program)"
+- "Social events involve food and alcohol - saying no feels awkward and isolating"
+- "When stressed at work, I skip workouts and eat convenient junk food"
+
+Finance V2MOM obstacles:
+- "Viewing budget as restriction rather than freedom - triggers rebellion and impulse spending"
+- "Fear of missing out on lifestyle experiences my peers have"
+- "Limited financial literacy - don't understand investing beyond 'put money in account'"
+
+Software Package V2MOM obstacles:
+- "Perfectionism delays releases - always 'one more feature' before v1.0"
+- "Maintaining documentation feels boring compared to writing features"
+- "Limited time (2-4 hours/week) and competing projects"
+
+*Time estimate:* 15-30 minutes
+
+** Phase 7: Define the Metrics
+
+*Ask:* "How will you measure success? What numbers tell you if this is working?"
+
+*Goal:* 5-10 metrics that are objective, measurable, and aligned with vision/values.
+
+*Claude's role:*
+- Suggest metrics based on vision, values, and methods
+- Push for measurable numbers (not "better", but concrete targets)
+- Identify vanity metrics (look good but don't measure real progress)
+- Ensure metrics align with values and methods
+
+*Metric categories:*
+- **Performance metrics:** Measurable outcomes of the work
+- **Discipline metrics:** Process adherence, consistency, focus
+- **Quality metrics:** Standards maintained, sustainability indicators
+
+*Good metric characteristics:*
+- Objective (not subjective opinion)
+- Measurable (can actually collect the data)
+- Actionable (can change behavior to improve it)
+- Aligned with values and methods
+
+*For each metric:*
+- Name it clearly
+- Specify current state (if known)
+- Specify target state
+- Describe how to measure it
+- Specify measurement frequency
+
+*Examples across domains:*
+
+Health V2MOM metrics:
+- Resting heart rate: 70 bpm → 60 bpm (measure: daily via fitness tracker)
+- Workout consistency: 3x/week strength training for 12 consecutive weeks
+- Sleep quality: 7+ hours per night 6+ nights per week (measure: sleep tracker)
+- Energy rating: subjective 1-10 scale, target 7+ average over week
+
+Finance V2MOM metrics:
+- Emergency fund: $0 → $6000 (measure: monthly)
+- High-interest debt: $8000 → $0 (measure: monthly)
+- Savings rate: 5% → 20% of gross income (measure: monthly)
+- Financial anxiety: weekly check-in, target "comfortable with financial decisions"
+
+Software Package V2MOM metrics:
+- Test coverage: 0% → 80% (measure: coverage tool)
+- Issue response time: median < 48 hours (measure: GitHub stats)
+- Documentation completeness: all public APIs documented with examples
+- Adoption: 10+ GitHub stars, 3+ projects depending on it
+
+*Time estimate:* 20-30 minutes
+
+** Phase 8: Migrate Existing Tasks (If Applicable)
+
+If you have an existing TODO.org file with tasks, migrate them into the V2MOM methods.
+
+*Goal:* Consolidate all project tasks under V2MOM methods, eliminate duplicates, move non-fitting items to someday-maybe.
+
+*Process:*
+
+1. **Identify Duplicates:**
+   - Read existing TODO.org
+   - Find tasks already in V2MOM methods
+   - Check if V2MOM task has all technical details from TODO version
+   - Enhance V2MOM task with any missing details
+   - Mark TODO task for deletion
+
+2. **Map Tasks to Methods:**
+   - For each remaining TODO task, ask: "Which method does this serve?"
+   - Add task under appropriate method with priority
+   - Capture all technical details from original task
+   - If task has state (DOING, VERIFY), preserve that state
+
+3. **Review Someday-Maybe Candidates One-by-One:**
+   Present each task that doesn't fit methods and ask:
+   - Keep in V2MOM (which method)?
+   - Move to someday-maybe?
+   - Delete entirely?
+
+*Decision Criteria for Someday-Maybe:*
+- Doesn't directly serve any method's goal
+- Nice-to-have enhancement without clear benefit
+- Research task without actionable outcome
+- Architectural change decided not to pursue
+- Personal task not related to project
+
+*Keep in V2MOM (don't move to someday-maybe):*
+- DOING tasks - work in progress must continue
+- VERIFY tasks - need testing/verification
+- Tasks that enable method goals
+
+*Delete entirely:*
+- Obsolete tasks (feature removed, problem solved elsewhere)
+- Duplicate of something already done
+- Task that no longer makes sense
+
+*For each task decision:*
+- Present task with full context
+- Wait for user decision
+- Don't batch - review one by one
+- Capture reasoning for future reference
+
+4. **Final Steps:**
+   - Append someday-maybe items to docs/someday-maybe.org
+   - Copy completed V2MOM to TODO.org (overwrite)
+   - V2MOM is now the single source of truth
+
+*Time estimate:* Highly variable
+- Small TODO.org (20 tasks): 30-45 minutes
+- Medium TODO.org (50 tasks): 60-90 minutes
+- Large TODO.org (100+ tasks): 2-3 hours
+
+*Note:* This phase is optional - only needed if existing TODO.org has substantial content to migrate.
+
+** Phase 9: Review and Refine
+
+Once all sections are complete (including task migration if applicable), review the whole V2MOM together:
+
+*Ask together:*
+1. **Does the vision excite you?** (If not, why not? What's missing?)
+2. **Do the values guide decisions?** (Can you use them to say no to things?)
+3. **Are the methods ordered by priority?** (Is Method 1 truly most important?)
+4. **Are the obstacles honest?** (Or are you sugar-coating?)
+5. **Will the metrics tell you if you're succeeding?** (Or are they vanity metrics?)
+6. **Does this V2MOM make you want to DO THE WORK?** (If not, something is wrong)
+
+*Refinement:*
+- Merge overlapping methods
+- Reorder methods if priorities are wrong
+- Add missing concrete actions
+- Strengthen weak definitions
+- Remove fluff
+
+*Red flags:*
+- Vision doesn't excite you → Need to dig deeper into what you really want
+- Values are generic → Need concrete definitions and examples
+- Methods have no concrete actions → Too vague, need specifics
+- Obstacles are all external → Need honesty about personal patterns
+- Metrics are subjective → Need objective measurements
+
+** Phase 10: Commit and Use
+
+Once the V2MOM feels complete:
+
+1. **Save the document** in appropriate location
+2. **Share with stakeholders** (if applicable)
+3. **Use it immediately** (start Method 1 execution or first triage)
+4. **Schedule first review** (1 week out: is this working?)
+
+*Why use immediately:* Validates the V2MOM is practical, not theoretical. Execution reveals gaps that discussion misses.
+
+* Principles to Follow
+
+** Honesty Over Aspiration
+
+V2MOM requires brutal honesty, especially in Obstacles section.
+
+*Examples:*
+- "I get bored after 6 weeks" (honest) vs "Maintaining focus is challenging" (bland)
+- "I have 3 hours per week max" (honest) vs "Time is limited" (vague)
+- "I impulse-spend when stressed" (honest) vs "Budget adherence needs work" (passive)
+
+**Honesty enables solutions.** If you can't name the obstacle, you can't overcome it.
+
+** Concrete Over Abstract
+
+Every section should have concrete examples and definitions.
+
+*Bad:*
+- Vision: "Be successful"
+- Values: "Quality, Speed, Innovation"
+- Methods: "Improve things"
+- Metrics: "Do better"
+
+*Good:*
+- Vision: "Complete a 5K in under 30 minutes, have energy to play with kids after work, sleep 7+ hours consistently"
+- Values: "Sustainable: Can maintain for 10+ years. No crash diets, no injury-risking overtraining."
+- Methods: "Method 1: Fix sleep quality (blackout curtains, consistent bedtime, no screens 1hr before bed)"
+- Metrics: "5K time: current 38min → target 29min (measure: monthly timed run)"
+
+** Priority Ordering is Strategic
+
+Method ordering determines what happens first. Get it wrong and you'll waste effort.
+
+*Common patterns:*
+- **Fix → Build → Enhance → Sustain** (eliminate problems before building)
+- **Eliminate → Replace → Optimize** (stop damage before improving)
+- **Learn → Practice → Apply → Teach** (build skill progressively)
+
+*Why Method 1 must address the blocker:*
+- If foundation is broken, can't build on it
+- High-impact quick wins build momentum
+- Must stop the bleeding before starting rehab
+
+** Methods Need Concrete Actions
+
+If you can't list 3-8 concrete actions for a method, it's too vague.
+
+*Test:* Can you start working on Method 1 immediately after completing the V2MOM?
+
+If answer is "I need to think about what to do first", the method needs more concrete actions.
+
+*Example:*
+- Too vague: "Method 1: Improve health"
+- Concrete: "Method 1: Fix sleep quality → blackout curtains, consistent 10pm bedtime, no screens after 9pm, magnesium supplement, sleep tracking"
+
+** Metrics Must Be Measurable
+
+"Better" is not a metric. "Bench press 135 lbs" is a metric.
+
+*For each metric, you must be able to answer:*
+1. How do I measure this? (exact method or tool)
+2. What's the current state?
+3. What's the target state?
+4. How often do I measure it?
+5. What does this metric actually tell me?
+
+If you can't answer these, it's not a metric yet.
+
+** V2MOM is Living Document
+
+V2MOM is not set in stone. As you execute:
+
+- Methods may need reordering (new information reveals priorities)
+- Metrics may need adjustment (too aggressive or too conservative)
+- New obstacles emerge (capture them)
+- Values get refined (concrete examples clarify definitions)
+
+*Update the V2MOM when:*
+- Major priority shift occurs
+- New obstacle emerges that changes approach
+- Metric targets prove unrealistic or too easy
+- Method completion opens new possibilities
+- Quarterly review reveals misalignment
+
+*But don't update frivolously:* Changing the V2MOM every week defeats the purpose. Update when major shifts occur, not when minor tactics change.
+
+** Use It or Lose It
+
+V2MOM only works if you use it for decisions.
+
+*Use it for:*
+- Weekly reviews (am I working on right things?)
+- Priority decisions (which method does this serve?)
+- Saying no to distractions (not in the methods)
+- Celebrating wins (shipped Method 1 items!)
+- Identifying blockers (obstacles getting worse?)
+
+*If 2 weeks pass without referencing the V2MOM, something is wrong.* Either the V2MOM isn't serving you, or you're not using it.
+
+* Living Document
+
+This is a living document. After creating V2MOMs for different projects, consider:
+- Did the process work well?
+- Were any sections harder than expected?
+- Did we discover better questions to ask?
+- Should sections be created in different order?
+- What patterns emerge across different domains?
+
+Update this session document with learnings to make future V2MOM creation smoother.
+
+* Examples: V2MOMs Across Different Domains
+
+** Example 1: Health and Fitness V2MOM (Brief)
+
+*Vision:* Wake up with energy, complete 5K comfortably, feel strong in daily activities, stable mood, no afternoon crashes.
+
+*Values:*
+- Sustainable: Can do this at 80 years old
+- Compound: Small daily habits over quick fixes
+
+*Methods:*
+1. Fix Sleep Quality (blackout curtains, consistent bedtime, track metrics)
+2. Build Baseline Strength (3x/week, compound movements, progressive overload)
+3. Establish Nutrition System (meal prep, protein targets, hydration)
+
+*Obstacles:*
+- Get excited about new programs, switch before results (6-week pattern)
+- Social events involve alcohol and junk food
+- Skip workouts when stressed at work
+
+*Metrics:*
+- Resting heart rate: 70 → 60 bpm
+- Workout consistency: 3x/week for 12 consecutive weeks
+- 5K time: 38min → 29min
+
+** Example 2: Financial Independence V2MOM (Brief)
+
+*Vision:* Six months emergency fund, debt-free except mortgage, automatic investing, financial decisions without anxiety.
+
+*Values:*
+- Automatic: Set up once, runs forever (don't rely on willpower)
+- Freedom: Budget enables choices, not restricts them
+
+*Methods:*
+1. Stop the Bleeding (eliminate subscriptions, high-interest debt, impulse purchases)
+2. Build Safety Net ($1000 emergency fund → 3 months → 6 months)
+3. Automate Investing (max 401k match, IRA, automatic contributions)
+
+*Obstacles:*
+- View budget as restriction → triggers rebellion spending
+- FOMO on experiences peers have
+- Limited financial literacy
+
+*Metrics:*
+- Emergency fund: $0 → $6000
+- Savings rate: 5% → 20%
+- High-interest debt: $8000 → $0
+
+** Example 3: Emacs Configuration V2MOM (Detailed)
+
+This V2MOM was created over 2 sessions in late 2025 and led to significant improvements in config quality and maintainability.
+
+*** The Context
+
+Craig's Emacs configuration had grown to ~50+ todo items, unclear priorities, and performance issues. Config was his most-used software (email, calendar, tasks, programming, reading, music) so breakage blocked all work.
+
+*** The Process (2 Sessions, ~2.5 Hours Total)
+
+*Session 1 (2025-10-30, ~1 hour):*
+- Vision: Already clear from existing draft, kept as-is
+- Values: Deep Q&A to define "Intuitive", "Fast", "Simple"
+  - Each value got concrete definition + examples + anti-patterns
+  - Intuitive: muscle memory + mnemonics + which-key timing
+  - Fast: < 3s startup, org-agenda is THE BOTTLENECK
+  - Simple: production practices, simplicity produces reliability
+
+*Session 2 (2025-10-31, ~1.5 hours):*
+- Methods: Identified 6 methods through Q&A
+  - Method 1: Make Using Emacs Frictionless (fix daily pain)
+  - Method 2: Stop Problems Before They Appear (stability)
+  - Method 3: Make Fixing Emacs Frictionless (tooling)
+  - Method 4: Contribute to Ecosystem (package maintenance)
+  - Method 5: Be Kind To Future Self (new features)
+  - Method 6: Develop Disciplined Practices (meta-method)
+- Obstacles: Honest personal patterns
+  - "Getting irritated at mistakes and pushing on"
+  - "Hard to say no to fun ideas"
+  - "Perfectionism delays shipping"
+- Metrics: Measurable outcomes
+  - Startup time: 6.2s → < 3s
+  - Org-agenda rebuild: 30s → < 5s
+  - Active todos: 50+ → < 20
+  - Weekly triage consistency
+  - Research:shipped ratio > 1:1
+
+*** Immediate Impact
+
+After completing V2MOM:
+- Ruthlessly triaged 50 todos → 23 (under < 20 target)
+- Archived items not serving vision to someday-maybe.org
+- Immediate execution: removed network check (2s improvement!)
+- Clear decision framework for weekly inbox triage
+- Startup improved: 6.19s → 4.16s → 3.8s (approaching target)
+
+*** Key Learnings
+
+1. **Vision was easy:** Already had clear picture of success
+2. **Values took work:** Required concrete definitions, not just words
+3. **Methods needed ordering:** Priority emerged from dependency discussion
+4. **Obstacles required honesty:** Hardest to name personal patterns
+5. **Metrics aligned with values:** "Fast" value → fast metrics (startup, org-agenda)
+
+*** Why It Worked
+
+- V2MOM provided framework to say "no" ruthlessly
+- Method ordering prevented building on broken foundation
+- Metrics were objective (seconds, counts) not subjective
+- Obstacles acknowledged personal patterns enabling better strategies
+- Used immediately for inbox triage (validated practicality)
+
+* Conclusion
+
+Creating a V2MOM transforms vague intentions into concrete strategy. It provides:
+
+- **Clarity** on what you're actually trying to achieve
+- **Decision framework** for ruthless prioritization
+- **Measurable progress** through objective metrics
+- **Honest obstacles** that can be addressed
+- **Ordered methods** that build on each other
+
+**The framework takes 2-3 hours to create. It saves weeks of unfocused work.**
+
+The V2MOM works across domains because the structure is universal:
+- Vision: Where am I going?
+- Values: What principles guide me?
+- Methods: How do I get there?
+- Obstacles: What's in my way?
+- Metrics: How do I know it's working?
+
+*Remember:* V2MOM is a tool, not a trophy. Create it, use it, update it, and let it guide your work. If you're not using it weekly, either fix the V2MOM or admit you don't need one.
+
+*Final test:* Can you say "no" to something you would have said "yes" to before? If so, the V2MOM is working.

@@ -1,0 +1,146 @@
+#+TITLE: What's Next Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-10
+
+* Overview
+
+The "what's next" workflow helps identify the most urgent and important task to work on next. It reduces decision fatigue by having Claude apply objective prioritization criteria (deadlines, priorities, method order) instead of relying on subjective feelings (what's fun, what's quick).
+
+* Problem We're Solving
+
+Without a "what's next" workflow, choosing the next task creates friction:
+
+** Decision Fatigue
+- Scanning through todo.org to find high-priority items
+- Remembering context from previous sessions (what's blocked, what's ready)
+- Mentally prioritizing competing tasks
+
+** Distraction by Easy Wins
+- Natural tendency to pick fun/quick tasks for dopamine hits
+- Important work gets postponed in favor of satisfying but less critical tasks
+- Momentum is broken by choosing easier tasks
+
+** Missing Time-Sensitive Work
+- Deadlines can be overlooked when scanning manually
+- Follow-up tasks from reminders get forgotten
+- In-progress tasks may not get finished before starting new work
+
+*Impact:* Less gets done per session, important work is delayed, and flow is disrupted by analysis paralysis.
+
+* Exit Criteria
+
+Success: User asks "what's next" and immediately receives a clear, actionable recommendation.
+
+We know this workflow succeeded when:
+- Claude provides **one task recommendation** (occasionally 2-3 if truly can't decide)
+- The recommendation is **urgent+important** (deadline-driven) or **important** (priority+method order)
+- User can **start working immediately** without second-guessing the choice
+- User **stays in flow** and gets more done per session
+
+* When to Use This Workflow
+
+Trigger "what's next" when:
+- Starting a work session and need to choose first task
+- Completing a task and ready for the next one
+- Feeling uncertain about priorities
+- Tempted to pick an easy/fun task instead of important work
+- Want external validation of task choice
+
+User says: "what's next" or "what should I work on next?"
+
+* Approach: How We Work Together
+
+** Prioritization Cascade
+
+Follow this decision tree in order:
+
+*** 1. Check for Incomplete In-Progress Tasks
+- Look for tasks marked as in-progress or partially complete
+- **If found:** Recommend that task (always finish what's started)
+- **If user declines:** Continue to next step
+
+*** 2. Check Active Reminders
+- Review Active Reminders section in project's NOTES.org (if it exists)
+- **If found:** Recommend reminder task
+- **If user declines:** Ask for priority and add to todo.org, then continue
+
+*** 3. Check for Deadline-Driven Tasks
+- Scan todo.org for tasks with explicit deadlines
+- **If found:** Recommend task with closest deadline
+- **If none:** Continue to next step
+
+*** 4. Prioritize by V2MOM Method Order (if applicable)
+If todo.org is structured with V2MOM methods:
+- Method 1 priority A tasks first
+- Then Method 2 priority A, Method 3 priority A, etc.
+- Then Method 1 priority B, Method 2 priority B, etc.
+- Continue pattern through priorities C and D
+
+*** 5. Prioritize by Priority Only (simple list)
+If todo.org is a simple flat list:
+- Evaluate all priority A tasks, pick most important
+- If no priority A, evaluate priority B tasks
+- Continue through priorities C and D
+
+*** 6. All Tasks Complete
+- **If no tasks remain:** Report "All done! No more tasks in todo.org"
+
+** Handling Multiple Tasks at Same Level
+
+When multiple tasks have same priority/method position:
+
+Pick one based on:
+1. **Blocks other work** - Dependencies matter
+2. **Recently discussed** - Mentioned in recent conversation
+3. **Most foundational** - Enables other tasks
+4. **If truly uncertain** - Show 2-3 options and let user choose
+
+** Providing Context
+
+Keep recommendations concise but informative:
+- Task name/description
+- One-line reasoning
+- Progress indicator (for V2MOM-structured todos)
+
+**Example:**
+```
+Next: Fix org-noter reliability (Method 1, Priority A, 8/18 complete)
+Reason: Blocks daily reading/annotation workflow
+```
+
+** Speed and Efficiency
+
+- Complete workflow in **< 30 seconds**
+- Don't re-read files if recently accessed (use recent context)
+- Trust objective criteria over subjective assessment
+- If uncertain, ask clarifying question rather than guessing
+
+* Workflow Steps
+
+1. **Scan in-progress tasks** - Check for incomplete work from previous session
+2. **Check reminders** - Review Active Reminders in NOTES.org
+3. **Scan for deadlines** - Look for time-sensitive tasks in todo.org
+4. **Apply priority cascade** - Use V2MOM method order or simple priority ranking
+5. **Make recommendation** - One task (or 2-3 if uncertain)
+6. **Show context** - Brief reasoning and progress indicator
+7. **Accept user decision** - If user declines, move to next candidate
+
+* Tips for Success
+
+** For Users
+- Trust the recommendation - it's based on objective criteria
+- If you decline, ask "what else?" to get next candidate
+- Update priorities/deadlines in todo.org regularly for best results
+- Use Active Reminders for important follow-ups
+
+** For Claude
+- Be decisive - one clear recommendation is better than analysis
+- Show your reasoning - builds trust in the process
+- Respect the cascade - don't skip steps
+- Keep it fast - this should reduce friction, not add it
+
+* Related Workflows
+
+- **emacs-inbox-zero** - Triage todo.org against V2MOM framework
+- **create-v2mom** - Build strategic framework for prioritization
+- **wrap-it-up** - End session with clean handoff to next session

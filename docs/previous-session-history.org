@@ -1,0 +1,13 @@
+#+TITLE: Previous Session History
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-14
+
+* About This File
+
+This file contains archived session history entries older than 2 weeks from the current date. Sessions are automatically moved here during the wrap-up workflow to keep NOTES.org at a manageable size.
+
+Sessions are listed in reverse chronological order (most recent first).
+
+* Archived Sessions
+
+(Sessions older than 2 weeks will be moved here automatically)

@@ -1,0 +1,209 @@
+#+TITLE: Journal Entry Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-07
+
+* Overview
+
+This workflow captures the day's work in Craig's personal journal. Journal entries serve as a searchable record for retrospectives, timelines, and trend analysis, while also providing context to Claude about relationships, priorities, mood, and goals that improve our collaboration.
+
+* Problem We're Solving
+
+Without regular journal entries, several problems emerge:
+
+** Limited Memory and Searchability
+- Craig's memory is limited, but what's recorded is always available
+- Finding when specific events occurred becomes difficult
+- Creating project timelines and retrospectives requires manual reconstruction
+- Identifying work patterns (weekday vs weekend, morning vs evening) is impossible
+
+** Missing Context for Collaboration
+- Claude lacks understanding of relationships (Julie is Craig's aunt, Laura is his sister)
+- Important contextual details that seem minor become critical unexpectedly
+- Craig's mood, frustrations, and satisfaction levels remain hidden
+- What Craig finds important vs unimportant isn't explicitly communicated
+- Claude can't identify where to help Craig focus attention to avoid mistakes
+
+** Lost Insights
+- Decisions made and reasoning behind them aren't captured
+- Big picture goals and upcoming plans remain undocumented
+- Patterns in what Craig is good at vs struggles with aren't tracked
+
+*Impact:* Without journal entries, Craig loses valuable personal records and Claude operates with incomplete context, reducing collaboration effectiveness.
+
+* Exit Criteria
+
+We know a journal entry is complete when:
+
+1. **Draft has been created** - Claude writes initial first-person draft based on NOTES.org session data
+2. **Revisions are complete** - Craig provides corrections and context until satisfied
+3. **Entry is added to journal file** - Text is added to the org-roam daily journal at ~/sync/org/roam/journal/YYYY-MM-DD.org
+4. **Craig approves** - Craig explicitly approves or indicates no more revisions needed
+
+*Measurable validation:*
+- Journal entry exists in the daily journal file
+- Craig has approved the final text
+- Entry captures big decisions, accomplishments, and unusual details
+- Tone feels personal, vulnerable, and story-like
+
+* When to Use This Session
+
+Trigger this workflow when:
+
+- Craig says "let's do a journal entry" or "create a journal entry"
+- At the end of a work session, particularly in the evening
+- Craig asks to wrap up the day
+- After completing significant work on a project
+
+This is typically done at the end of the day to capture that day's activities.
+
+* Approach: How We Work Together
+
+** Step 1: Review the Day's Work
+
+Check the project's NOTES.org file for today's session entries. This is your primary source for:
+- Accomplishments achieved
+- Decisions made
+- Meetings or calls attended
+- Files created or organized
+- Actions planned for the future
+- Outstanding items
+
+** Step 2: Draft the Journal Entry
+
+Write a first-person journal entry as Craig. The entry should:
+- Be 2-3 paragraphs (unless it's an unusually eventful day)
+- Focus on big ideas and decisions
+- Include unusual or notable details
+- Read like a personal journal - it's a little story about how things went
+- Use a tone that's personal, genuine, and vulnerably open (never emotional)
+
+Structure suggestions:
+- Start with the big event or decision of the day
+- Explain what led to that decision or what work was accomplished
+- Include any context about people, mood, or upcoming plans
+- End with what's next or how you're feeling about progress
+
+** Step 3: Display and Request Revisions
+
+Display the draft to Craig and ask: "Does this capture the day? What would you like me to adjust?"
+
+This is where important context emerges:
+- Corrections about relationships and people
+- Clarification of goals and motivations
+- Craig's mood and feelings about events
+- Plans for the future
+- What's important vs not important
+
+** Step 4: Incorporate Feedback and Iterate
+
+Make the requested changes and display the revised text. Ask again for revisions. Repeat this process until Craig approves or indicates no more changes are needed.
+
+During revisions:
+- Ask questions if unsure about tone or word choice
+- Ask about people mentioned for the first time
+- If someone behaves strangely, ask Craig's thoughts to find the right tone
+- Record any new context in your notes for future reference
+
+** Step 5: Add Entry to Journal File
+
+Once approved:
+
+1. Find the org-roam daily journal file at ~/sync/org/roam/journal/YYYY-MM-DD.org
+2. If it doesn't exist, create it with this header:
+   ```
+   :PROPERTIES:
+   :ID:       [generate UUID using uuidgen]
+   :END:
+   #+FILETAGS: Journal
+   #+TITLE: YYYY-MM-DD
+   ```
+3. Create a top-level org header with timestamp:
+   ```
+   * YYYY-MM-DD Day @ HH:MM:SS TZ ProjectName - What Kind of Day Has It Been?
+   ```
+   (Get timezone with: date +%z)
+4. Add the approved journal text below the header
+
+** Step 6: Wrap Up
+
+After adding the journal entry, ask Craig: "Are we done for the evening, or is there anything else that needs to be done?"
+
+Since journal entries typically happen at end of day, this provides a natural session close.
+
+* Principles to Follow
+
+** Personal and Vulnerable
+- Write in a genuinely open, vulnerable tone
+- Never emotional, but honest about challenges and feelings
+- Make it feel like Craig's personal journal, not a work report
+
+** Brief but Complete
+- Default to 2-3 paragraphs
+- Capture big ideas and unusual details
+- Don't document every minor task
+- Longer entries are fine for unusually eventful days
+
+** Story-Like Quality
+- Read like someone telling a story about their day
+- Have a narrative flow, not just a bullet list
+- Connect events and decisions with context
+
+** Clarifying Questions Welcome
+- Ask about tone, word choice, or what to include when unsure
+- Ask about people mentioned for the first time
+- Probe for Craig's thoughts when events seem unusual
+- Use questions to gather context that improves collaboration
+
+** Context Capture
+- Record new information about relationships, goals, and preferences
+- Note what Craig finds important vs unimportant
+- Track mood indicators and patterns
+- Save insights for future reference
+
+** Use Session Data
+- Start from NOTES.org session entries for the day
+- Don't rely on memory - check the documented record
+- Include key decisions, accomplishments, and next steps
+
+* Living Document
+
+This is a living document. As we create journal entries and learn what works well, we update this file with:
+
+- Improvements to the drafting approach
+- Better examples of tone and style
+- Additional principles discovered
+- Refinements based on Craig's feedback
+
+Every journal entry is an opportunity to improve this workflow.
+
+* Example Journal Entry
+
+Here's an example from 2025-11-07 (JR-Estate project):
+
+#+begin_quote
+Big day. We sold Gogo's condo.
+
+This morning I woke up to two counter offers - one from Cortney Arambula at $1,377,000 and another from Rolando Tong Jr. at $1,405,000. Deadline was 3 PM today.
+
+I had two phone calls with Craig Ratowsky. The first at 11:59 AM, we talked through both offers. Rolando's was clearly better - $28,000 more, already pre-approved, and the buyer is his sister. Craig walked me through the numbers and timeline.
+
+On the second call at 12:25 PM, I made the decision: accept Rolando's offer at $1,405,000. After all these months of work - dealing with mold, replacing the kitchen, new flooring, staging - we have a buyer.
+
+Escrow opens Monday (11/10/2025), 30-day close from there. By mid-December, this will be done.
+
+Net proceeds to the trust will be around $1,099,385 after the mortgage payoff, closing costs, and agent commissions.
+
+I spent the early evening getting all the files organized so I can figure out exactly how much Christine and I put in for the renovation and get reimbursed. This will also help when I report expenses to Mom and Laura about the estate.
+
+Now I need to plan the trip to Huntington Beach to handle Gogo's financial affairs - consolidate her accounts into the estate account, pay her bills, distribute her funds, and mail some items from the garage back home. Plus empty the garage for the seller before closing.
+
+Escrow Monday. Still need to:
+- Decide on compensating Craig and Justin for their extra work
+- Get the Tax ID number for the estate
+- Work on Gogo's final taxes with a CPA
+- File the Inventory & Appraisal with probate court
+
+It's been almost nine months since Gogo passed. Getting this condo sold feels like a huge milestone.
+#+end_quote
+
+Note the personal tone, narrative flow, big decision (accepting the offer), context about people (Gogo, Craig Ratowsky, Christine), mood (milestone feeling), and what's next.

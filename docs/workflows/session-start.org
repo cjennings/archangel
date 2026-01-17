@@ -1,0 +1,540 @@
+#+TITLE: Session Start Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2025-11-14
+
+* Overview
+
+This workflow defines the process for beginning a Claude Code session. It ensures Claude has the necessary context, is aware of current priorities, and can work effectively with Craig from the start.
+
+This workflow runs **automatically at the beginning of EVERY session** without needing to be triggered by Craig.
+
+* Problem We're Solving
+
+Without a structured session start process, sessions can begin poorly:
+
+** Missing Context
+- Claude doesn't know what happened in previous sessions
+- Important reminders or decisions are overlooked
+- No awareness of project-specific conventions or preferences
+- Time wasted re-explaining project context
+
+** Outdated Information
+- Missing protocol updates from template improvements
+- Unaware of new workflows available in the project
+- Using old conventions that have been superseded
+- Templates and project drift out of sync
+
+** Missed Priorities
+- New documents in inbox go unnoticed
+- Critical reminders aren't surfaced
+- Pending decisions remain unaddressed
+- User has urgent work but Claude suggests non-urgent tasks
+
+** Inefficient Start
+- Reading entire NOTES.org file (wasting tokens on static content)
+- No clear next steps or priorities
+- User must orient Claude manually
+- Lack of structure for beginning work
+
+*Impact:* Slow session starts, missed context, wasted time, and frustration from having to repeat information.
+
+* Exit Criteria
+
+The session start is complete when:
+
+1. **Claude has current context:**
+   - Knows project-specific information and goals
+   - Aware of how user prefers to work
+   - Understanding of recent session history (last 2-3 sessions)
+   - Current reminders and pending decisions surfaced
+
+2. **Templates are synced:**
+   - Checked for updates from claude-templates
+   - Any new workflows or improvements identified
+   - Project templates directory is current
+
+3. **Inbox is processed:**
+   - New documents identified and reviewed
+   - Recommendations provided for each
+   - Documents filed appropriately
+
+4. **Next steps are clear:**
+   - User has stated urgent work, OR
+   - Claude has suggested following what's-next workflow
+   - Session has clear direction
+
+*Measurable validation:*
+- Active Reminders have been surfaced to user
+- Pending Decisions have been mentioned
+- Inbox is empty or user has deferred processing
+- User has confirmed what to work on OR agreed to what's-next workflow
+
+* When to Use This Workflow
+
+**IMPORTANT: This workflow runs AUTOMATICALLY at the start of EVERY session.**
+
+Do NOT ask the user if they want to run it - just execute it immediately when a new session begins.
+
+The only exception is if the user immediately provides urgent instructions that require immediate action (e.g., "the server is down, help me debug it right now").
+
+* First Time Setup
+
+If this is the first time using this workflow in a project, perform this one-time cleanup:
+
+** Clean Up Old "Session Start" Documentation
+
+Before using this workflow, check if NOTES.org contains old/redundant session start instructions:
+
+1. **Search NOTES.org for duplicate content:**
+   #+begin_src bash
+   grep -n "Session Start\|session start" docs/NOTES.org
+   #+end_src
+
+2. **Look for sections that duplicate this workflow:**
+   - Detailed "Session Start Routine" instructions
+   - Step-by-step template sync instructions
+   - Inline instructions for reading NOTES.org sections
+   - Inbox processing instructions
+
+3. **Replace with link to this workflow:**
+   - Remove the detailed inline instructions
+   - Replace with: "See [[file:docs/workflows/session-start.org][Session Start Workflow]]"
+   - Keep brief summary if helpful for quick reference
+
+4. **Why this matters:**
+   - Prevents conflicting instructions (e.g., different diff commands)
+   - Single source of truth for session start process
+   - Easier to maintain and update in one place
+   - Reduces NOTES.org file size
+
+**Example cleanup:**
+
+Before:
+#+begin_example
+* Session Start Routine
+
+When starting a new session with Craig, follow these steps:
+
+1. Add Timestamp for Session History
+   [detailed instructions...]
+2. Sync with Templates
+   [detailed instructions...]
+3. Scan workflows directory
+   [detailed instructions...]
+[30+ lines of detailed instructions]
+#+end_example
+
+After:
+#+begin_example
+* Session Start Routine
+
+**IMPORTANT: ALWAYS run this routine automatically at the start of EVERY session.**
+
+Execute the session start workflow defined in [[file:docs/workflows/session-start.org][session-start.org]].
+
+Brief summary: Add timestamp, sync templates, scan workflows, read key NOTES.org sections, process inbox, ask about priorities.
+#+end_example
+
+This cleanup should only be done ONCE when first adopting this workflow.
+
+* The Workflow
+
+** Step 1: Add Session Start Timestamp
+
+Record when the session begins for tracking purposes.
+
+*** Why This Matters
+
+- Helps identify if previous session was interrupted (no end timestamp)
+- Provides session duration tracking
+- Creates clear session boundaries in history
+
+*** How to Add Timestamp
+
+1. **Navigate to Session History section** in =docs/NOTES.org=
+
+2. **Check the last session entry:**
+   - If it has a start timestamp but NO end timestamp → previous session was interrupted
+   - If it has both start and end timestamps → previous session completed normally
+
+3. **Prepare for new session entry** (will be written during wrap-up):
+   - Note the current time for internal reference
+   - Session entry will be created at wrap-up, not now
+   - This step is just to CHECK for interrupted sessions
+
+4. **If previous session was interrupted:**
+   - Mention to user: "I notice the last session (DATE) didn't complete normally. Should I review what was being worked on?"
+   - This helps recover context if something went wrong
+
+*** Format
+
+Session timestamps follow this format (added during wrap-up, not session start):
+- Start: Recorded at beginning of session
+- End: Recorded during wrap-up workflow
+
+Example:
+#+begin_example
+** Session: November 14, 2025 (Morning)
+Started: 09:30 AM
+Ended: 11:45 AM
+#+end_example
+
+** Step 2: Sync with Templates
+
+Keep the project aligned with latest best practices from claude-templates.
+
+*** CRITICAL: Template is Authoritative
+
+**The template is the single source of truth.** Do not review diffs or decide whether to apply changes - just copy from template to project. There should NEVER be differences between template files and project files, not even cosmetic differences like trailing whitespace.
+
+If a project needs project-specific protocol additions, put them in NOTES.org under a "Project-Specific Protocols" section - NEVER modify protocols.org in the project.
+
+*** Why This Matters
+
+- Ensures consistent behavior across all projects
+- Eliminates drift between template and projects
+- Protocol improvements automatically propagate to all projects
+- Single source of truth prevents confusion
+
+*** How to Copy
+
+Copy template files directly to the project's docs/ directory:
+
+#+begin_src bash
+cp ~/projects/claude-templates/docs/protocols.org docs/protocols.org
+cp -r ~/projects/claude-templates/docs/workflows docs/
+cp -r ~/projects/claude-templates/docs/scripts docs/
+#+end_src
+
+**Mention any significant updates** if you notice them:
+- If protocols.org has new sections, mention briefly
+- If new workflows were added, mention them
+- Example: "protocols.org now includes alarm instructions"
+
+That's it. No diff review, no decisions - template always wins.
+
+*** Workflow Directory Structure
+
+There are TWO workflow directories:
+
+**=docs/workflows/=** - Template workflows (standard across all projects)
+- Copied from template on every session start
+- NEVER edit these in a project - edit in template instead
+- Safe to overwrite completely during copy
+- Examples: session-start.org, session-wrap-up.org, create-workflow.org
+
+**=docs/project-workflows/=** - Project-specific workflows (unique to this project)
+- NEVER copied or touched by template sync
+- Created and maintained within the project only
+- Examples: morning-checkin.org (health), danneel-inbox-zero.org (danneel)
+
+*** What Gets Copied (Template → Project)
+
+- **protocols.org** - Always overwrite from template
+- **workflows/** - Template workflows (overwritten completely)
+- **scripts/** - Template scripts (overwritten completely)
+
+*** What Is NEVER Copied (Project-Specific)
+
+- **NOTES.org** - Project-specific content (context, history, reminders)
+- **previous-session-history.org** - Project-specific history
+- **session-context.org** - Project-specific live session data
+- **someday-maybe.org** - Project-specific ideas
+- **project-workflows/** - Project-specific workflows (separate directory, never touched)
+
+** Step 3: Scan Workflows Directory
+
+Understand what workflows are available in this project.
+
+*** Why This Matters
+
+- Enables Claude to suggest appropriate workflows
+- Builds vocabulary for understanding user requests
+- Shows what standardized processes exist
+- Helps answer "how do we do X?" questions
+
+*** How to Scan
+
+1. **List workflow files:**
+   #+begin_src bash
+   ls -1 docs/workflows/
+   #+end_src
+
+2. **Note the workflow names** (just filenames, don't read contents):
+   - create-workflow.org
+   - create-v2mom.org
+   - session-start.org
+   - session-wrap-up.org
+   - [project-specific workflows]
+
+3. **Remember these exist** for suggesting to user later
+
+4. **Do NOT read full workflow contents** - they're long and will be read when actually executing a workflow
+
+*** When User Says "Let's Run the X Workflow"
+
+1. Check if workflow exists in docs/workflows/
+2. If yes: Read that specific workflow file and execute it
+3. If no: Offer to create it using create-workflow process
+
+** Step 4: Read protocols.org and NOTES.org
+
+Get behavioral instructions and project context.
+
+*** Why Two Files?
+
+Documentation is now split into two files:
+- **protocols.org** - How Claude should behave (consistent across all projects)
+- **NOTES.org** - Project-specific content (unique to each project)
+
+This separation allows protocol updates to sync automatically without affecting project data.
+
+*** Read protocols.org First
+
+Read the entire =docs/protocols.org= file. It contains:
+- Session management protocols (context files, compacting)
+- Important terminology and trigger phrases
+- User information and preferences
+- Git commit requirements
+- File format and naming conventions
+- Session start instructions
+
+This file is relatively short and should be read in full.
+
+*** Then Read NOTES.org
+
+NOTES.org now contains only project-specific content:
+
+1. **Project-Specific Context** section
+   - **THIS IS THE KEY SECTION** - contains what the project is about
+   - People involved and their roles
+   - Current state of the project
+   - Goals and objectives
+   - Important background information
+   - Technical architecture or key decisions
+
+2. **Active Reminders** section
+   - Critical items to surface to user
+   - Time-sensitive follow-ups
+   - Important tasks user asked to be reminded about
+
+3. **Pending Decisions** section
+   - Decisions awaiting user input
+   - Blockers that need resolution
+   - Questions that need answering
+
+4. **Session History - Last 2-3 entries only**
+   - Recent work completed
+   - Recent decisions made
+   - Context from previous sessions
+   - What was being worked on
+   - **Do NOT read entire session history** - older entries are archived
+
+*** What to SKIP in NOTES.org
+
+- About This File (brief, just links to protocols.org)
+- Available Workflows catalog (just scanned in Step 3)
+- Session History format instructions (reference material)
+- Full Session History (only read last 2-3 entries)
+- Archived sessions in previous-session-history.org (unless specifically needed)
+
+*** How to Read Efficiently
+
+#+begin_example
+1. Read docs/protocols.org (entire file - it's the behavioral guide)
+2. Read docs/NOTES.org Project-Specific Context section
+3. Read docs/NOTES.org Active Reminders section
+4. Read docs/NOTES.org Pending Decisions section
+5. Read last 2-3 Session History entries (count backwards from end)
+#+end_example
+
+** Step 5: Process Inbox
+
+Check for new documents and help user file them appropriately.
+
+*** Why This Matters
+
+- New documents need to be reviewed and filed
+- Unprocessed inbox items can contain important information
+- Helps maintain organized project structure
+- Ensures nothing gets missed
+
+*** Inbox Location
+
+Default inbox location: =./inbox/= (at project root)
+
+Some projects may have different locations - check NOTES.org or ask user on first session.
+
+*** How to Process
+
+1. **Check inbox directory:**
+   #+begin_src bash
+   ls -lh inbox/
+   #+end_src
+
+2. **If inbox is empty:**
+   - No action needed
+   - Continue to Step 6
+
+3. **If inbox contains files:**
+   - **Do NOT ask if user wants to process** - process is MANDATORY
+   - Say: "I see X items in your inbox. Let me review them."
+
+4. **For each file in inbox:**
+   - Read the file to understand content
+   - Determine:
+     - Who it's from (if applicable)
+     - What it's about
+     - What action should be taken
+   - Consider project history and context
+   - Recommend appropriate action:
+     - File to =assets/emails/= if it's an email
+     - File to =assets/= if it's a document/attachment
+     - File to =docs/= if it's project documentation
+     - Add TODO items if action is needed
+   - Recommend appropriate filename:
+     - Format: =YYYY-MM-DD-Source-Description.ext=
+     - Example: =2025-11-14-Mark-Response-To-Settlement.txt=
+   - Get user approval before filing
+
+5. **File the document:**
+   - Move (not copy) from inbox to destination
+   - Use approved filename
+   - Update any relevant TODO items or event logs
+
+6. **Repeat for all inbox items** until inbox is empty
+
+*** Inbox Processing Workflow
+
+Some projects may have a specific inbox-zero workflow (e.g., =docs/workflows/danneel-inbox-zero.org=).
+
+If it exists:
+- Use that workflow instead of the generic process above
+- It may have project-specific filing conventions
+
+** Step 6: Ask About Priorities
+
+Determine what to work on this session.
+
+*** Why This Matters
+
+- User may have urgent work that takes priority
+- Prevents suggesting V2MOM tasks when there's a crisis
+- Gives user control over session direction
+- Enables following structured workflow if no urgent work
+
+*** How to Ask
+
+**Say to user:**
+
+"Is there something urgent you'd like to work on, or should we follow the what's-next workflow to identify priorities?"
+
+Wait for user response.
+
+*** If User Has Urgent Work
+
+- Proceed with the urgent work immediately
+- Skip what's-next workflow
+- Focus session on user's stated priority
+
+*** If User Says Follow What's-Next
+
+- Check if =docs/workflows/whats-next.org= exists
+- If yes: Execute that workflow
+- If no: Check if V2MOM exists and suggest working on top priority method
+- If no V2MOM: Offer to create one using create-v2mom workflow
+
+*** If User is Unsure
+
+Provide helpful context:
+- Remind them of Active Reminders (from Step 4)
+- Mention any Pending Decisions (from Step 4)
+- Reference recent session history (what was being worked on)
+- Suggest continuing previous work if it's unfinished
+
+** Session Start Complete
+
+Once all steps are done:
+- Claude has full context
+- User knows what's being worked on
+- Session can proceed productively
+
+Don't announce "session start complete" - just begin working on the chosen task.
+
+* Tips for Effective Session Starts
+
+** Template Sync
+
+1. **Don't panic about changes** - Most are improvements
+2. **Review carefully** - Understand what changed before applying
+3. **Project-specific workflows** - Don't overwrite if customized
+4. **Mention significant updates** - User should know about workflow improvements
+5. **First sync is clean** - No diff needed, just copy
+
+** Reading NOTES.org
+
+1. **Use line numbers** - More efficient than searching
+2. **Read in order** - Builds context progressively
+3. **Focus on Project-Specific Context** - This is the most important section
+4. **Surface reminders immediately** - Don't wait until later
+5. **Note interrupted sessions** - Helps recover from crashes
+
+** Inbox Processing
+
+1. **Be thorough** - Read files completely to understand context
+2. **Consider history** - Recommendations should fit project patterns
+3. **Suggest good filenames** - Use established conventions
+4. **Don't delete without asking** - User may want to review first
+5. **Update related systems** - Add TODOs, update event logs as needed
+
+** Priorities Discussion
+
+1. **Ask clearly** - Don't be vague about what's being offered
+2. **Respect urgency** - If user has crisis, drop everything else
+3. **Provide context** - Remind user of reminders and decisions
+4. **Don't assume** - Even if previous session had direction, ask
+5. **Be helpful** - If user is unsure, provide gentle guidance
+
+* Common Mistakes to Avoid
+
+1. **Reading entire NOTES.org file** - Wastes tokens on static content
+2. **Skipping template sync** - Miss important updates
+3. **Not checking for interrupted sessions** - Lose context from crashes
+4. **Forgetting to surface Active Reminders** - User misses critical items
+5. **Asking if user wants inbox processed** - It's mandatory, not optional
+6. **Processing inbox after asking about priorities** - Should be before
+7. **Not excluding NOTES.org from template diff** - Creates noise
+8. **Not excluding previous-session-history.org from diff** - Project-specific content
+9. **Announcing "session start complete"** - Just begin working
+10. **Reading full workflow files during scan** - Just note filenames
+
+* Validation Checklist
+
+Before considering session start complete, verify:
+
+- [ ] Checked for interrupted previous session (missing end timestamp)
+- [ ] Template sync executed (diff or first-time copy)
+- [ ] Template changes reviewed and applied if needed
+- [ ] Workflows directory scanned (filenames noted)
+- [ ] IMPORTANT TERMINOLOGY section read
+- [ ] User Information section read
+- [ ] Project-Specific Context section read (CRITICAL)
+- [ ] Active Reminders section read and surfaced to user
+- [ ] Pending Decisions section read and mentioned to user
+- [ ] Last 2-3 Session History entries read
+- [ ] Inbox checked for new files
+- [ ] Inbox processed (if contained files) or confirmed empty
+- [ ] Asked user about urgent work vs what's-next workflow
+- [ ] User has confirmed what to work on OR agreed to follow workflow
+- [ ] Ready to begin productive work
+
+* Meta Notes
+
+This workflow should evolve based on experience:
+
+- If session starts consistently miss something important, update the checklist
+- If reading NOTES.org sections takes too long, further optimize what's read
+- If template sync creates too much noise, refine what's excluded
+- Craig can modify this workflow at any time to better fit needs
+
+The goal is efficient session starts with full context, not rigid adherence to format.
