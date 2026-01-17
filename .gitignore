@@ -1,0 +1,10 @@
+# Build artifacts
+work/
+out/
+profile/
+
+# Downloaded packages
+zfs-packages/
+
+# Session notes (private)
+docs/

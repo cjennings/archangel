@@ -1,0 +1,24 @@
+#!/bin/bash
+# install-claude - Install Claude Code CLI
+# Run this if you need AI assistance during installation
+
+set -e
+
+echo "Installing Claude Code..."
+
+# Check if npm is available
+if ! command -v npm &>/dev/null; then
+    echo "npm not found. Installing nodejs and npm..."
+    pacman -Sy --noconfirm nodejs npm
+fi
+
+# Install Claude Code globally
+npm install -g @anthropic-ai/claude-code
+
+echo ""
+echo "Claude Code installed successfully!"
+echo ""
+echo "To start Claude Code, run:"
+echo "  claude"
+echo ""
+echo "You'll need to authenticate on first run."
