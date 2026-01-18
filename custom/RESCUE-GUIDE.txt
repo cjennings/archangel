@@ -850,6 +850,7 @@ QUICK REFERENCE
   tldr hdparm         # Disk info and benchmarks
   man memtester       # Memory testing
   man stress-ng       # Stress testing
+  man iotop           # Disk I/O monitor by process
 
 SCENARIO: Check if a drive is failing (SMART)
 ---------------------------------------------
@@ -1042,6 +1043,44 @@ Find what driver a device is using:
   lspci -k | grep -A3 "VGA"        # Graphics driver
 
 
+SCENARIO: Find what's doing disk I/O (iotop)
+--------------------------------------------
+iotop shows disk read/write by process - like top for disk I/O.
+Useful when disk is thrashing and you need to find the cause.
+
+Basic usage (requires root):
+
+  iotop
+
+Only show processes doing I/O:
+
+  iotop -o
+
+Batch mode (non-interactive, for logging):
+
+  iotop -b -n 5         # 5 iterations then exit
+
+Show accumulated I/O instead of bandwidth:
+
+  iotop -a
+
+Key columns:
+  - DISK READ: current read bandwidth
+  - DISK WRITE: current write bandwidth
+  - IO>: percentage of time spent waiting on I/O
+
+Interactive commands:
+  - o: toggle showing only active processes
+  - a: toggle accumulated vs bandwidth
+  - r: reverse sort
+  - q: quit
+
+Common culprits for high I/O:
+  - jbd2: journaling (normal on ext4)
+  - kswapd: swapping (need more RAM)
+  - Large file copies or database operations
+
+
 HARDWARE DIAGNOSTICS TIPS
 -------------------------
 1. Run SMART checks regularly - drives often show warning signs
@@ -1052,6 +1091,7 @@ HARDWARE DIAGNOSTICS TIPS
 6. SMART "Reallocated Sector Count" increasing = drive dying
 7. Back up immediately if SMART shows any warnings
 8. SSDs have limited write cycles - check Wear_Leveling_Count
+9. iotop -o filters to only processes actively doing I/O
 
 ================================================================================
 6. DISK OPERATIONS
@@ -1064,6 +1104,8 @@ QUICK REFERENCE
   man nwipe           # Secure disk wiping (DBAN replacement)
   tldr parted         # Partition management
   tldr mkfs           # Create filesystems
+  tldr ncdu           # Interactive disk usage analyzer
+  tldr tree           # Directory tree viewer
 
 FIRST: Understand your options for disk copying
 -----------------------------------------------
@@ -1316,6 +1358,79 @@ View partition layout:
   fdisk -l /dev/sdX
 
 
+SCENARIO: Find what's using disk space (ncdu)
+---------------------------------------------
+ncdu is an interactive disk usage analyzer - much faster than
+repeatedly running du.
+
+Analyze current directory:
+
+  ncdu
+
+Analyze specific path:
+
+  ncdu /home
+  ncdu /var
+
+Analyze root filesystem:
+
+  ncdu /
+
+Exclude mounted filesystems (just local disk):
+
+  ncdu -x /
+
+Navigation:
+  - Arrow keys or j/k to move
+  - Enter to drill into directory
+  - d to delete file/folder (confirms first)
+  - q to quit
+  - g to show percentage/graph
+  - n to sort by name
+  - s to sort by size
+
+Export scan to file (for slow disks, scan once):
+
+  ncdu -o scan.json /
+  ncdu -f scan.json      # Load later
+
+
+SCENARIO: Visualize directory structure (tree)
+----------------------------------------------
+tree shows directories as an indented tree.
+
+Show current directory:
+
+  tree
+
+Show specific path:
+
+  tree /etc/systemd
+
+Limit depth:
+
+  tree -L 2              # Only 2 levels deep
+  tree -L 3 /home        # 3 levels under /home
+
+Show hidden files:
+
+  tree -a
+
+Show only directories:
+
+  tree -d
+
+With file sizes:
+
+  tree -h               # Human-readable sizes
+  tree -sh              # Include size for files
+
+Filter by pattern:
+
+  tree -P "*.conf"      # Only .conf files
+  tree -I "node_modules|.git"  # Exclude patterns
+
+
 DISK OPERATIONS TIPS
 --------------------
 1. partclone is 5-10x faster than dd for partially-filled partitions
@@ -1327,6 +1442,8 @@ DISK OPERATIONS TIPS
 7. Keep partition tables aligned to 1MiB boundaries for SSD performance
 8. exFAT is best for cross-platform USB drives >32GB
 9. F2FS is optimized for flash but less portable than ext4
+10. ncdu -x avoids crossing filesystem boundaries (stays on one disk)
+11. tree -L 2 gives quick overview without overwhelming detail
 
 ================================================================================
 7. NETWORK TROUBLESHOOTING
@@ -1346,6 +1463,11 @@ QUICK REFERENCE
   man iftop           # Live bandwidth monitor
   man nethogs         # Per-process bandwidth
   man tshark          # Wireshark CLI (packet analysis)
+  tldr speedtest-cli  # Internet speed test
+  tldr mosh           # Mobile shell (survives disconnects)
+  tldr aria2c         # Multi-protocol downloader
+  tldr tmate          # Terminal sharing
+  tldr sshuttle       # VPN over SSH
 
 FIRST: Check basic network connectivity
 ---------------------------------------
@@ -1868,6 +1990,194 @@ Download and verify checksum:
   sha256sum -c file.iso.sha256
 
 
+SCENARIO: Test internet connection speed (speedtest-cli)
+--------------------------------------------------------
+Tests download/upload speed using speedtest.net servers.
+
+Basic speed test:
+
+  speedtest-cli
+
+Show simple output (just speeds):
+
+  speedtest-cli --simple
+
+List nearby servers:
+
+  speedtest-cli --list
+
+Test against specific server:
+
+  speedtest-cli --server 1234
+
+No download test (upload only):
+
+  speedtest-cli --no-download
+
+No upload test (download only):
+
+  speedtest-cli --no-upload
+
+Output as JSON (for scripting):
+
+  speedtest-cli --json
+
+Note: Requires working internet and DNS.
+Test basic connectivity first with: ping 1.1.1.1
+
+
+SCENARIO: SSH over unreliable connection (mosh)
+-----------------------------------------------
+mosh is SSH that survives disconnects, IP changes, and high latency.
+Shows local echo immediately - feels responsive even on slow links.
+
+Connect to server:
+
+  mosh user@hostname
+
+With specific SSH port:
+
+  mosh --ssh="ssh -p 2222" user@hostname
+
+With SSH key:
+
+  mosh --ssh="ssh -i ~/.ssh/key" user@hostname
+
+How it works:
+  - Initial connection via SSH (for auth)
+  - Then switches to UDP for the session
+  - Reconnects automatically when network changes
+  - Local echo - typing appears instantly
+
+Requirements:
+  - mosh-server must be installed on the remote
+  - UDP port 60001 (default) must be open
+
+When to use mosh vs SSH:
+  - Flaky WiFi: mosh
+  - Cellular/roaming: mosh
+  - Stable network: SSH is fine
+  - Need port forwarding: SSH (mosh doesn't support it)
+
+
+SCENARIO: Download files reliably (aria2)
+-----------------------------------------
+aria2 is a multi-protocol downloader with resume, parallel
+connections, and BitTorrent support.
+
+Basic download:
+
+  aria2c https://example.com/file.iso
+
+Resume interrupted download:
+
+  aria2c -c https://example.com/file.iso
+
+Multiple connections (faster for large files):
+
+  aria2c -x 8 https://example.com/file.iso    # 8 connections
+
+Download multiple files:
+
+  aria2c -i urls.txt     # One URL per line
+
+Download with specific filename:
+
+  aria2c -o myfile.iso https://example.com/file.iso
+
+BitTorrent:
+
+  aria2c file.torrent
+  aria2c "magnet:?xt=..."
+
+Metalink (auto-selects mirrors):
+
+  aria2c file.metalink
+
+Limit download speed:
+
+  aria2c --max-download-limit=1M https://example.com/file.iso
+
+Why aria2 over wget/curl:
+  - Multi-connection downloads (significantly faster)
+  - Automatic resume
+  - BitTorrent built-in
+  - Downloads from multiple sources simultaneously
+
+
+SCENARIO: Share terminal for remote assistance (tmate)
+------------------------------------------------------
+tmate lets you share your terminal session via a URL.
+Someone can view or control your terminal from anywhere.
+
+Start a shared session:
+
+  tmate
+
+tmate shows connection strings:
+
+  ssh session: ssh XYZ123@nyc1.tmate.io
+  read-only:   ssh ro-XYZ123@nyc1.tmate.io
+  web (rw):    https://tmate.io/t/XYZ123
+  web (ro):    https://tmate.io/t/ro-XYZ123
+
+Share the appropriate link:
+  - Full access: give them the ssh or web (rw) link
+  - View only: give them the ro- link
+
+Get the links programmatically:
+
+  tmate show-messages
+
+End the session:
+
+  exit                   # Or Ctrl+D
+
+Security notes:
+  - Anyone with the link has access
+  - Use read-only link unless they need to type
+  - Session ends when you exit
+  - New session = new random URL
+
+
+SCENARIO: VPN over SSH (sshuttle)
+---------------------------------
+sshuttle tunnels all traffic through an SSH connection.
+No server-side setup needed - just SSH access.
+
+Tunnel all traffic through remote server:
+
+  sshuttle -r user@server 0/0
+
+Tunnel only specific subnet:
+
+  sshuttle -r user@server 10.0.0.0/8
+  sshuttle -r user@server 192.168.1.0/24
+
+Exclude local network:
+
+  sshuttle -r user@server 0/0 -x 192.168.1.0/24
+
+With specific SSH port:
+
+  sshuttle -r user@server:2222 0/0
+
+DNS through tunnel too:
+
+  sshuttle --dns -r user@server 0/0
+
+Use cases:
+  - Access office network from rescue environment
+  - Bypass network restrictions
+  - Secure all traffic on untrusted network
+  - Access remote resources without full VPN setup
+
+Requirements:
+  - SSH access to a server on the target network
+  - Python on remote server (most Linux servers have it)
+  - Root locally (uses iptables)
+
+
 NETWORK TROUBLESHOOTING TIPS
 ----------------------------
 1. If no IP, check cable/wifi and try dhclient or dhcpcd
@@ -1886,6 +2196,10 @@ NETWORK TROUBLESHOOTING TIPS
 14. ethtool shows link speed and cable status (Link detected: yes/no)
 15. High latency + low packet loss = congestion; high loss = hardware issue
 16. tcpdump and tshark capture files (.pcap) are interchangeable
+17. mosh survives network changes; use for flaky connections
+18. aria2c -x 8 uses 8 connections for faster downloads
+19. tmate for instant terminal sharing - great for getting remote help
+20. sshuttle -r user@server 0/0 tunnels ALL traffic through SSH
 
 ================================================================================
 8. ENCRYPTION & GPG
@@ -1895,6 +2209,7 @@ QUICK REFERENCE
 ---------------
   tldr gpg            # GNU Privacy Guard
   tldr cryptsetup     # LUKS disk encryption
+  tldr pass           # Password manager
   man gpg             # Full GPG manual
 
 FIRST: Understand encryption types you may encounter
@@ -2069,6 +2384,45 @@ Or manually:
   mount -t ecryptfs /home/.ecryptfs/username/.Private /mnt/recovery
 
 
+SCENARIO: Access stored passwords (pass)
+----------------------------------------
+pass is the standard Unix password manager. Passwords are GPG-encrypted
+files in ~/.password-store.
+
+If you use pass, your passwords may be recoverable if you have:
+  - Your GPG private key
+  - Your ~/.password-store directory
+
+List all passwords:
+
+  pass
+
+Show a password:
+
+  pass Email/gmail
+  pass -c Email/gmail    # Copy to clipboard instead
+
+Search passwords:
+
+  pass grep searchterm
+
+Initialize new password store (if setting up):
+
+  pass init GPG-KEY-ID
+
+Import existing password store:
+  1. Import your GPG private key: gpg --import key.asc
+  2. Copy ~/.password-store from backup
+  3. Use pass commands as normal
+
+Generate new password:
+
+  pass generate -n 20 NewSite/login
+
+Note: Requires your GPG private key to decrypt.
+If you don't use pass, this tool isn't useful for you.
+
+
 ENCRYPTION TIPS
 ---------------
 1. GPG symmetric encryption (gpg -c) only needs the password to decrypt
@@ -2079,6 +2433,7 @@ ENCRYPTION TIPS
 6. eCryptfs wrapped passphrase is in ~/.ecryptfs/wrapped-passphrase
 7. If you forget encryption passwords and have no backups, data is gone
 8. Hardware security keys (YubiKey) may be required for some GPG keys
+9. pass stores passwords as GPG-encrypted files - need your GPG key to access
 
 ================================================================================
                               END OF GUIDE

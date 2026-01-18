@@ -5,41 +5,42 @@
 
 ** What We Completed This Session
 
-Rescue guide and recovery tools work - sections 6, 7, and 8 completed.
+Completed rescue guide and recovery tools - all 8 sections done.
 
-*** Packages Added to build.sh
+*** Packages Added to build.sh (this session)
+
+Disk operations:
 - partimage (legacy partition imaging)
 - f2fs-tools (Flash-Friendly FS)
 - exfatprogs (exFAT filesystem)
+
+Utilities:
 - emacs (editor)
 
-*** RESCUE-GUIDE.txt Sections Completed
-All 8 sections now complete:
-1. ZFS Recovery - done previously
-2. Data Recovery - done previously
-3. Boot Repair - done previously
-4. Windows Recovery - done previously
-5. Hardware Diagnostics - done previously
-6. Disk Operations - completed this session
-   - partclone, fsarchiver, partimage
-   - nwipe secure wiping
-   - XFS, Btrfs, F2FS, exFAT filesystem tools
-   - Partitioning with parted/gdisk
-7. Network Troubleshooting - completed this session
-   - Basic connectivity debugging
-   - NetworkManager and manual config
-   - SSHFS for remote file access
-   - SCP/rsync file transfers
-   - DNS debugging
-8. Encryption & GPG - completed this session
-   - GPG symmetric/asymmetric decryption
-   - Key import/export
-   - File signing/verification
-   - LUKS partition encryption
-   - eCryptfs home directory recovery
+Network diagnostics:
+- mtr (combined ping + traceroute)
+- iperf3 (bandwidth testing)
+- iftop (live bandwidth monitor by connection)
+- nethogs (bandwidth monitor by process)
+- ethtool (NIC configuration and diagnostics)
+- tcpdump (packet capture)
+- bind (dig/nslookup DNS tools)
+- nmap (network scanner)
+- wireshark-cli (tshark packet analysis)
 
-** Commits Made
+*** RESCUE-GUIDE.txt - All Sections Complete
+1. ZFS Recovery
+2. Data Recovery
+3. Boot Repair
+4. Windows Recovery
+5. Hardware Diagnostics
+6. Disk Operations
+7. Network Troubleshooting (expanded with all diagnostic tools)
+8. Encryption & GPG
+
+** Commits Made This Session
 - 6df73f6: Add disk, network, and encryption tools with rescue guide sections
+- f53c951: Add network diagnostics tools and rescue guide documentation
 
 ** Git Status
 - All changes committed and pushed
@@ -47,11 +48,11 @@ All 8 sections now complete:
 - Up to date with origin/main
 
 ** Project State
-- RESCUE-GUIDE.txt is now complete (all 8 sections written)
+- RESCUE-GUIDE.txt is complete (all 8 sections with comprehensive documentation)
 - ISO needs rebuild to include new packages
-- Ready for testing
+- Estimated additional ISO size: ~90MB (mostly wireshark-cli and nmap)
 
 ** Next Steps
 - Rebuild ISO with new packages
-- Test that all rescue tools are present on ISO
-- Consider any additional scenarios for rescue guide
+- Test that all rescue tools are present and functional
+- Consider testing some rescue scenarios in VM

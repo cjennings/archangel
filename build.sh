@@ -164,6 +164,7 @@ lshw
 dmidecode
 nvme-cli
 hdparm
+iotop
 
 # Disk operations
 partclone
@@ -174,6 +175,8 @@ xfsprogs
 btrfs-progs
 f2fs-tools
 exfatprogs
+ncdu
+tree
 
 # Network diagnostics
 mtr
@@ -185,6 +188,14 @@ tcpdump
 bind
 nmap
 wireshark-cli
+speedtest-cli
+mosh
+aria2
+tmate
+sshuttle
+
+# Security
+pass
 
 EOF
 
