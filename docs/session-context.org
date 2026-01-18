@@ -3,72 +3,55 @@
 
 * Current Session State
 
-** What We're Working On
-All 3 unattended installation tests completed successfully.
+** What We Completed This Session
 
-** Bugs Found and Fixed This Session
+Rescue guide and recovery tools work - sections 6, 7, and 8 completed.
 
-*** Bug 1: gather_input returns non-zero exit code
-- Cause: `[[ -n "$WIFI_SSID" ]] && info "..."` returns 1 when WIFI_SSID is empty
-- The bare `return` inherits this exit code
-- With `set -e`, script exits immediately
-- Fix: Changed `return` to `return 0`
-- Commit: 2f5bb37
+*** Packages Added to build.sh
+- partimage (legacy partition imaging)
+- f2fs-tools (Flash-Friendly FS)
+- exfatprogs (exFAT filesystem)
+- emacs (editor)
 
-*** Bug 2: pacstrap hangs on provider prompts
-- Cause: pacstrap prompts for package provider selection (iptables, initramfs)
-- In unattended mode, no input is available
-- Fix: Pipe `yes ""` to pacstrap to auto-select defaults
-- Commit: 1dc4e95
+*** RESCUE-GUIDE.txt Sections Completed
+All 8 sections now complete:
+1. ZFS Recovery - done previously
+2. Data Recovery - done previously
+3. Boot Repair - done previously
+4. Windows Recovery - done previously
+5. Hardware Diagnostics - done previously
+6. Disk Operations - completed this session
+   - partclone, fsarchiver, partimage
+   - nwipe secure wiping
+   - XFS, Btrfs, F2FS, exFAT filesystem tools
+   - Partitioning with parted/gdisk
+7. Network Troubleshooting - completed this session
+   - Basic connectivity debugging
+   - NetworkManager and manual config
+   - SSHFS for remote file access
+   - SCP/rsync file transfers
+   - DNS debugging
+8. Encryption & GPG - completed this session
+   - GPG symmetric/asymmetric decryption
+   - Key import/export
+   - File signing/verification
+   - LUKS partition encryption
+   - eCryptfs home directory recovery
 
-*** Bug 3: fsck hook in mkinitcpio
-- Cause: fsck hook was included in HOOKS for ZFS root
-- ZFS doesn't use fsck, causes error messages
-- Fix: Removed fsck from HOOKS line
-- Commit: 1dc4e95
+** Commits Made
+- 6df73f6: Add disk, network, and encryption tools with rescue guide sections
 
-*** Bug 4: Missing hostid for ZFS boot
-- Cause: ZFS uses hostid to identify pool ownership
-- Without hostid, pool import can fail
-- Fix: Generate/copy hostid and add spl.spl_hostid to kernel cmdline
-- Commit: 1dc4e95
+** Git Status
+- All changes committed and pushed
+- Working tree clean
+- Up to date with origin/main
 
-** Testing Status
-- Test 1: 2-disk mirror - PASSED (installation complete, boots to passphrase prompt)
-- Test 2: 2-disk stripe - PASSED (installation complete)
-- Test 3: Single disk - PASSED (installation complete)
+** Project State
+- RESCUE-GUIDE.txt is now complete (all 8 sections written)
+- ISO needs rebuild to include new packages
+- Ready for testing
 
-** Key Progress This Session
-
-*** Config File Support for Unattended Installs
-- Added --config-file /path/to/config argument
-- Config only used when explicitly specified (prevents accidental disk wipes)
-- Example config at /root/install-archzfs.conf.example on ISO
-- Validates required fields: HOSTNAME, TIMEZONE, DISKS, ZFS_PASSPHRASE, ROOT_PASSWORD
-
-*** Boot Fixes for ZFS
-- Removed fsck from mkinitcpio HOOKS
-- Added hostid generation/copy to installed system
-- Added spl.spl_hostid to kernel command line
-- Removed 'quiet' from kernel params for visible boot messages
-
-** Files Modified This Session
-- custom/install-archzfs - Config file support, bug fixes
-- custom/install-archzfs.conf.example - Template for unattended installs
-- build.sh - Copies example config to ISO
-- .gitignore - Ignore VM disk images
-
-** Recent Commits
-- 2f5bb37: Fix unattended mode exit issue (return 0)
-- 1dc4e95: Add config file support for unattended installations
-
-** Test Configuration
-- VM: ./scripts/test-vm.sh --multi-disk (for RAID testing)
-- VM: ./scripts/test-vm.sh (for single disk)
-- SSH: sshpass -p archzfs ssh -p 2222 root@localhost (live ISO)
-- Config file: /root/test-mirror.conf
-
-** Test Credentials
-- Live ISO root password: archzfs
-- Test ZFS passphrase: testpass123
-- Test root password: testpass123
+** Next Steps
+- Rebuild ISO with new packages
+- Test that all rescue tools are present on ISO
+- Consider any additional scenarios for rescue guide

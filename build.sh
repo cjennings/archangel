@@ -175,6 +175,17 @@ btrfs-progs
 f2fs-tools
 exfatprogs
 
+# Network diagnostics
+mtr
+iperf3
+iftop
+nethogs
+ethtool
+tcpdump
+bind
+nmap
+wireshark-cli
+
 EOF
 
 # Get kernel version for ISO naming

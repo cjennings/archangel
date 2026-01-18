@@ -1339,6 +1339,13 @@ QUICK REFERENCE
   tldr ping           # Test connectivity
   tldr ss             # Socket statistics (netstat replacement)
   tldr curl           # Transfer data from URLs
+  tldr mtr            # Combined ping + traceroute
+  tldr iperf3         # Network bandwidth testing
+  tldr tcpdump        # Packet capture and analysis
+  tldr nmap           # Network scanner
+  man iftop           # Live bandwidth monitor
+  man nethogs         # Per-process bandwidth
+  man tshark          # Wireshark CLI (packet analysis)
 
 FIRST: Check basic network connectivity
 ---------------------------------------
@@ -1468,20 +1475,338 @@ With progress and compression:
   rsync -avzP /local/path/ user@host:/remote/path/
 
 
-SCENARIO: Test network speed and latency
-----------------------------------------
-Ping with timing:
+SCENARIO: Test network path and latency (mtr)
+---------------------------------------------
+mtr combines ping and traceroute into one tool. Shows packet loss and
+latency at each hop in real-time.
 
-  ping -c 10 hostname              # 10 pings with statistics
+Interactive mode (updates continuously):
 
-Traceroute (find network path):
+  mtr google.com
 
-  traceroute hostname
-  traceroute -I hostname           # Use ICMP (may work better)
+Report mode (runs 10 cycles and exits):
 
-Test bandwidth (if iperf3 server available):
+  mtr -r -c 10 google.com
 
-  iperf3 -c server-ip              # Test to iperf3 server
+With IP addresses only (faster, no DNS lookups):
+
+  mtr -n google.com
+
+Show both hostnames and IPs:
+
+  mtr -b google.com
+
+Reading mtr output:
+  - Loss% = packet loss at that hop (>0% = problem)
+  - Snt = packets sent
+  - Last/Avg/Best/Wrst = latency in ms
+  - StDev = latency variation (high = inconsistent)
+
+Common patterns:
+  - High loss at one hop, normal after = that router deprioritizes ICMP (OK)
+  - Loss increasing at each hop = real network problem
+  - Sudden latency jump = congested link or long physical distance
+
+
+SCENARIO: Test bandwidth between two machines (iperf3)
+------------------------------------------------------
+iperf3 measures actual throughput between two endpoints.
+Requires iperf3 running on both ends.
+
+On the server (machine to test TO):
+
+  iperf3 -s                        # Listen on default port 5201
+
+On the client (machine to test FROM):
+
+  iperf3 -c server-ip              # Basic test (10 seconds)
+  iperf3 -c server-ip -t 30        # Test for 30 seconds
+  iperf3 -c server-ip -R           # Reverse (test download instead of upload)
+
+Test both directions:
+
+  iperf3 -c server-ip              # Upload speed
+  iperf3 -c server-ip -R           # Download speed
+
+With parallel streams (better for high-latency links):
+
+  iperf3 -c server-ip -P 4         # 4 parallel streams
+
+Test UDP (for VoIP/streaming quality):
+
+  iperf3 -c server-ip -u -b 100M   # UDP at 100 Mbps
+
+Interpreting results:
+  - Bitrate = actual throughput achieved
+  - Retr = TCP retransmissions (high = packet loss)
+  - Cwnd = TCP congestion window
+
+
+SCENARIO: Monitor live bandwidth usage (iftop)
+----------------------------------------------
+iftop shows bandwidth usage per connection in real-time.
+Like top, but for network traffic.
+
+Monitor all interfaces:
+
+  iftop
+
+Monitor specific interface:
+
+  iftop -i eth0
+  iftop -i wlan0
+
+Without DNS lookups (faster):
+
+  iftop -n
+
+Show port numbers:
+
+  iftop -P
+
+Filter to specific host:
+
+  iftop -f "host 192.168.1.100"
+
+Interactive commands while running:
+  h = help
+  n = toggle DNS resolution
+  s = toggle source display
+  d = toggle destination display
+  p = toggle port display
+  P = pause display
+  q = quit
+
+
+SCENARIO: Find which process is using bandwidth (nethogs)
+---------------------------------------------------------
+nethogs shows bandwidth usage per process, not per connection.
+Essential for finding what's eating your bandwidth.
+
+Monitor all interfaces:
+
+  nethogs
+
+Monitor specific interface:
+
+  nethogs eth0
+
+Refresh faster (every 0.5 seconds):
+
+  nethogs -d 0.5
+
+Interactive commands:
+  m = cycle through display modes (KB/s, KB, B, MB)
+  r = sort by received
+  s = sort by sent
+  q = quit
+
+
+SCENARIO: Check network interface details (ethtool)
+---------------------------------------------------
+ethtool shows and configures network interface settings.
+
+Show interface status:
+
+  ethtool eth0
+
+Key information:
+  - Speed: 1000Mb/s (link speed)
+  - Duplex: Full (full or half duplex)
+  - Link detected: yes (cable connected)
+
+Show driver information:
+
+  ethtool -i eth0
+
+Show interface statistics:
+
+  ethtool -S eth0
+
+Check for errors (look for non-zero values):
+
+  ethtool -S eth0 | grep -i error
+  ethtool -S eth0 | grep -i drop
+
+Wake-on-LAN settings:
+
+  ethtool eth0 | grep Wake-on
+
+Enable Wake-on-LAN:
+
+  ethtool -s eth0 wol g
+
+
+SCENARIO: Capture and analyze packets (tcpdump)
+-----------------------------------------------
+tcpdump captures network traffic for analysis.
+Essential for debugging network issues at the packet level.
+
+Capture all traffic on an interface:
+
+  tcpdump -i eth0
+
+Capture with more detail:
+
+  tcpdump -i eth0 -v              # Verbose
+  tcpdump -i eth0 -vv             # More verbose
+  tcpdump -i eth0 -X              # Show packet contents in hex + ASCII
+
+Capture to a file (for later analysis):
+
+  tcpdump -i eth0 -w capture.pcap
+
+Read a capture file:
+
+  tcpdump -r capture.pcap
+
+Common filters:
+
+  tcpdump -i eth0 host 192.168.1.100           # Traffic to/from host
+  tcpdump -i eth0 port 80                       # HTTP traffic
+  tcpdump -i eth0 port 443                      # HTTPS traffic
+  tcpdump -i eth0 tcp                           # TCP only
+  tcpdump -i eth0 udp                           # UDP only
+  tcpdump -i eth0 icmp                          # Ping traffic
+  tcpdump -i eth0 'port 22 and host 10.0.0.1'  # SSH to specific host
+
+Capture only N packets:
+
+  tcpdump -i eth0 -c 100          # Stop after 100 packets
+
+Show only packet summaries (no payload):
+
+  tcpdump -i eth0 -q
+
+Useful for debugging:
+
+  # See DNS queries
+  tcpdump -i eth0 port 53
+
+  # See all SYN packets (connection attempts)
+  tcpdump -i eth0 'tcp[tcpflags] & tcp-syn != 0'
+
+  # See HTTP requests
+  tcpdump -i eth0 -A port 80 | grep -E '^(GET|POST|HEAD)'
+
+
+SCENARIO: Scan network and discover hosts (nmap)
+------------------------------------------------
+nmap is a powerful network scanner for discovery and security auditing.
+
+Discover hosts on local network:
+
+  nmap -sn 192.168.1.0/24         # Ping scan (no port scan)
+
+Quick scan of common ports:
+
+  nmap 192.168.1.100              # Top 1000 ports
+
+Scan specific ports:
+
+  nmap -p 22,80,443 192.168.1.100
+  nmap -p 1-1000 192.168.1.100    # Port range
+  nmap -p- 192.168.1.100          # All 65535 ports (slow)
+
+Service version detection:
+
+  nmap -sV 192.168.1.100          # Detect service versions
+
+Operating system detection:
+
+  nmap -O 192.168.1.100           # Requires root
+
+Comprehensive scan:
+
+  nmap -A 192.168.1.100           # OS detection, version, scripts, traceroute
+
+Fast scan (fewer ports):
+
+  nmap -F 192.168.1.100           # Top 100 ports only
+
+Scan multiple hosts:
+
+  nmap 192.168.1.1-50             # Range
+  nmap 192.168.1.1 192.168.1.2    # Specific hosts
+  nmap -iL hosts.txt              # From file
+
+Output formats:
+
+  nmap -oN scan.txt 192.168.1.100   # Normal output
+  nmap -oX scan.xml 192.168.1.100   # XML output
+  nmap -oG scan.grep 192.168.1.100  # Greppable output
+
+Common use cases:
+
+  # Find all web servers on network
+  nmap -p 80,443 192.168.1.0/24
+
+  # Find SSH servers
+  nmap -p 22 192.168.1.0/24
+
+  # Find all live hosts quickly
+  nmap -sn -T4 192.168.1.0/24
+
+
+SCENARIO: Deep packet analysis (tshark/Wireshark CLI)
+-----------------------------------------------------
+tshark is the command-line version of Wireshark. More powerful than
+tcpdump for protocol analysis.
+
+Capture on interface:
+
+  tshark -i eth0
+
+Capture to file:
+
+  tshark -i eth0 -w capture.pcap
+
+Read and analyze capture file:
+
+  tshark -r capture.pcap
+
+Filter during capture:
+
+  tshark -i eth0 -f "port 80"     # Capture filter (BPF syntax)
+
+Filter during display:
+
+  tshark -r capture.pcap -Y "http"                    # HTTP traffic
+  tshark -r capture.pcap -Y "dns"                     # DNS traffic
+  tshark -r capture.pcap -Y "tcp.port == 443"         # HTTPS
+  tshark -r capture.pcap -Y "ip.addr == 192.168.1.1"  # Specific host
+
+Show specific fields:
+
+  tshark -r capture.pcap -T fields -e ip.src -e ip.dst -e tcp.port
+
+Protocol statistics:
+
+  tshark -r capture.pcap -q -z io,stat,1              # I/O statistics
+  tshark -r capture.pcap -q -z conv,tcp               # TCP conversations
+  tshark -r capture.pcap -q -z http,tree              # HTTP statistics
+
+Follow a TCP stream:
+
+  tshark -r capture.pcap -q -z follow,tcp,ascii,0     # First TCP stream
+
+Extract HTTP objects:
+
+  tshark -r capture.pcap --export-objects http,./extracted/
+
+Useful filters:
+
+  # Failed TCP connections
+  tshark -r capture.pcap -Y "tcp.flags.reset == 1"
+
+  # DNS queries only
+  tshark -r capture.pcap -Y "dns.flags.response == 0"
+
+  # HTTP requests
+  tshark -r capture.pcap -Y "http.request"
+
+  # TLS handshakes
+  tshark -r capture.pcap -Y "tls.handshake"
 
 
 SCENARIO: Debug DNS issues
@@ -1553,6 +1878,14 @@ NETWORK TROUBLESHOOTING TIPS
 6. rsync -avzP is better than scp for large transfers (resumable)
 7. Check firewall if services aren't reachable: iptables -L
 8. For WiFi issues, check rfkill: rfkill list
+9. mtr is better than traceroute - shows packet loss at each hop
+10. Use iperf3 to test actual throughput, not just connectivity
+11. nethogs shows bandwidth by process; iftop shows by connection
+12. tcpdump -w saves packets; analyze later with tshark
+13. nmap -sn for quick host discovery without port scanning
+14. ethtool shows link speed and cable status (Link detected: yes/no)
+15. High latency + low packet loss = congestion; high loss = hardware issue
+16. tcpdump and tshark capture files (.pcap) are interchangeable
 
 ================================================================================
 8. ENCRYPTION & GPG
