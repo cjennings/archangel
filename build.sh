@@ -136,6 +136,14 @@ rsync
 mbuffer
 lsof
 
+# Data recovery
+ddrescue
+testdisk
+foremost
+sleuthkit
+safecopy
+smartmontools
+
 EOF
 
 # Get kernel version for ISO naming

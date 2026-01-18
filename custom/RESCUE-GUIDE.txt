@@ -193,7 +193,195 @@ USEFUL ZFS COMMANDS
 2. DATA RECOVERY
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr ddrescue     # Clone failing drives
+  tldr testdisk     # Partition/file recovery
+  tldr photorec     # Recover deleted files by type
+  tldr smartctl     # Check drive health
+
+FIRST: Assess drive health before recovery
+------------------------------------------
+Check if drive is failing (SMART data):
+
+  smartctl -H /dev/sdX              # Quick health check
+  smartctl -a /dev/sdX              # Full SMART report
+
+Key things to look for:
+  - "PASSED" vs "FAILED" health status
+  - Reallocated_Sector_Ct - bad sectors remapped (increasing = dying)
+  - Current_Pending_Sector - sectors waiting to be remapped
+  - Offline_Uncorrectable - sectors that couldn't be read
+
+If SMART shows problems, STOP and use ddrescue immediately.
+Do not run fsck or other tools that write to a failing drive.
+
+
+SCENARIO: Clone a failing drive (CRITICAL - do this first!)
+------------------------------------------------------------
+Golden rule: NEVER work directly on a failing drive.
+Clone it first, then recover from the clone.
+
+Clone to an image file (safest):
+
+  ddrescue -d -r3 /dev/sdX /path/to/image.img /path/to/logfile.log
+
+  -d    = direct I/O, bypass cache
+  -r3   = retry bad sectors 3 times
+  logfile = allows resuming if interrupted
+
+Clone to another drive:
+
+  ddrescue -d -r3 /dev/sdX /dev/sdY /path/to/logfile.log
+
+Monitor progress (ddrescue shows its own progress, but for pipes):
+
+  ddrescue -d /dev/sdX - 2>/dev/null | pv > /path/to/image.img
+
+Resume an interrupted clone:
+
+  ddrescue -d -r3 /dev/sdX /path/to/image.img /path/to/logfile.log
+
+The log file tracks what's been copied. Same command resumes.
+
+If drive is very bad, do a quick pass first, then retry bad sectors:
+
+  ddrescue -d -n /dev/sdX image.img logfile.log     # Fast pass, skip errors
+  ddrescue -d -r3 /dev/sdX image.img logfile.log   # Retry bad sectors
+
+
+SCENARIO: Recover deleted files (PhotoRec)
+------------------------------------------
+PhotoRec recovers files by their content signatures, not filesystem.
+Works even if filesystem is damaged or reformatted.
+
+Run PhotoRec (included with testdisk):
+
+  photorec /dev/sdX            # From device
+  photorec image.img           # From disk image
+
+Interactive steps:
+  1. Select the disk/partition
+  2. Choose filesystem type (usually "Other" for FAT/NTFS/exFAT)
+  3. Choose "Free" (unallocated) or "Whole" (entire partition)
+  4. Select destination folder for recovered files
+  5. Wait (can take hours for large drives)
+
+Recovered files are named by type (e.g., f0001234.jpg) in recup_dir.*/
+
+
+SCENARIO: Recover lost partition / Fix partition table
+------------------------------------------------------
+TestDisk can find and recover lost partitions.
+
+Run TestDisk:
+
+  testdisk /dev/sdX            # From device
+  testdisk image.img           # From disk image
+
+Interactive steps:
+  1. Select disk
+  2. Select partition table type (usually Intel/PC for MBR, EFI GPT)
+  3. Choose "Analyse" to scan for partitions
+  4. "Quick Search" finds most partitions
+  5. "Deeper Search" if quick search misses any
+  6. Review found partitions, select ones to recover
+  7. "Write" to save new partition table (or just note the info)
+
+TestDisk can also:
+  - Recover deleted files from FAT/NTFS/ext filesystems
+  - Repair FAT/NTFS boot sectors
+  - Rebuild NTFS MFT
+
+
+SCENARIO: Recover specific file types (Foremost)
+------------------------------------------------
+Foremost carves files based on headers/footers.
+Useful when PhotoRec doesn't find what you need.
+
+Basic usage:
+
+  foremost -t all -i /dev/sdX -o /output/dir
+  foremost -t all -i image.img -o /output/dir
+
+Specific file types:
+
+  foremost -t jpg,png,gif -i image.img -o /output/dir
+  foremost -t pdf,doc,xls -i image.img -o /output/dir
+
+Supported types: jpg, gif, png, bmp, avi, exe, mpg, wav, riff,
+wmv, mov, pdf, ole (doc/xls/ppt), doc, zip, rar, htm, cpp, all
+
+
+SCENARIO: Can't mount filesystem - try repair
+----------------------------------------------
+WARNING: Only run fsck on a COPY, not the original failing drive!
+
+For ext2/ext3/ext4:
+
+  fsck.ext4 -n /dev/sdX        # Check only, no changes (safe)
+  fsck.ext4 -p /dev/sdX        # Auto-repair safe problems
+  fsck.ext4 -y /dev/sdX        # Say yes to all repairs (risky)
+
+For NTFS:
+
+  ntfsfix /dev/sdX             # Fix common NTFS issues
+
+For XFS:
+
+  xfs_repair -n /dev/sdX       # Check only
+  xfs_repair /dev/sdX          # Repair
+
+For FAT32:
+
+  fsck.fat -n /dev/sdX         # Check only
+  fsck.fat -a /dev/sdX         # Auto-repair
+
+
+SCENARIO: Mount a disk image for file access
+---------------------------------------------
+Mount a full disk image (find partitions first):
+
+  fdisk -l image.img           # List partitions and offsets
+
+Note the "Start" sector of the partition you want, multiply by 512:
+
+  mount -o loop,offset=$((START*512)) image.img /mnt/recovery
+
+Or use losetup to set up loop devices for all partitions:
+
+  losetup -P /dev/loop0 image.img
+  mount /dev/loop0p1 /mnt/recovery
+
+For NTFS images:
+
+  mount -t ntfs-3g -o loop,offset=$((START*512)) image.img /mnt/recovery
+
+
+SCENARIO: Low-level recovery from very bad drives (safecopy)
+------------------------------------------------------------
+Safecopy is more aggressive than ddrescue for very damaged media.
+Use when ddrescue can't make progress.
+
+  safecopy /dev/sdX image.img
+
+With multiple passes (increasingly aggressive):
+
+  safecopy --stage1 /dev/sdX image.img    # Quick pass
+  safecopy --stage2 /dev/sdX image.img    # Retry errors
+  safecopy --stage3 /dev/sdX image.img    # Maximum recovery
+
+
+DATA RECOVERY TIPS
+------------------
+1. STOP using a failing drive immediately - every access risks more damage
+2. Clone first, recover from clone - never work on original
+3. Keep the log file from ddrescue - allows resuming
+4. Recover to a DIFFERENT drive - never same drive
+5. For deleted files on working drive, unmount immediately to prevent
+   overwriting the deleted data
+6. If drive makes clicking/grinding noises, consider professional recovery
+7. For SSDs, TRIM may have already zeroed deleted blocks - recovery harder
 
 ================================================================================
 3. BOOT REPAIR
