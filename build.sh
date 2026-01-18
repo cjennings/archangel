@@ -144,6 +144,11 @@ sleuthkit
 safecopy
 smartmontools
 
+# Boot repair
+os-prober
+syslinux
+ms-sys
+
 EOF
 
 # Get kernel version for ISO naming

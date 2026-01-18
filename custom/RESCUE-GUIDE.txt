@@ -387,7 +387,223 @@ DATA RECOVERY TIPS
 3. BOOT REPAIR
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr grub-install     # Install GRUB bootloader
+  tldr efibootmgr       # Manage UEFI boot entries
+  tldr arch-chroot      # Chroot into installed system
+  man mkinitcpio        # Rebuild initramfs
+
+FIRST: Identify your boot mode
+------------------------------
+Check if system is UEFI or Legacy BIOS:
+
+  ls /sys/firmware/efi       # If exists, you're in UEFI mode
+
+If booting from this rescue USB in UEFI mode, you need to fix UEFI.
+If booting in Legacy mode, you need to fix MBR/Legacy boot.
+
+
+SCENARIO: Chroot into broken system (preparation for most repairs)
+------------------------------------------------------------------
+This is the foundation for most boot repairs.
+
+1. Find your partitions:
+
+  lsblk -f                    # Shows filesystems and labels
+
+2. Mount the root filesystem:
+
+  mount /dev/sdX2 /mnt        # Replace with your root partition
+
+   For ZFS root:
+
+     zpool import -R /mnt zroot
+     zfs mount -a
+
+3. Mount required system directories:
+
+  mount /dev/sdX1 /mnt/boot   # EFI partition (if separate)
+  mount --bind /dev /mnt/dev
+  mount --bind /proc /mnt/proc
+  mount --bind /sys /mnt/sys
+  mount --bind /sys/firmware/efi/efivars /mnt/sys/firmware/efi/efivars
+
+   Or use arch-chroot (handles mounts automatically):
+
+     arch-chroot /mnt
+
+4. Now you can run commands as if booted into the system.
+
+
+SCENARIO: Reinstall GRUB (UEFI)
+-------------------------------
+After chrooting into the system:
+
+  grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+
+If EFI partition is mounted elsewhere:
+
+  grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+
+Regenerate GRUB config:
+
+  grub-mkconfig -o /boot/grub/grub.cfg
+
+
+SCENARIO: Reinstall GRUB (Legacy BIOS/MBR)
+------------------------------------------
+After chrooting into the system:
+
+  grub-install --target=i386-pc /dev/sdX    # Note: device, not partition
+
+Regenerate GRUB config:
+
+  grub-mkconfig -o /boot/grub/grub.cfg
+
+
+SCENARIO: Fix UEFI boot entries
+-------------------------------
+List current boot entries:
+
+  efibootmgr -v
+
+Delete a broken entry (replace XXXX with boot number):
+
+  efibootmgr -b XXXX -B
+
+Create a new boot entry:
+
+  efibootmgr --create --disk /dev/sdX --part 1 --label "Arch Linux" \
+    --loader /EFI/GRUB/grubx64.efi
+
+Change boot order (comma-separated boot numbers):
+
+  efibootmgr -o 0001,0002,0003
+
+Set next boot only:
+
+  efibootmgr -n 0001
+
+
+SCENARIO: Rebuild initramfs (kernel panic, missing modules)
+-----------------------------------------------------------
+After chrooting into the system:
+
+List available presets:
+
+  ls /etc/mkinitcpio.d/
+
+Rebuild for specific kernel:
+
+  mkinitcpio -p linux          # Standard kernel
+  mkinitcpio -p linux-lts      # LTS kernel
+
+Rebuild all:
+
+  mkinitcpio -P
+
+Check mkinitcpio.conf for ZFS:
+
+  grep "^HOOKS" /etc/mkinitcpio.conf
+
+For ZFS, HOOKS should include 'zfs':
+  HOOKS=(base udev autodetect modconf block zfs filesystems keyboard fsck)
+
+
+SCENARIO: GRUB not detecting Windows (dual-boot)
+------------------------------------------------
+After chrooting into the system:
+
+Enable os-prober in GRUB config:
+
+  echo 'GRUB_DISABLE_OS_PROBER=false' >> /etc/default/grub
+
+Mount the Windows EFI partition if not already mounted.
+
+Regenerate GRUB config:
+
+  grub-mkconfig -o /boot/grub/grub.cfg
+
+os-prober should find Windows and add it to the menu.
+
+
+SCENARIO: Restore Windows MBR (remove GRUB, restore Windows boot)
+-----------------------------------------------------------------
+If you need to remove Linux and restore Windows-only MBR:
+
+  ms-sys -w /dev/sdX           # Write Windows 7+ MBR
+
+Other options:
+  ms-sys -7 /dev/sdX           # Windows 7 MBR specifically
+  ms-sys -i /dev/sdX           # Show current MBR type
+
+
+SCENARIO: Install syslinux (lightweight alternative to GRUB)
+------------------------------------------------------------
+For Legacy BIOS:
+
+  syslinux-install_update -i -a -m
+
+For UEFI, copy the EFI binary:
+
+  cp /usr/lib/syslinux/efi64/* /boot/EFI/syslinux/
+
+Create /boot/syslinux/syslinux.cfg with boot entries.
+
+
+SCENARIO: Can't boot - kernel panic with ZFS
+--------------------------------------------
+Common causes:
+1. ZFS module not in initramfs - rebuild with mkinitcpio
+2. Pool name changed - check zpool.cache
+3. hostid mismatch - regenerate hostid
+
+After chrooting:
+
+Check if ZFS hook is present:
+
+  grep zfs /etc/mkinitcpio.conf
+
+Regenerate hostid if needed:
+
+  zgenhostid $(hostid)
+
+Rebuild initramfs:
+
+  mkinitcpio -P
+
+
+SCENARIO: Emergency boot from GRUB command line
+-----------------------------------------------
+If GRUB loads but config is broken, press 'c' for command line:
+
+For Linux (non-ZFS):
+
+  set root=(hd0,gpt2)
+  linux /boot/vmlinuz-linux root=/dev/sda2
+  initrd /boot/initramfs-linux.img
+  boot
+
+For Linux with ZFS root:
+
+  set root=(hd0,gpt1)
+  linux /vmlinuz-linux-lts root=ZFS=zroot/ROOT/default
+  initrd /initramfs-linux-lts.img
+  boot
+
+Tab completion works in GRUB command line!
+
+
+BOOT REPAIR TIPS
+----------------
+1. Always backup your current EFI partition before making changes
+2. Use 'efibootmgr -v' to see full paths and verify entries
+3. Some UEFI firmwares are picky about the bootloader path -
+   try /EFI/BOOT/BOOTX64.EFI as a fallback
+4. If all else fails, most UEFI has a boot menu (F12, F8, Esc at POST)
+5. GRUB reinstall usually fixes most boot issues
+6. For ZFS, the initramfs must include the zfs hook
 
 ================================================================================
 4. WINDOWS RECOVERY
