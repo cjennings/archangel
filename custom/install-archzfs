@@ -1114,11 +1114,56 @@ if zfs snapshot "$DATASET@$SNAPSHOT_NAME"; then
 else
     echo "Warning: Failed to create snapshot" >&2
 fi
+
+# Prune old snapshots (runs quietly, non-blocking)
+if [[ -x /usr/local/bin/zfs-snap-prune ]]; then
+    /usr/local/bin/zfs-snap-prune --quiet &
+fi
 EOF
 
     chmod +x /mnt/usr/local/bin/zfs-pre-snapshot
 
     info "Pacman hook configured."
+}
+
+configure_snapshot_retention() {
+    step "Configuring Snapshot Retention"
+
+    # Copy the prune script
+    cp /usr/local/bin/zfs-snap-prune /mnt/usr/local/bin/zfs-snap-prune
+    chmod +x /mnt/usr/local/bin/zfs-snap-prune
+
+    # Create systemd service for pruning
+    cat > /mnt/etc/systemd/system/zfs-snap-prune.service << 'EOF'
+[Unit]
+Description=Prune old ZFS snapshots
+After=zfs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/zfs-snap-prune --quiet
+EOF
+
+    # Create systemd timer for daily pruning
+    cat > /mnt/etc/systemd/system/zfs-snap-prune.timer << 'EOF'
+[Unit]
+Description=Daily ZFS snapshot pruning
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # Enable the timer
+    arch-chroot /mnt systemctl enable zfs-snap-prune.timer
+
+    info "Snapshot retention configured."
+    info "Policy: Keep 20 recent, delete if older than 180 days"
+    info "Genesis snapshot is always preserved."
 }
 
 copy_archsetup() {
@@ -1299,6 +1344,7 @@ main() {
     configure_grub_zfs_snap
     configure_zfs_services
     configure_pacman_hook
+    configure_snapshot_retention
     copy_archsetup
     sync_efi_partitions
     create_genesis_snapshot

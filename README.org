@@ -21,6 +21,7 @@ manual module loading or package installation during the install process.
 - *Genesis Snapshot* - Automatic pristine-state snapshot after installation
 - *Rollback Script* - One-command factory reset via ~/root/rollback-to-genesis~
 - *Pre-Pacman Snapshots* - Automatic snapshots before package operations
+- *Snapshot Retention* - Automatic pruning keeps disk usage bounded
 - *GRUB Snapshot Boot* - Boot into any ZFS snapshot directly from GRUB menu
 - *NetworkManager* - WiFi configuration copied to installed system
 - *SSH Ready* - Optional SSH with root login for headless servers
@@ -94,6 +95,7 @@ archzfs/
 │   ├── install-archzfs            # Interactive installation script
 │   ├── install-archzfs.conf.example  # Example config for unattended install
 │   ├── grub-zfs-snap              # ZFS snapshot GRUB menu generator
+│   ├── zfs-snap-prune             # Snapshot retention/pruning script
 │   ├── 40_zfs_snapshots           # GRUB generator script (for /etc/grub.d/)
 │   └── zz-grub-zfs-snap.hook      # Pacman hook for auto-regeneration
 ├── scripts/
@@ -508,6 +510,61 @@ zpool status
 # Pool usage
 zpool list
 #+END_SRC
+
+** Snapshot Retention Policy
+
+The system automatically prunes old snapshots to prevent unbounded disk usage.
+
+*** Retention Rules
+
+| Rule | Description |
+|------+-------------|
+| Keep 20 most recent | Always preserved regardless of age |
+| Delete if >180 days | Snapshots beyond position 20, older than 6 months |
+| Genesis protected | Never deleted, regardless of position or age |
+
+*** How It Works
+
+Pruning runs automatically:
+- *After every pacman operation* - Pre-pacman hook triggers prune after creating new snapshot
+- *Daily via systemd timer* - Catches any missed pruning, syncs GRUB menu
+
+*** Manual Pruning
+
+#+BEGIN_SRC bash
+# Preview what would be deleted
+zfs-snap-prune --dry-run
+
+# Run with verbose output
+zfs-snap-prune --verbose
+
+# Check current snapshots
+zfs-snap-prune --help
+#+END_SRC
+
+*** Customizing Retention
+
+Set environment variables before running:
+
+#+BEGIN_SRC bash
+# Keep more snapshots (default: 20)
+KEEP_COUNT=50 zfs-snap-prune
+
+# Shorter retention period (default: 180 days)
+MAX_AGE_DAYS=90 zfs-snap-prune
+
+# Different pool/dataset
+POOL_NAME=tank ROOT_DATASET=ROOT/arch zfs-snap-prune
+#+END_SRC
+
+To change defaults permanently, edit ~/usr/local/bin/zfs-snap-prune~.
+
+*** Example: One Year of Use
+
+With weekly pacman updates (~52/year) plus genesis:
+- Total snapshots created: ~53
+- Snapshots kept: ~27 (20 recent + ~6 within 180 days + genesis)
+- Snapshots pruned: ~26 (older than 180 days, beyond position 20)
 
 * Keeping Up-to-Date
 
