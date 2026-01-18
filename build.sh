@@ -149,6 +149,12 @@ os-prober
 syslinux
 ms-sys
 
+# Windows recovery
+chntpw
+ntfs-3g
+dislocker
+hivex
+
 EOF
 
 # Get kernel version for ISO naming

@@ -609,7 +609,234 @@ BOOT REPAIR TIPS
 4. WINDOWS RECOVERY
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr chntpw         # Reset Windows passwords
+  tldr ntfs-3g        # Mount NTFS filesystems
+  man dislocker       # Access BitLocker drives
+  man hivexregedit    # Edit Windows registry
+
+FIRST: Identify and mount the Windows partition
+-----------------------------------------------
+Find Windows partition:
+
+  lsblk -f            # Look for "ntfs" filesystem
+  fdisk -l            # Look for "Microsoft basic data" type
+
+Check if BitLocker encrypted:
+
+  lsblk -f            # Will show "BitLocker" instead of "ntfs"
+
+Mount NTFS partition (read-write):
+
+  mkdir -p /mnt/windows
+  mount -t ntfs-3g /dev/sdX1 /mnt/windows
+
+If Windows wasn't shut down cleanly (hibernation/fast startup):
+
+  mount -t ntfs-3g -o remove_hiberfile /dev/sdX1 /mnt/windows
+
+Read-only mount (safer):
+
+  mount -t ntfs-3g -o ro /dev/sdX1 /mnt/windows
+
+
+SCENARIO: Reset forgotten Windows password
+------------------------------------------
+Mount the Windows partition first (see above).
+
+Navigate to the SAM database:
+
+  cd /mnt/windows/Windows/System32/config
+
+List all users:
+
+  chntpw -l SAM
+
+Reset password for a specific user (interactive):
+
+  chntpw -u "Username" SAM
+
+In the interactive menu:
+  1. Clear (blank) user password  <-- Recommended
+  2. Unlock and enable user account
+  3. Promote user to administrator
+  q. Quit
+
+After making changes, type 'q' to quit, then 'y' to save.
+
+Alternative - blank ALL passwords:
+
+  chntpw -i SAM      # Interactive mode, select options
+
+
+SCENARIO: Unlock disabled/locked Windows account
+------------------------------------------------
+  cd /mnt/windows/Windows/System32/config
+  chntpw -u "Username" SAM
+
+Select option 2: "Unlock and enable user account"
+
+
+SCENARIO: Promote user to Administrator
+---------------------------------------
+  cd /mnt/windows/Windows/System32/config
+  chntpw -u "Username" SAM
+
+Select option 3: "Promote user (make user an administrator)"
+
+
+SCENARIO: Access BitLocker encrypted drive
+------------------------------------------
+You MUST have either:
+  - The BitLocker password, OR
+  - The 48-digit recovery key
+
+Find your recovery key:
+  - Microsoft account: account.microsoft.com/devices/recoverykey
+  - Printed/saved during BitLocker setup
+  - Active Directory (for domain-joined PCs)
+
+Decrypt with password:
+
+  mkdir -p /mnt/bitlocker-decrypted /mnt/windows
+  dislocker -V /dev/sdX1 -u -- /mnt/bitlocker-decrypted
+  # Enter password when prompted
+
+Decrypt with recovery key:
+
+  dislocker -V /dev/sdX1 -p123456-789012-345678-901234-567890-123456-789012-345678 -- /mnt/bitlocker-decrypted
+
+Now mount the decrypted volume:
+
+  mount -t ntfs-3g /mnt/bitlocker-decrypted/dislocker-file /mnt/windows
+
+When done:
+
+  umount /mnt/windows
+  umount /mnt/bitlocker-decrypted
+
+
+SCENARIO: Copy files from Windows that won't boot
+-------------------------------------------------
+Mount the Windows partition (see above), then:
+
+Copy specific files/folders:
+
+  cp -r "/mnt/windows/Users/Username/Documents" /destination/
+
+Copy with rsync (shows progress, preserves attributes):
+
+  rsync -avP "/mnt/windows/Users/Username/" /destination/
+
+Common locations for user data:
+  /mnt/windows/Users/Username/Desktop/
+  /mnt/windows/Users/Username/Documents/
+  /mnt/windows/Users/Username/Downloads/
+  /mnt/windows/Users/Username/Pictures/
+  /mnt/windows/Users/Username/AppData/  (hidden app data)
+
+
+SCENARIO: Edit Windows Registry
+-------------------------------
+The registry is stored in several hive files:
+
+  SYSTEM    - Hardware, services, boot config
+  SOFTWARE  - Installed programs, system settings
+  SAM       - User accounts (password hashes)
+  SECURITY  - Security policies
+  DEFAULT   - Default user profile
+  NTUSER.DAT - Per-user settings (in each user's profile)
+
+View registry contents:
+
+  hivexregedit --export /mnt/windows/Windows/System32/config/SYSTEM '\' > system.reg
+
+Merge changes from a .reg file:
+
+  hivexregedit --merge /mnt/windows/Windows/System32/config/SOFTWARE changes.reg
+
+Interactive registry shell:
+
+  hivexsh /mnt/windows/Windows/System32/config/SYSTEM
+  # Commands: cd, ls, lsval, cat, exit
+
+
+SCENARIO: Fix Windows boot (from Linux)
+---------------------------------------
+Sometimes you can fix Windows boot issues from Linux:
+
+Rebuild BCD (Windows Boot Configuration Data):
+  - This usually requires Windows Recovery Environment
+  - From Linux, you can backup/restore the BCD file:
+
+  cp /mnt/windows/Boot/BCD /mnt/windows/Boot/BCD.backup
+
+Restore Windows bootloader to MBR (if GRUB overwrote it):
+
+  ms-sys -w /dev/sdX     # Write Windows 7+ compatible MBR
+
+For UEFI systems, Windows boot files are in:
+  /mnt/efi/EFI/Microsoft/Boot/
+
+
+SCENARIO: Scan Windows for malware (offline scan)
+-------------------------------------------------
+Update ClamAV definitions first (requires internet):
+
+  freshclam
+
+Scan the Windows partition:
+
+  clamscan -r /mnt/windows              # Basic scan
+  clamscan -r -i /mnt/windows           # Only show infected files
+  clamscan -r --move=/quarantine /mnt/windows   # Quarantine infected
+
+Scan common malware locations:
+
+  clamscan -r "/mnt/windows/Users/*/AppData"
+  clamscan -r "/mnt/windows/Windows/Temp"
+  clamscan -r "/mnt/windows/ProgramData"
+
+Note: ClamAV detection isn't as comprehensive as commercial AV.
+Best for known malware; may miss new/sophisticated threats.
+
+
+SCENARIO: Disable Windows Fast Startup (to mount NTFS read-write)
+-----------------------------------------------------------------
+Windows 8+ uses "Fast Startup" (hybrid shutdown) by default.
+This leaves NTFS in a "dirty" state, preventing safe writes from Linux.
+
+Option 1: Force mount (may cause issues):
+
+  mount -t ntfs-3g -o remove_hiberfile /dev/sdX1 /mnt/windows
+
+Option 2: Boot Windows and disable Fast Startup:
+  - Control Panel > Power Options > "Choose what the power buttons do"
+  - Click "Change settings that are currently unavailable"
+  - Uncheck "Turn on fast startup"
+  - Shutdown (not restart) Windows
+
+Option 3: Via registry from Linux:
+
+  hivexregedit --merge /mnt/windows/Windows/System32/config/SYSTEM << 'EOF'
+  Windows Registry Editor Version 5.00
+
+  [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power]
+  "HiberbootEnabled"=dword:00000000
+  EOF
+
+
+WINDOWS RECOVERY TIPS
+---------------------
+1. Always try mounting read-only first to assess the situation
+2. Windows Fast Startup/hibernation prevents safe NTFS writes
+3. BitLocker recovery key is essential - no key = no access
+4. chntpw blanks passwords; it cannot recover/show old passwords
+5. Back up registry hives before editing them
+6. If Windows is bootable but locked out, just reset the password
+7. For serious Windows issues, Windows Recovery Environment may be needed
+8. Some antivirus/security software may re-lock accounts on next boot
 
 ================================================================================
 5. HARDWARE DIAGNOSTICS
