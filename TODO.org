@@ -27,6 +27,180 @@
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
 
+** TODO [#B] Consider adding bootable archzfs ISO to GRUB boot menu
+Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
+
+*** Benefits
+- Always have a rescue environment available
+- Can reinstall or rollback without external media
+- Useful for remote/headless servers
+
+*** Challenges
+1. Storage location - ISO is 5GB. Can't live on ZFS (GRUB can't read it). Options:
+   - EFI partition (currently 1GB - would need to be larger)
+   - Dedicated recovery partition (ext4 or FAT32)
+   - Second EFI partition just for the ISO
+
+2. GRUB loopback boot - Arch ISOs support this with the right kernel params:
+   #+BEGIN_SRC
+   menuentry "Archzfs Recovery" {
+       loopback loop /path/to/archzfs.iso
+       linux (loop)/arch/boot/x86_64/vmlinuz-linux archisolabel=ARCHZFS
+       initrd (loop)/arch/boot/x86_64/initramfs-linux.img
+   }
+   #+END_SRC
+
+3. Keeping it updated - Would need a mechanism to update the ISO when rebuilding
+
+*** Questions to resolve
+- Is this for recovery scenarios, or would you actually reinstall from it?
+- Would you want this integrated into the installer (auto-create recovery partition)?
+- Or just document how to set it up manually?
+
+** TODO [#B] Add common recovery tools to archzfs ISO
+Make the ISO double as a general-purpose recovery disk.
+
+*** Research Sources
+- [[https://www.system-rescue.org/Detailed-packages-list/][SystemRescue Package List]] - Arch-based rescue distro with 1000+ packages
+- [[https://alternativeto.net/software/hiren39s-bootcd/][Hiren's BootCD Alternatives]] - Popular rescue disk comparisons
+- [[https://www.chntpw.com/][chntpw]] - Windows password reset tool
+- [[https://rtech.support/disks/encryption/dislocker/][Dislocker]] - BitLocker decryption on Linux
+
+*** Currently on archzfs ISO
+- ZFS tools (zpool, zfs, zfs-utils)
+- Base Arch system (coreutils, util-linux, systemd)
+- Network (networkmanager, openssh, curl, wget)
+- Editors (vim)
+- Partitioning (parted, gdisk)
+- Filesystem (dosfstools, e2fsprogs)
+
+*** Proposed Additions by Category
+
+**** Data Recovery & Forensics
+| Package | Description | Size |
+|---------+-------------+------|
+| testdisk | Partition/file recovery, fixes partition tables | ~2MB |
+| ddrescue | Copy data from failing drives with retries | ~1MB |
+| foremost | File carving based on headers/footers | ~1MB |
+| sleuthkit | Forensic analysis toolkit (icat, fls, etc.) | ~5MB |
+| safecopy | Low-level data recovery from damaged media | ~1MB |
+
+**** Disk Cloning & Imaging
+| Package | Description | Size |
+|---------+-------------+------|
+| partclone | Efficient partition cloning (used by Clonezilla) | ~2MB |
+| fsarchiver | Filesystem archiver with compression | ~1MB |
+| partimage | Partition imaging (legacy, but useful) | ~1MB |
+
+**** Windows Recovery
+| Package | Description | Size |
+|---------+-------------+------|
+| chntpw | Reset Windows passwords, edit registry | ~500KB |
+| dislocker | Read/write BitLocker encrypted volumes | ~1MB |
+| ntfs-3g | Full NTFS read/write support | (likely included) |
+| hivex | Windows registry hive extraction | ~500KB |
+| ms-sys | Write Windows MBR/boot records | ~100KB |
+
+**** Filesystem Tools
+| Package | Description | Size |
+|---------+-------------+------|
+| ntfs-3g | NTFS read/write | ~2MB |
+| exfatprogs | exFAT support | ~500KB |
+| btrfs-progs | Btrfs tools | ~5MB |
+| xfsprogs | XFS tools | ~3MB |
+| f2fs-tools | Flash-Friendly FS tools | ~1MB |
+| hfsprogs | HFS/HFS+ (Mac) support | ~1MB |
+
+**** Hardware Diagnostics
+| Package | Description | Size |
+|---------+-------------+------|
+| smartmontools | SMART disk health monitoring | ~1MB |
+| hdparm | HDD/SSD parameter tuning | ~500KB |
+| nvme-cli | NVMe drive management | ~1MB |
+| lshw | Detailed hardware lister | ~1MB |
+| dmidecode | DMI/SMBIOS decoder | ~500KB |
+| memtester | Userspace memory testing | ~100KB |
+| stress-ng | CPU/memory/IO stress testing | ~2MB |
+| i2c-tools | I2C/SMBus tools | ~500KB |
+| lm_sensors | Hardware monitoring (temps, fans, voltages) | ~500KB |
+
+**** Network Diagnostics
+| Package | Description | Size |
+|---------+-------------+------|
+| nmap | Network scanner and security auditing | ~25MB |
+| tcpdump | Command-line packet analyzer | ~1MB |
+| wireshark-cli | TShark packet analysis | ~50MB |
+| iperf3 | Network bandwidth testing | ~500KB |
+| mtr | Combined ping/traceroute | ~500KB |
+| iftop | Network bandwidth monitor | ~500KB |
+| nethogs | Per-process bandwidth monitor | ~500KB |
+| ethtool | NIC configuration/diagnostics | ~500KB |
+| bind | dig/nslookup DNS tools | ~5MB |
+
+**** Security & Malware Scanning
+| Package | Description | Size |
+|---------+-------------+------|
+| clamav | Open source antivirus engine | ~150MB |
+| rkhunter | Rootkit detection | ~1MB |
+| chkrootkit | Rootkit checker | ~500KB |
+| lynis | Security auditing tool | ~1MB |
+
+**** Boot Repair
+| Package | Description | Size |
+|---------+-------------+------|
+| efibootmgr | UEFI boot manager (likely included) | ~100KB |
+| grub | GRUB bootloader tools (included) | - |
+| os-prober | Detect other OSes for GRUB | ~100KB |
+| syslinux | Legacy bootloader tools | ~2MB |
+
+**** File Management & Compression
+| Package | Description | Size |
+|---------+-------------+------|
+| mc | Midnight Commander file manager | ~2MB |
+| ncdu | NCurses disk usage analyzer | ~500KB |
+| tree | Directory listing | ~100KB |
+| p7zip | 7-Zip compression | ~3MB |
+| unrar | RAR extraction | ~500KB |
+| cabextract | Windows CAB extraction | ~100KB |
+| cpio | Archive tool (initramfs) | ~500KB |
+
+**** Remote Access
+| Package | Description | Size |
+|---------+-------------+------|
+| remmina | RDP/VNC client (GUI) | ~10MB |
+| tigervnc | VNC server/client | ~5MB |
+| screen | Terminal multiplexer | ~1MB |
+| tmux | Terminal multiplexer | ~1MB |
+
+**** Monitoring & System Info
+| Package | Description | Size |
+|---------+-------------+------|
+| htop | Interactive process viewer | ~500KB |
+| iotop | I/O monitoring | ~100KB |
+| atop | Advanced system monitor | ~500KB |
+| inxi | System information script | ~500KB |
+| neofetch | System info display | ~500KB |
+
+**** GUI Tools (if keeping Xfce or adding minimal X)
+| Package | Description | Size |
+|---------+-------------+------|
+| gparted | Graphical partition editor | ~5MB |
+| baobab | Disk usage analyzer | ~3MB |
+| gnome-disk-utility | GNOME Disks | ~5MB |
+
+*** Size Estimate
+- Core recovery tools: ~50MB
+- Network diagnostics: ~80MB
+- ClamAV (optional): ~150MB
+- GUI tools (optional): ~20MB
+- Total estimate: ~150-300MB additional
+
+*** Questions to Resolve
+- Include ClamAV? Adds ~150MB but very useful for Windows malware scanning
+- Include Wireshark CLI (tshark)? Adds ~50MB
+- Keep ISO under specific size target?
+- Add GUI tools or keep it minimal/CLI-focused?
+
 ** TODO [#C] Check for methods to abstract
 
 * Resolved
