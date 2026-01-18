@@ -1,0 +1,160 @@
+#!/bin/bash
+# grub-zfs-snap - Generate GRUB menu entries for ZFS snapshots
+#
+# This script scans ZFS snapshots and generates GRUB submenu entries
+# allowing boot into previous system states.
+#
+# Usage: grub-zfs-snap [--generate]
+#   --generate    Output GRUB menu entries (called by /etc/grub.d/40_zfs_snapshots)
+#   (no args)     Regenerate GRUB config
+#
+# Installation:
+#   1. Copy this script to /usr/local/bin/grub-zfs-snap
+#   2. Copy 40_zfs_snapshots to /etc/grub.d/
+#   3. Run: grub-mkconfig -o /boot/grub/grub.cfg
+
+set -e
+
+# Configuration
+POOL_NAME="${POOL_NAME:-zroot}"
+ROOT_DATASET="${ROOT_DATASET:-ROOT/default}"
+MAX_SNAPSHOTS="${MAX_SNAPSHOTS:-10}"
+
+# Get full dataset path
+FULL_DATASET="${POOL_NAME}/${ROOT_DATASET}"
+
+# Colors for terminal output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+info() { echo -e "${GREEN}[INFO]${NC} $1" >&2; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
+
+# Check if running as root
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run as root"
+    fi
+}
+
+# Get kernel and initramfs paths
+get_kernel_info() {
+    # Find the LTS kernel
+    KERNEL=$(ls /boot/vmlinuz-linux-lts 2>/dev/null || ls /boot/vmlinuz-linux 2>/dev/null | head -1)
+    INITRD=$(ls /boot/initramfs-linux-lts.img 2>/dev/null || ls /boot/initramfs-linux.img 2>/dev/null | head -1)
+
+    if [[ -z "$KERNEL" ]] || [[ -z "$INITRD" ]]; then
+        error "Could not find kernel or initramfs"
+    fi
+
+    # Get just the filenames
+    KERNEL_FILE=$(basename "$KERNEL")
+    INITRD_FILE=$(basename "$INITRD")
+}
+
+# Get GRUB root device hint
+get_grub_root() {
+    # Get the EFI partition device
+    local efi_dev=$(findmnt -n -o SOURCE /boot 2>/dev/null | head -1)
+    if [[ -z "$efi_dev" ]]; then
+        # Fallback - assume first partition of first disk
+        echo "hd0,gpt1"
+        return
+    fi
+
+    # Convert to GRUB device notation
+    # This is simplified - may need adjustment for complex setups
+    local disk=$(echo "$efi_dev" | sed 's/[0-9]*$//')
+    local part=$(echo "$efi_dev" | grep -o '[0-9]*$')
+
+    # Get disk index (simplified - assumes /dev/sda or /dev/vda style)
+    echo "hd0,gpt${part}"
+}
+
+# Generate GRUB menu entries for snapshots
+generate_entries() {
+    get_kernel_info
+
+    local grub_root=$(get_grub_root)
+    local hostid=$(hostid)
+
+    # Get list of snapshots, sorted by creation time (newest first)
+    local snapshots=$(zfs list -H -t snapshot -o name,creation -s creation -r "$FULL_DATASET" 2>/dev/null | \
+                      grep "^${FULL_DATASET}@" | \
+                      tac | \
+                      head -n "$MAX_SNAPSHOTS")
+
+    if [[ -z "$snapshots" ]]; then
+        return
+    fi
+
+    # Generate submenu
+    cat << 'SUBMENU_START'
+submenu 'ZFS Snapshots' --class zfs {
+SUBMENU_START
+
+    while IFS=$'\t' read -r snapshot creation; do
+        local snap_name="${snapshot##*@}"
+        local snap_date=$(echo "$creation" | awk '{print $1, $2, $3, $4, $5}')
+
+        cat << ENTRY
+    menuentry '${snap_name} (${snap_date})' --class zfs {
+        insmod part_gpt
+        insmod fat
+        insmod zfs
+        search --no-floppy --fs-uuid --set=root \$(grub-probe --target=fs_uuid /boot)
+        echo 'Loading Linux kernel...'
+        linux /${KERNEL_FILE} root=ZFS=${snapshot} ro spl.spl_hostid=0x${hostid}
+        echo 'Loading initial ramdisk...'
+        initrd /${INITRD_FILE}
+    }
+ENTRY
+    done <<< "$snapshots"
+
+    echo "}"
+}
+
+# Regenerate GRUB configuration
+regenerate_grub() {
+    check_root
+    info "Regenerating GRUB configuration..."
+    grub-mkconfig -o /boot/grub/grub.cfg
+    info "Done. ZFS snapshots added to GRUB menu."
+}
+
+# List current snapshots
+list_snapshots() {
+    echo "ZFS Snapshots for ${FULL_DATASET}:"
+    echo ""
+    zfs list -H -t snapshot -o name,creation,used -s creation -r "$FULL_DATASET" 2>/dev/null | \
+        grep "^${FULL_DATASET}@" | \
+        tac | \
+        head -n "$MAX_SNAPSHOTS" | \
+        while IFS=$'\t' read -r name creation used; do
+            local snap_name="${name##*@}"
+            printf "  %-30s %s (used: %s)\n" "$snap_name" "$creation" "$used"
+        done
+}
+
+# Main
+case "${1:-}" in
+    --generate)
+        generate_entries
+        ;;
+    --list)
+        list_snapshots
+        ;;
+    "")
+        regenerate_grub
+        ;;
+    *)
+        echo "Usage: $0 [--generate|--list]"
+        echo ""
+        echo "Options:"
+        echo "  --generate    Output GRUB menu entries (for /etc/grub.d/)"
+        echo "  --list        List available snapshots"
+        echo "  (no args)     Regenerate GRUB configuration"
+        exit 1
+        ;;
+esac

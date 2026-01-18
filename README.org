@@ -21,6 +21,7 @@ manual module loading or package installation during the install process.
 - *Genesis Snapshot* - Automatic pristine-state snapshot after installation
 - *Rollback Script* - One-command factory reset via ~/root/rollback-to-genesis~
 - *Pre-Pacman Snapshots* - Automatic snapshots before package operations
+- *GRUB Snapshot Boot* - Boot into any ZFS snapshot directly from GRUB menu
 - *NetworkManager* - WiFi configuration copied to installed system
 - *SSH Ready* - Optional SSH with root login for headless servers
 - *LTS Kernel* - Uses linux-lts for stability with ZFS
@@ -91,7 +92,10 @@ archzfs/
 ├── build.sh                       # Main ISO build script
 ├── custom/
 │   ├── install-archzfs            # Interactive installation script
-│   └── install-archzfs.conf.example  # Example config for unattended install
+│   ├── install-archzfs.conf.example  # Example config for unattended install
+│   ├── grub-zfs-snap              # ZFS snapshot GRUB menu generator
+│   ├── 40_zfs_snapshots           # GRUB generator script (for /etc/grub.d/)
+│   └── zz-grub-zfs-snap.hook      # Pacman hook for auto-regeneration
 ├── scripts/
 │   └── test-vm.sh                 # QEMU test VM launcher
 ├── profile/                       # archiso profile (generated during build)
@@ -407,6 +411,62 @@ If you enabled SSH during installation:
 3. Run ~archsetup~ for further configuration
 
 * Post-Installation
+
+** ZFS Snapshot Boot Entries (grub-zfs-snap)
+
+The installer configures GRUB to display bootable ZFS snapshots in the boot menu.
+This allows you to boot directly into a previous system state without manually
+rolling back.
+
+*** How It Works
+
+- A GRUB submenu "ZFS Snapshots" appears in the boot menu
+- Shows up to 10 most recent snapshots of the root dataset
+- Selecting a snapshot boots the system in read-only mode from that snapshot
+- The running system sees the snapshot's files, but changes go to a temporary overlay
+
+*** When Snapshots Appear in GRUB
+
+The GRUB menu is automatically updated:
+- After kernel updates (~linux-lts~)
+- After ZFS package updates (~zfs-dkms~, ~zfs-utils~)
+- After GRUB updates
+- After any kernel module installation
+
+*** Manual Snapshot Management
+
+#+BEGIN_SRC bash
+# Create a snapshot before making changes
+zfs snapshot zroot/ROOT/default@before-experiment
+
+# Regenerate GRUB menu to include new snapshot
+grub-zfs-snap
+
+# List snapshots that will appear in GRUB
+grub-zfs-snap --list
+#+END_SRC
+
+*** Customization
+
+Environment variables control behavior:
+
+#+BEGIN_SRC bash
+# Change pool name (default: zroot)
+POOL_NAME=mypool grub-zfs-snap
+
+# Change root dataset (default: ROOT/default)
+ROOT_DATASET=ROOT/arch grub-zfs-snap
+
+# Show more snapshots in menu (default: 10)
+MAX_SNAPSHOTS=20 grub-zfs-snap
+#+END_SRC
+
+*** Booting from a Snapshot
+
+1. Reboot and select "ZFS Snapshots" from GRUB menu
+2. Choose the desired snapshot by date/name
+3. System boots with that snapshot's root filesystem
+4. Files are read-only - to make permanent, rollback from normal boot
 
 ** Genesis Snapshot
 

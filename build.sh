@@ -180,6 +180,13 @@ cp "$CUSTOM_DIR/install-archzfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
+# Copy grub-zfs-snap for ZFS snapshot boot entries
+info "Copying grub-zfs-snap..."
+cp "$CUSTOM_DIR/grub-zfs-snap" "$PROFILE_DIR/airootfs/usr/local/bin/"
+mkdir -p "$PROFILE_DIR/airootfs/usr/local/share/grub-zfs-snap"
+cp "$CUSTOM_DIR/40_zfs_snapshots" "$PROFILE_DIR/airootfs/usr/local/share/grub-zfs-snap/"
+cp "$CUSTOM_DIR/zz-grub-zfs-snap.hook" "$PROFILE_DIR/airootfs/usr/local/share/grub-zfs-snap/"
+
 # Copy example config for unattended installs
 mkdir -p "$PROFILE_DIR/airootfs/root"
 cp "$CUSTOM_DIR/install-archzfs.conf.example" "$PROFILE_DIR/airootfs/root/"
@@ -195,6 +202,9 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/archsetup-zfs"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/grub-zfs-snap"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/etc/shadow"]="0:0:400"

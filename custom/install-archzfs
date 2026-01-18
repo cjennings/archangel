@@ -1031,6 +1031,26 @@ EOF
     fi
 }
 
+configure_grub_zfs_snap() {
+    step "Configuring ZFS Snapshot Boot Entries"
+
+    # Install grub-zfs-snap script
+    info "Installing grub-zfs-snap..."
+    cp /usr/local/bin/grub-zfs-snap /mnt/usr/local/bin/grub-zfs-snap
+    chmod +x /mnt/usr/local/bin/grub-zfs-snap
+
+    # Install GRUB generator
+    cp /usr/local/share/grub-zfs-snap/40_zfs_snapshots /mnt/etc/grub.d/40_zfs_snapshots
+    chmod +x /mnt/etc/grub.d/40_zfs_snapshots
+
+    # Install pacman hook for auto-regeneration
+    mkdir -p /mnt/etc/pacman.d/hooks
+    cp /usr/local/share/grub-zfs-snap/zz-grub-zfs-snap.hook /mnt/etc/pacman.d/hooks/
+
+    info "ZFS snapshots will appear in GRUB boot menu."
+    info "Run 'grub-zfs-snap' to manually regenerate after creating snapshots."
+}
+
 configure_zfs_services() {
     step "Configuring ZFS Services"
 
@@ -1276,6 +1296,7 @@ main() {
     configure_ssh
     configure_initramfs
     configure_bootloader
+    configure_grub_zfs_snap
     configure_zfs_services
     configure_pacman_hook
     copy_archsetup

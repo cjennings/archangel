@@ -1,0 +1,13 @@
+#!/bin/bash
+# /etc/grub.d/40_zfs_snapshots
+# GRUB configuration generator for ZFS snapshot boot entries
+#
+# This script is called by grub-mkconfig to generate menu entries
+# for booting into ZFS snapshots.
+
+set -e
+
+# Only run if grub-zfs-snap is installed
+if [[ -x /usr/local/bin/grub-zfs-snap ]]; then
+    /usr/local/bin/grub-zfs-snap --generate
+fi
