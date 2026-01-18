@@ -1,5 +1,4 @@
 * Open Work
-** TODO [#B] Add config file information to README
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 *** Options to evaluate
 - Self-hosted on TrueNAS (primary target)
@@ -31,6 +30,12 @@
 ** TODO [#C] Check for methods to abstract
 
 * Resolved
+** DONE [#B] Add config file information to README
+Config file format documented in README.org with full reference and examples.
+
+** DONE [#B] Add CI/CD test infrastructure
+Added Makefile, test-install.sh, and test configs for automated VM testing.
+
 ** CANCELLED [#C] Consider Dialog-Based Interface for Status, Information, and Questions
 Using fzf instead.
 
