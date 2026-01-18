@@ -451,15 +451,84 @@ zpool list
 
 * Keeping Up-to-Date
 
-** When to Rebuild
+** Kernel Updates on Installed Systems
+
+The installed system uses *zfs-dkms* which builds ZFS modules from source. This
+means kernel updates work automatically:
+
+1. *Pacman installs new kernel* - ~linux-lts~ update via pacman/topgrade
+2. *DKMS hook triggers* - Automatically compiles ZFS for the new kernel
+3. *mkinitcpio hook triggers* - Regenerates initramfs with new ZFS modules
+4. *Reboot* - System boots with new kernel and matching ZFS modules
+
+*** Why DKMS?
+
+| Approach | Pros | Cons |
+|----------+------+------|
+| ~zfs-dkms~ (what we use) | Always compatible, builds for any kernel | Slower updates (compile time) |
+| ~zfs-linux-lts~ (prebuilt) | Fast updates | Must wait for archzfs to release matching version |
+
+We use DKMS because it guarantees compatibility - you're never stuck waiting
+for the archzfs maintainers to release a new package.
+
+*** Verify After Kernel Update
+
+#+BEGIN_SRC bash
+# Check ZFS module matches running kernel
+uname -r                      # Current kernel version
+modinfo zfs | grep vermagic   # ZFS module version
+
+# These should show the same kernel version
+#+END_SRC
+
+*** If Something Goes Wrong
+
+If a kernel update breaks ZFS (rare with LTS kernel):
+
+#+BEGIN_SRC bash
+# Boot from archzfs ISO
+# Import the pool
+zpool import -f zroot
+
+# Enter passphrase when prompted, then mount
+zfs mount -a
+mount /dev/vda1 /mnt/boot  # EFI partition
+
+# Chroot and fix
+arch-chroot /mnt
+
+# Option 1: Rebuild DKMS modules
+dkms autoinstall
+mkinitcpio -P
+
+# Option 2: Rollback to previous snapshot
+# (exit chroot first)
+/mnt/root/rollback-to-genesis
+#+END_SRC
+
+*** Pre-Pacman Snapshots
+
+The installer configures automatic snapshots before every pacman operation.
+If a kernel update causes issues, you can rollback:
+
+#+BEGIN_SRC bash
+# List recent snapshots
+zfs list -t snapshot -o name,creation | grep ROOT
+
+# Rollback to pre-update snapshot
+zfs rollback zroot/ROOT/default@autosnap_YYYY-MM-DD_HH:MM:SS
+reboot
+#+END_SRC
+
+** Rebuilding the ISO
 
 Rebuild the ISO when:
-- New Linux LTS kernel is released
+- New Linux LTS kernel is released (for new installations)
 - New ZFS version is released
 - You've made changes to install-archzfs
 - archzfs repository packages are updated
 
-** Rebuild Process
+*** Rebuild Process
 
 #+BEGIN_SRC bash
 # Clean and rebuild
@@ -471,7 +540,7 @@ The build automatically pulls the latest packages from:
 - Official Arch repositories
 - archzfs repository (https://archzfs.com)
 
-** Checking for Updates
+*** Checking for Updates
 
 #+BEGIN_SRC bash
 # Check current linux-lts version in repos
