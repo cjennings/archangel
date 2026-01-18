@@ -842,7 +842,215 @@ WINDOWS RECOVERY TIPS
 5. HARDWARE DIAGNOSTICS
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr smartctl       # Check drive health
+  tldr lshw           # List hardware
+  tldr hdparm         # Disk info and benchmarks
+  man memtester       # Memory testing
+  man stress-ng       # Stress testing
+
+SCENARIO: Check if a drive is failing (SMART)
+---------------------------------------------
+Quick health check:
+
+  smartctl -H /dev/sdX
+
+Full SMART report:
+
+  smartctl -a /dev/sdX
+
+For NVMe drives:
+
+  smartctl -a /dev/nvme0n1
+  nvme smart-log /dev/nvme0n1
+
+Key SMART attributes to watch:
+  - Reallocated_Sector_Ct: Bad sectors remapped (increasing = dying)
+  - Current_Pending_Sector: Sectors waiting to be remapped
+  - Offline_Uncorrectable: Unreadable sectors
+  - UDMA_CRC_Error_Count: Cable/connection issues
+  - Wear_Leveling_Count: SSD wear (lower = more worn)
+
+Run a self-test:
+
+  smartctl -t short /dev/sdX    # Quick test (~2 min)
+  smartctl -t long /dev/sdX     # Thorough test (~hours)
+
+Check test results:
+
+  smartctl -l selftest /dev/sdX
+
+
+SCENARIO: Test RAM for errors
+-----------------------------
+Option 1: Memtest86+ (from boot menu)
+  - Restart and select "Memtest86+" from the boot menu
+  - Most thorough test, runs before OS loads
+  - Let it run for at least 1-2 passes (can take hours)
+
+Option 2: memtester (from running system)
+  - Tests available RAM while system is running
+  - Can't test RAM used by kernel/programs
+
+Test 1GB of RAM (adjust based on free memory):
+
+  free -h                       # Check available memory
+  memtester 1G 1                # Test 1GB, 1 iteration
+  memtester 2G 5                # Test 2GB, 5 iterations
+
+Note: memtester can only test free RAM. For thorough testing,
+use Memtest86+ from the boot menu.
+
+
+SCENARIO: Monitor temperatures, fans, voltages
+----------------------------------------------
+First, detect and load sensor modules:
+
+  sensors-detect --auto         # Auto-detect sensors
+
+Then view readings:
+
+  sensors                       # Show all sensor data
+
+Continuous monitoring:
+
+  watch -n 1 sensors            # Update every second
+
+If sensors shows nothing, modules may need loading:
+
+  modprobe coretemp             # Intel CPU temps
+  modprobe k10temp              # AMD CPU temps
+  modprobe nct6775              # Common motherboard chip
+
+
+SCENARIO: Stress test hardware (verify stability)
+-------------------------------------------------
+Useful for:
+  - Testing used/refurbished hardware
+  - Verifying overclocking stability
+  - Burn-in testing before deployment
+  - Reproducing intermittent issues
+
+CPU stress test:
+
+  stress-ng --cpu $(nproc) --timeout 300s     # All cores, 5 min
+
+Memory stress test:
+
+  stress-ng --vm 2 --vm-bytes 1G --timeout 300s
+
+Combined CPU + memory:
+
+  stress-ng --cpu $(nproc) --vm 2 --vm-bytes 1G --timeout 600s
+
+Disk I/O stress:
+
+  stress-ng --hdd 2 --timeout 300s
+
+Monitor during stress test (in another terminal):
+
+  watch -n 1 sensors            # Watch temperatures
+  htop                          # Watch CPU/memory usage
+
+
+SCENARIO: Get detailed hardware information
+-------------------------------------------
+Full hardware report:
+
+  lshw                          # All hardware (verbose)
+  lshw -short                   # Summary view
+  lshw -html > hardware.html    # HTML report
+
+Specific components:
+
+  lshw -class processor         # CPU info
+  lshw -class memory            # RAM info
+  lshw -class disk              # Disk info
+  lshw -class network           # Network adapters
+
+BIOS/motherboard info:
+
+  dmidecode                     # All DMI tables
+  dmidecode -t bios             # BIOS info
+  dmidecode -t system           # System/motherboard
+  dmidecode -t memory           # Memory slots and modules
+  dmidecode -t processor        # CPU socket info
+
+Quick system overview:
+
+  inxi -Fxz                     # If inxi is installed
+  cat /proc/cpuinfo             # CPU details
+  cat /proc/meminfo             # Memory details
+
+
+SCENARIO: Test disk speed / benchmark
+-------------------------------------
+Basic read speed test:
+
+  hdparm -t /dev/sdX            # Buffered read speed
+  hdparm -T /dev/sdX            # Cached read speed
+
+More accurate test (run 3 times, average):
+
+  hdparm -tT /dev/sdX
+  hdparm -tT /dev/sdX
+  hdparm -tT /dev/sdX
+
+Get drive information:
+
+  hdparm -I /dev/sdX            # Detailed drive info
+
+For NVMe drives:
+
+  nvme list                     # List NVMe drives
+  nvme id-ctrl /dev/nvme0n1     # Controller info
+  nvme smart-log /dev/nvme0n1   # SMART/health data
+
+
+SCENARIO: Check for bad blocks (surface scan)
+---------------------------------------------
+WARNING: This is read-only but takes a long time on large drives.
+
+  badblocks -sv /dev/sdX
+
+For faster progress indication:
+
+  badblocks -sv -b 4096 /dev/sdX
+
+Note: For modern drives, SMART is usually more informative.
+badblocks is useful for older drives without good SMART support.
+
+
+SCENARIO: Identify unknown hardware / find drivers
+--------------------------------------------------
+List PCI devices:
+
+  lspci                         # All PCI devices
+  lspci -v                      # Verbose (with drivers)
+  lspci -k                      # Show kernel drivers
+
+List USB devices:
+
+  lsusb                         # All USB devices
+  lsusb -v                      # Verbose
+
+Find what driver a device is using:
+
+  lspci -k | grep -A3 "Network"    # Network adapter driver
+  lspci -k | grep -A3 "VGA"        # Graphics driver
+
+
+HARDWARE DIAGNOSTICS TIPS
+-------------------------
+1. Run SMART checks regularly - drives often show warning signs
+2. Memtest86+ (from boot menu) is more thorough than memtester
+3. Stress test new/used hardware before trusting it with data
+4. High temperatures during stress test = cooling problem
+5. Random crashes/errors often indicate RAM or power issues
+6. SMART "Reallocated Sector Count" increasing = drive dying
+7. Back up immediately if SMART shows any warnings
+8. SSDs have limited write cycles - check Wear_Leveling_Count
 
 ================================================================================
 6. DISK OPERATIONS

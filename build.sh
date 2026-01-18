@@ -155,6 +155,15 @@ ntfs-3g
 dislocker
 hivex
 
+# Hardware diagnostics
+memtester
+stress-ng
+lm_sensors
+lshw
+dmidecode
+nvme-cli
+hdparm
+
 EOF
 
 # Get kernel version for ISO naming
