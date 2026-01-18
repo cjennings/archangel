@@ -135,8 +135,7 @@ get_locale() {
         | awk '{print $1}' \
         | sort -u \
         | fzf --height=20 --layout=reverse --border \
-              --header="Select Locale" \
-              --query="en_US" \
+              --header="Select Locale (type to search, e.g. 'de_DE', 'fr_FR')" \
               --preview='
                   loc={}
                   echo "Locale: $loc"
@@ -167,8 +166,7 @@ get_keymap() {
 
     KEYMAP=$(localectl list-keymaps \
         | fzf --height=20 --layout=reverse --border \
-              --header="Select Keyboard Layout" \
-              --query="us" \
+              --header="Select Keyboard Layout (type to search)" \
               --preview='
                   echo "Keymap: {}"
                   echo ""
@@ -197,7 +195,7 @@ get_disks() {
 
     # Get list of available disks with info
     local disk_list
-    disk_list=$(lsblk -d -n -o NAME,SIZE,MODEL,TYPE | awk '$4=="disk"{printf "/dev/%-8s %8s  %s\n", $1, $2, $3}')
+    disk_list=$(lsblk -d -n -o NAME,SIZE,TYPE | awk '$3=="disk"{printf "/dev/%-8s %8s\n", $1, $2}')
 
     if [[ -z "$disk_list" ]]; then
         error "No disks found!"
@@ -406,16 +404,48 @@ get_wifi() {
         echo ""
         info "Scanning for networks..."
         nmcli device wifi rescan 2>/dev/null || true
-        sleep 2
+        sleep 3
+
+        # Get list of networks for fzf
+        local networks
+        networks=$(nmcli -t -f SSID,SIGNAL,SECURITY device wifi list | grep -v '^$' | sort -t: -k2 -rn | uniq)
+
+        if [[ -z "$networks" ]]; then
+            warn "No WiFi networks found."
+            info "Skipping WiFi configuration."
+            return
+        fi
+
         echo ""
-        echo "Available networks:"
-        nmcli device wifi list
+        info "Select network (ENTER to confirm, ESC to skip)"
         echo ""
 
-        prompt "Enter WiFi SSID:"
-        read -p "> " WIFI_SSID
+        # Use fzf to select network
+        WIFI_SSID=$(echo "$networks" \
+            | fzf --height=15 --layout=reverse --border \
+                  --header="Select WiFi Network" \
+                  --delimiter=':' \
+                  --with-nth=1 \
+                  --preview='
+                      IFS=":" read -r ssid signal security <<< {}
+                      echo "Network: $ssid"
+                      echo ""
+                      echo "Signal:   ${signal}%"
+                      echo "Security: ${security:-Open}"
+                      echo ""
+                      if [[ -z "$security" ]]; then
+                          echo "WARNING: Open network (no encryption)"
+                      fi
+                  ' \
+                  --preview-window=right:40% \
+            | cut -d: -f1)
 
-        prompt "Enter WiFi password:"
+        if [[ -z "$WIFI_SSID" ]]; then
+            info "Skipping WiFi configuration."
+            return
+        fi
+
+        prompt "Enter WiFi password for '$WIFI_SSID':"
         read -s -p "> " WIFI_PASSWORD
         echo ""
 
