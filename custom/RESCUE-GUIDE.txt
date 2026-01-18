@@ -1,0 +1,230 @@
+================================================================================
+                         ARCHZFS RESCUE GUIDE
+================================================================================
+
+This guide covers common rescue and recovery scenarios. For quick command
+reference, use: tldr <command>
+
+Table of Contents:
+  1. ZFS Recovery
+  2. Data Recovery
+  3. Boot Repair
+  4. Windows Recovery
+  5. Hardware Diagnostics
+  6. Disk Operations
+  7. Network Troubleshooting
+
+================================================================================
+1. ZFS RECOVERY
+================================================================================
+
+QUICK REFERENCE
+---------------
+  tldr zfs          # ZFS filesystem commands
+  tldr zpool        # ZFS pool commands
+  man zfs           # Full ZFS manual
+  man zpool         # Full zpool manual
+
+SCENARIO: Import a pool from another system
+-------------------------------------------
+List pools available for import:
+
+  zpool import
+
+Import a specific pool:
+
+  zpool import poolname
+
+If the pool was not cleanly exported (e.g., system crash):
+
+  zpool import -f poolname
+
+Import with a different name (to avoid conflicts):
+
+  zpool import oldname newname
+
+
+SCENARIO: Pool won't import - "pool may be in use"
+--------------------------------------------------
+Force import (use when you know it's safe):
+
+  zpool import -f poolname
+
+If that fails, try recovery mode:
+
+  zpool import -F poolname
+
+Last resort - import read-only to recover data:
+
+  zpool import -o readonly=on poolname
+
+
+SCENARIO: Check pool health and repair
+--------------------------------------
+Check pool status:
+
+  zpool status poolname
+
+Start a scrub (checks all data, can take hours):
+
+  zpool scrub poolname
+
+Check scrub progress:
+
+  zpool status poolname
+
+Clear transient errors after fixing hardware:
+
+  zpool clear poolname
+
+
+SCENARIO: Recover from snapshot / Rollback
+------------------------------------------
+List all snapshots:
+
+  zfs list -t snapshot
+
+Rollback to a snapshot (destroys changes since snapshot):
+
+  zfs rollback poolname/dataset@snapshot
+
+For snapshots with intermediate snapshots, use -r:
+
+  zfs rollback -r poolname/dataset@snapshot
+
+
+SCENARIO: Copy data from ZFS pool
+---------------------------------
+Mount datasets if not auto-mounted:
+
+  zfs mount -a
+
+Or mount specific dataset:
+
+  zfs set mountpoint=/mnt/recovery poolname/dataset
+  zfs mount poolname/dataset
+
+Copy with rsync (preserves permissions, shows progress):
+
+  rsync -avP --progress /mnt/recovery/ /destination/
+
+
+SCENARIO: Send/Receive snapshots (backup/migrate)
+-------------------------------------------------
+Create a snapshot first:
+
+  zfs snapshot poolname/dataset@backup
+
+Send to a file (local backup):
+
+  zfs send poolname/dataset@backup > /path/to/backup.zfs
+
+Send with progress indicator:
+
+  zfs send poolname/dataset@backup | pv > /path/to/backup.zfs
+
+Send to another pool locally:
+
+  zfs send poolname/dataset@backup | zfs recv newpool/dataset
+
+Send to remote system over SSH:
+
+  zfs send poolname/dataset@backup | ssh user@remote zfs recv pool/dataset
+
+With progress and buffering for network transfers:
+
+  zfs send poolname/dataset@backup | pv | mbuffer -s 128k -m 1G | \
+    ssh user@remote "mbuffer -s 128k -m 1G | zfs recv pool/dataset"
+
+
+SCENARIO: Encrypted pool - unlock and mount
+-------------------------------------------
+Load the encryption key (will prompt for passphrase):
+
+  zfs load-key poolname
+
+Or for all encrypted datasets:
+
+  zfs load-key -a
+
+Then mount:
+
+  zfs mount -a
+
+
+SCENARIO: Replace failed drive in mirror/raidz
+----------------------------------------------
+Check which drive failed:
+
+  zpool status poolname
+
+Replace the drive (assuming /dev/sdc is new drive):
+
+  zpool replace poolname /dev/old-drive /dev/sdc
+
+Monitor resilver progress:
+
+  zpool status poolname
+
+
+SCENARIO: See what's using a dataset (before unmount)
+-----------------------------------------------------
+Check what processes have files open:
+
+  lsof /mountpoint
+
+Or for all ZFS mounts:
+
+  lsof | grep poolname
+
+
+USEFUL ZFS COMMANDS
+-------------------
+  zpool status              # Pool health overview
+  zpool list                # Pool capacity
+  zpool history poolname    # Command history
+  zfs list                  # All datasets
+  zfs list -t snapshot      # All snapshots
+  zfs get all poolname      # All properties
+  zdb -l /dev/sdX           # Low-level pool label info
+
+
+================================================================================
+2. DATA RECOVERY
+================================================================================
+
+[To be added]
+
+================================================================================
+3. BOOT REPAIR
+================================================================================
+
+[To be added]
+
+================================================================================
+4. WINDOWS RECOVERY
+================================================================================
+
+[To be added]
+
+================================================================================
+5. HARDWARE DIAGNOSTICS
+================================================================================
+
+[To be added]
+
+================================================================================
+6. DISK OPERATIONS
+================================================================================
+
+[To be added]
+
+================================================================================
+7. NETWORK TROUBLESHOOTING
+================================================================================
+
+[To be added]
+
+================================================================================
+                              END OF GUIDE
+================================================================================

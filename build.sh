@@ -128,6 +128,14 @@ fzf
 
 # For installation scripts
 dialog
+
+# Rescue/Recovery tools
+tealdeer
+pv
+rsync
+mbuffer
+lsof
+
 EOF
 
 # Get kernel version for ISO naming
@@ -195,6 +203,10 @@ cp "$CUSTOM_DIR/zfs-snap-prune" "$PROFILE_DIR/airootfs/usr/local/bin/"
 mkdir -p "$PROFILE_DIR/airootfs/root"
 cp "$CUSTOM_DIR/install-archzfs.conf.example" "$PROFILE_DIR/airootfs/root/"
 
+# Copy rescue guide
+info "Copying rescue guide..."
+cp "$CUSTOM_DIR/RESCUE-GUIDE.txt" "$PROFILE_DIR/airootfs/root/"
+
 # Set permissions in profiledef.sh
 info "Setting file permissions..."
 if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
@@ -224,6 +236,20 @@ if [[ -d /home/cjennings/code/archsetup ]]; then
     cp -r /home/cjennings/code/archsetup "$PROFILE_DIR/airootfs/code/"
     rm -rf "$PROFILE_DIR/airootfs/code/archsetup/.git"
     rm -rf "$PROFILE_DIR/airootfs/code/archsetup/.claude"
+fi
+
+# Pre-populate tealdeer (tldr) cache for offline use
+info "Pre-populating tealdeer cache..."
+if command -v tldr &>/dev/null; then
+    tldr --update 2>/dev/null || true
+    if [[ -d "$HOME/.cache/tealdeer" ]]; then
+        mkdir -p "$PROFILE_DIR/airootfs/root/.cache"
+        cp -r "$HOME/.cache/tealdeer" "$PROFILE_DIR/airootfs/root/.cache/"
+        info "Tealdeer cache copied (~27MB)"
+    fi
+else
+    warn "tealdeer not installed on build host, skipping cache pre-population"
+    warn "Install with: pacman -S tealdeer && tldr --update"
 fi
 
 # Ensure scripts are executable in the profile
