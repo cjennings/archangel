@@ -142,18 +142,15 @@ ddrescue
 testdisk
 foremost
 sleuthkit
-safecopy
 smartmontools
 
 # Boot repair
 os-prober
 syslinux
-ms-sys
 
 # Windows recovery
 chntpw
 ntfs-3g
-dislocker
 hivex
 
 # Hardware diagnostics
@@ -170,7 +167,6 @@ iotop
 partclone
 fsarchiver
 partimage
-nwipe
 xfsprogs
 btrfs-progs
 f2fs-tools
