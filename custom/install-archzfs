@@ -43,6 +43,7 @@ ZFS_PARTS=()           # Array of ZFS partition paths
 EFI_PARTS=()           # Array of EFI partition paths
 RAID_LEVEL=""          # "", "mirror", "raidz1", "raidz2", "raidz3"
 ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
+NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
 
 # Logging
 LOGFILE="/tmp/install-archzfs.log"
@@ -72,11 +73,16 @@ parse_args() {
                     error "--config-file requires a path argument"
                 fi
                 ;;
+            --no-encrypt)
+                NO_ENCRYPT="yes"
+                shift
+                ;;
             --help|-h)
                 echo "Usage: install-archzfs [OPTIONS]"
                 echo ""
                 echo "Options:"
                 echo "  --config-file PATH  Use config file for unattended installation"
+                echo "  --no-encrypt        Skip ZFS encryption (for testing only)"
                 echo "  --help, -h          Show this help message"
                 echo ""
                 echo "Without --config-file, runs in interactive mode."
@@ -146,7 +152,7 @@ gather_input() {
         # Validate required config values
         [[ -z "$HOSTNAME" ]] && error "Config missing required: HOSTNAME"
         [[ -z "$TIMEZONE" ]] && error "Config missing required: TIMEZONE"
-        [[ -z "$ZFS_PASSPHRASE" ]] && error "Config missing required: ZFS_PASSPHRASE"
+        [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]] && error "Config missing required: ZFS_PASSPHRASE"
         [[ -z "$ROOT_PASSWORD" ]] && error "Config missing required: ROOT_PASSWORD"
         [[ ${#SELECTED_DISKS[@]} -eq 0 ]] && error "Config missing required: DISKS"
 
@@ -169,6 +175,7 @@ gather_input() {
         info "  Disks: ${SELECTED_DISKS[*]}"
         [[ -n "$RAID_LEVEL" ]] && info "  RAID: $RAID_LEVEL"
         info "  SSH: $ENABLE_SSH"
+        [[ "$NO_ENCRYPT" == "yes" ]] && warn "  Encryption: DISABLED (testing mode)"
         [[ -n "$WIFI_SSID" ]] && info "  WiFi: $WIFI_SSID"
         return 0
     fi
@@ -189,7 +196,7 @@ gather_input() {
     get_disks
     get_raid_level
     get_wifi
-    get_zfs_passphrase
+    [[ "$NO_ENCRYPT" != "yes" ]] && get_zfs_passphrase
     get_root_password
     get_ssh_config
     show_summary
@@ -735,24 +742,42 @@ create_zfs_pool() {
         info "Creating single-disk pool..."
     fi
 
-    # Create encrypted pool using passphrase from variable
-    echo "$ZFS_PASSPHRASE" | zpool create -f \
-        -o ashift="$ASHIFT" \
-        -o autotrim=on \
-        -O acltype=posixacl \
-        -O atime=off \
-        -O canmount=off \
-        -O compression="$COMPRESSION" \
-        -O dnodesize=auto \
-        -O normalization=formD \
-        -O relatime=on \
-        -O xattr=sa \
-        -O encryption=aes-256-gcm \
-        -O keyformat=passphrase \
-        -O keylocation=prompt \
-        -O mountpoint=none \
-        -R /mnt \
-        "$POOL_NAME" $pool_config
+    # Create pool (with or without encryption)
+    if [[ "$NO_ENCRYPT" == "yes" ]]; then
+        warn "Creating pool WITHOUT encryption (testing mode)"
+        zpool create -f \
+            -o ashift="$ASHIFT" \
+            -o autotrim=on \
+            -O acltype=posixacl \
+            -O atime=off \
+            -O canmount=off \
+            -O compression="$COMPRESSION" \
+            -O dnodesize=auto \
+            -O normalization=formD \
+            -O relatime=on \
+            -O xattr=sa \
+            -O mountpoint=none \
+            -R /mnt \
+            "$POOL_NAME" $pool_config
+    else
+        echo "$ZFS_PASSPHRASE" | zpool create -f \
+            -o ashift="$ASHIFT" \
+            -o autotrim=on \
+            -O acltype=posixacl \
+            -O atime=off \
+            -O canmount=off \
+            -O compression="$COMPRESSION" \
+            -O dnodesize=auto \
+            -O normalization=formD \
+            -O relatime=on \
+            -O xattr=sa \
+            -O encryption=aes-256-gcm \
+            -O keyformat=passphrase \
+            -O keylocation=prompt \
+            -O mountpoint=none \
+            -R /mnt \
+            "$POOL_NAME" $pool_config
+    fi
 
     info "ZFS pool created successfully."
     zpool status "$POOL_NAME"

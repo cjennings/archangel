@@ -3,7 +3,8 @@
 # Copy this file to /root/install-archzfs.conf and edit values.
 # Or use: install-archzfs --config-file /path/to/your-config.conf
 #
-# Required fields: HOSTNAME, TIMEZONE, DISKS, ZFS_PASSPHRASE, ROOT_PASSWORD
+# Required fields: HOSTNAME, TIMEZONE, DISKS, ROOT_PASSWORD
+# Plus either ZFS_PASSPHRASE or NO_ENCRYPT=yes
 # All other fields have sensible defaults.
 
 #############################
@@ -42,9 +43,13 @@ RAID_LEVEL=
 # Security
 #############################
 
-# ZFS encryption passphrase (required)
+# ZFS encryption passphrase (required unless NO_ENCRYPT=yes)
 # This will be required at every boot to unlock the pool
 ZFS_PASSPHRASE=changeme
+
+# Disable ZFS encryption (optional, for testing only)
+# Set to "yes" to skip encryption - NOT recommended for real installs
+#NO_ENCRYPT=no
 
 # Root password (required)
 ROOT_PASSWORD=changeme
