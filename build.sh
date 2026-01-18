@@ -125,6 +125,7 @@ ripgrep
 eza
 fd
 fzf
+emacs
 
 # For installation scripts
 dialog
@@ -163,6 +164,16 @@ lshw
 dmidecode
 nvme-cli
 hdparm
+
+# Disk operations
+partclone
+fsarchiver
+partimage
+nwipe
+xfsprogs
+btrfs-progs
+f2fs-tools
+exfatprogs
 
 EOF
 

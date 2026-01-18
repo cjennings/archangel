@@ -13,6 +13,7 @@ Table of Contents:
   5. Hardware Diagnostics
   6. Disk Operations
   7. Network Troubleshooting
+  8. Encryption & GPG
 
 ================================================================================
 1. ZFS RECOVERY
@@ -1056,13 +1057,695 @@ HARDWARE DIAGNOSTICS TIPS
 6. DISK OPERATIONS
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr partclone      # Filesystem-aware partition cloning
+  tldr fsarchiver     # Backup/restore filesystems to archive
+  man nwipe           # Secure disk wiping (DBAN replacement)
+  tldr parted         # Partition management
+  tldr mkfs           # Create filesystems
+
+FIRST: Understand your options for disk copying
+-----------------------------------------------
+Different tools for different situations:
+
+  dd / ddrescue    - Byte-for-byte copy (use for failing drives)
+  partclone        - Filesystem-aware, only copies used blocks (faster)
+  fsarchiver       - Creates compressed archive (smallest, most flexible)
+  partimage        - Legacy imaging (for restoring old partimage backups)
+
+Rule of thumb:
+  - Failing drive? Use ddrescue (section 2)
+  - Clone partition quickly? Use partclone
+  - Backup for long-term storage? Use fsarchiver
+  - Restore old .img.gz from partimage? Use partimage
+
+
+SCENARIO: Clone a partition (partclone - faster than dd)
+--------------------------------------------------------
+Partclone only copies used blocks. A 500GB partition with 50GB used
+takes ~50GB to clone instead of 500GB.
+
+Clone ext4 partition to image:
+
+  partclone.ext4 -c -s /dev/sdX1 -o partition.img
+
+Clone with compression (recommended):
+
+  partclone.ext4 -c -s /dev/sdX1 | gzip -c > partition.img.gz
+
+  -c = clone mode
+  -s = source
+  -o = output
+
+Restore from image:
+
+  partclone.ext4 -r -s partition.img -o /dev/sdX1
+
+Restore from compressed image:
+
+  gunzip -c partition.img.gz | partclone.ext4 -r -s - -o /dev/sdX1
+
+Supported filesystems:
+
+  partclone.ext4      partclone.ext3      partclone.ext2
+  partclone.ntfs      partclone.fat32     partclone.fat16
+  partclone.xfs       partclone.btrfs     partclone.exfat
+  partclone.f2fs      partclone.dd        (dd mode for any fs)
+
+
+SCENARIO: Create a full system backup (fsarchiver)
+--------------------------------------------------
+Fsarchiver creates compressed, portable archives. Archives can be
+restored to different-sized partitions.
+
+Backup a filesystem:
+
+  fsarchiver savefs backup.fsa /dev/sdX1
+
+Backup with compression level and progress:
+
+  fsarchiver savefs -v -z7 backup.fsa /dev/sdX1
+
+  -v  = verbose
+  -z7 = compression level (1-9, higher = smaller but slower)
+
+Backup multiple filesystems to one archive:
+
+  fsarchiver savefs backup.fsa /dev/sdX1 /dev/sdX2 /dev/sdX3
+
+List contents of archive:
+
+  fsarchiver archinfo backup.fsa
+
+Restore to a partition:
+
+  fsarchiver restfs backup.fsa id=0,dest=/dev/sdX1
+
+  id=0 = first filesystem in archive (0, 1, 2...)
+
+Restore to different-sized partition (will resize):
+
+  fsarchiver restfs backup.fsa id=0,dest=/dev/sdY1
+
+
+SCENARIO: Restore a legacy partimage backup
+-------------------------------------------
+Partimage is legacy software but you may have old backups to restore.
+
+Restore partimage backup:
+
+  partimage restore /dev/sdX1 backup.img.gz
+
+Interactive mode:
+
+  partimage
+
+Note: partimage cannot create images of ext4, GPT, or modern filesystems.
+Use fsarchiver for new backups.
+
+
+SCENARIO: Securely wipe a drive (nwipe)
+---------------------------------------
+DANGER: This PERMANENTLY DESTROYS all data. Triple-check the device!
+
+Interactive mode (recommended - shows all drives, select with space):
+
+  nwipe
+
+Wipe specific drive with single zero pass (usually sufficient):
+
+  nwipe --method=zero /dev/sdX
+
+Wipe with DoD 3-pass method:
+
+  nwipe --method=dod /dev/sdX
+
+Wipe with verification:
+
+  nwipe --verify=last /dev/sdX
+
+Available wipe methods:
+
+  zero      - Single pass of zeros (fastest, usually sufficient)
+  one       - Single pass of ones
+  random    - Random data
+  dod       - DoD 5220.22-M (3 passes)
+  dodshort  - DoD short (3 passes)
+  gutmann   - Gutmann 35-pass (overkill for modern drives)
+
+For SSDs, use the drive's built-in secure erase instead:
+
+  # Set a temporary password
+  hdparm --user-master u --security-set-pass Erase /dev/sdX
+  # Trigger secure erase (password is cleared after)
+  hdparm --user-master u --security-erase Erase /dev/sdX
+
+For NVMe SSDs:
+
+  nvme format /dev/nvme0n1 --ses=1    # Cryptographic erase
+
+
+SCENARIO: Work with XFS filesystems
+-----------------------------------
+Create XFS filesystem:
+
+  mkfs.xfs /dev/sdX1
+  mkfs.xfs -L "mylabel" /dev/sdX1     # With label
+
+Repair XFS (must be unmounted):
+
+  xfs_repair /dev/sdX1
+  xfs_repair -n /dev/sdX1             # Check only, no changes
+
+Grow XFS filesystem (while mounted):
+
+  xfs_growfs /mountpoint
+
+Note: XFS cannot be shrunk, only grown.
+
+Show XFS info:
+
+  xfs_info /mountpoint
+
+
+SCENARIO: Work with Btrfs filesystems
+-------------------------------------
+Create Btrfs filesystem:
+
+  mkfs.btrfs /dev/sdX1
+  mkfs.btrfs -L "mylabel" /dev/sdX1   # With label
+
+Check Btrfs (must be unmounted):
+
+  btrfs check /dev/sdX1
+  btrfs check --repair /dev/sdX1      # Repair (use with caution!)
+
+Scrub (online integrity check - safe):
+
+  btrfs scrub start /mountpoint
+  btrfs scrub status /mountpoint
+
+Show filesystem info:
+
+  btrfs filesystem show
+  btrfs filesystem df /mountpoint
+  btrfs filesystem usage /mountpoint
+
+List/manage subvolumes:
+
+  btrfs subvolume list /mountpoint
+  btrfs subvolume create /mountpoint/newsubvol
+  btrfs subvolume delete /mountpoint/subvol
+
+
+SCENARIO: Work with F2FS filesystems (Flash-Friendly)
+-----------------------------------------------------
+F2FS is optimized for flash storage (SSDs, SD cards, USB drives).
+Common on Android devices.
+
+Create F2FS filesystem:
+
+  mkfs.f2fs /dev/sdX1
+  mkfs.f2fs -l "mylabel" /dev/sdX1    # With label
+
+Check/repair F2FS:
+
+  fsck.f2fs /dev/sdX1
+  fsck.f2fs -a /dev/sdX1              # Auto-repair
+
+
+SCENARIO: Work with exFAT filesystems
+-------------------------------------
+exFAT is common on USB drives and SD cards (>32GB).
+Cross-platform compatible (Windows, Mac, Linux).
+
+Create exFAT filesystem:
+
+  mkfs.exfat /dev/sdX1
+  mkfs.exfat -L "LABEL" /dev/sdX1     # With label (uppercase recommended)
+
+Check/repair exFAT:
+
+  fsck.exfat /dev/sdX1
+  fsck.exfat -a /dev/sdX1             # Auto-repair
+
+
+SCENARIO: Partition a disk
+--------------------------
+Interactive partition editors:
+
+  parted /dev/sdX                     # Works with GPT and MBR
+  gdisk /dev/sdX                      # GPT-specific (recommended for UEFI)
+  fdisk /dev/sdX                      # Traditional (MBR or GPT)
+
+Create GPT partition table:
+
+  parted /dev/sdX mklabel gpt
+
+Create partitions (example: 512MB EFI + rest for Linux):
+
+  parted /dev/sdX mkpart primary fat32 1MiB 513MiB
+  parted /dev/sdX set 1 esp on
+  parted /dev/sdX mkpart primary ext4 513MiB 100%
+
+View partition layout:
+
+  parted /dev/sdX print
+  lsblk -f /dev/sdX
+  fdisk -l /dev/sdX
+
+
+DISK OPERATIONS TIPS
+--------------------
+1. partclone is 5-10x faster than dd for partially-filled partitions
+2. fsarchiver archives can restore to different-sized partitions
+3. For SSDs, nwipe is less effective than ATA/NVMe secure erase
+4. Always verify backups can be restored before wiping originals
+5. XFS cannot be shrunk, only grown - plan partition sizes carefully
+6. Btrfs check --repair is risky; try without --repair first
+7. Keep partition tables aligned to 1MiB boundaries for SSD performance
+8. exFAT is best for cross-platform USB drives >32GB
+9. F2FS is optimized for flash but less portable than ext4
 
 ================================================================================
 7. NETWORK TROUBLESHOOTING
 ================================================================================
 
-[To be added]
+QUICK REFERENCE
+---------------
+  tldr ip             # Network interface configuration
+  tldr nmcli          # NetworkManager CLI
+  tldr ping           # Test connectivity
+  tldr ss             # Socket statistics (netstat replacement)
+  tldr curl           # Transfer data from URLs
+
+FIRST: Check basic network connectivity
+---------------------------------------
+Is the interface up?
+
+  ip link show
+  ip a                            # Show all addresses
+
+Is there an IP address?
+
+  ip addr show dev eth0           # Replace eth0 with your interface
+  ip addr show dev wlan0          # For WiFi
+
+Can you reach the gateway?
+
+  ip route                        # Show default gateway
+  ping -c 3 $(ip route | grep default | awk '{print $3}')
+
+Can you reach the internet?
+
+  ping -c 3 1.1.1.1               # Test IP connectivity
+  ping -c 3 google.com            # Test DNS resolution
+
+
+SCENARIO: Configure network with NetworkManager
+-----------------------------------------------
+List connections:
+
+  nmcli connection show
+
+Show WiFi networks:
+
+  nmcli device wifi list
+
+Connect to WiFi:
+
+  nmcli device wifi connect "SSID" password "password"
+
+Show current connection details:
+
+  nmcli device show
+
+Restart networking:
+
+  systemctl restart NetworkManager
+
+
+SCENARIO: Configure network manually (no NetworkManager)
+--------------------------------------------------------
+Bring up interface:
+
+  ip link set eth0 up
+
+Get IP via DHCP:
+
+  dhclient eth0
+  # or
+  dhcpcd eth0
+
+Set static IP:
+
+  ip addr add 192.168.1.100/24 dev eth0
+  ip route add default via 192.168.1.1
+
+Set DNS:
+
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+
+
+SCENARIO: Mount remote filesystem over SSH (sshfs)
+--------------------------------------------------
+Access files on a remote system as if they were local.
+Useful for copying data to/from a working machine during recovery.
+
+Mount remote directory:
+
+  mkdir -p /mnt/remote
+  sshfs user@hostname:/path/to/dir /mnt/remote
+
+Mount with password prompt (if no SSH keys):
+
+  sshfs user@hostname:/home/user /mnt/remote -o password_stdin
+
+Mount remote root filesystem:
+
+  sshfs root@192.168.1.100:/ /mnt/remote
+
+Common options:
+
+  sshfs user@host:/path /mnt/remote -o reconnect           # Auto-reconnect
+  sshfs user@host:/path /mnt/remote -o port=2222           # Custom SSH port
+  sshfs user@host:/path /mnt/remote -o IdentityFile=~/.ssh/key  # SSH key
+
+Copy files to/from mounted remote:
+
+  cp /mnt/remote/important-file.txt /local/backup/
+  rsync -avP /local/data/ /mnt/remote/backup/
+
+Unmount when done:
+
+  fusermount -u /mnt/remote
+  # or
+  umount /mnt/remote
+
+Why use sshfs instead of scp/rsync?
+  - Browse remote files interactively before deciding what to copy
+  - Run local tools on remote files (grep, diff, etc.)
+  - Easier than remembering rsync syntax for quick operations
+
+
+SCENARIO: Transfer files over SSH
+---------------------------------
+Copy file to remote:
+
+  scp localfile.txt user@host:/path/to/destination/
+
+Copy file from remote:
+
+  scp user@host:/path/to/file.txt /local/destination/
+
+Copy directory recursively:
+
+  scp -r /local/dir user@host:/remote/path/
+
+With progress and compression:
+
+  rsync -avzP /local/path/ user@host:/remote/path/
+
+
+SCENARIO: Test network speed and latency
+----------------------------------------
+Ping with timing:
+
+  ping -c 10 hostname              # 10 pings with statistics
+
+Traceroute (find network path):
+
+  traceroute hostname
+  traceroute -I hostname           # Use ICMP (may work better)
+
+Test bandwidth (if iperf3 server available):
+
+  iperf3 -c server-ip              # Test to iperf3 server
+
+
+SCENARIO: Debug DNS issues
+--------------------------
+Check current DNS servers:
+
+  cat /etc/resolv.conf
+
+Test DNS resolution:
+
+  host google.com
+  dig google.com
+  nslookup google.com
+
+Test specific DNS server:
+
+  dig @1.1.1.1 google.com
+  dig @8.8.8.8 google.com
+
+Temporarily use different DNS:
+
+  echo "nameserver 1.1.1.1" > /etc/resolv.conf
+
+
+SCENARIO: Check what's listening on ports
+-----------------------------------------
+Show all listening ports:
+
+  ss -tlnp                         # TCP
+  ss -ulnp                         # UDP
+  ss -tulnp                        # Both
+
+Check if specific port is open:
+
+  ss -tlnp | grep :22              # SSH
+  ss -tlnp | grep :80              # HTTP
+
+Check what process is using a port:
+
+  ss -tlnp | grep :8080
+
+
+SCENARIO: Download files
+------------------------
+Download with curl:
+
+  curl -O https://example.com/file.iso
+  curl -L -O https://example.com/file    # Follow redirects
+
+Download with wget:
+
+  wget https://example.com/file.iso
+  wget -c https://example.com/file.iso   # Resume partial download
+
+Download and verify checksum:
+
+  curl -O https://example.com/file.iso
+  curl -O https://example.com/file.iso.sha256
+  sha256sum -c file.iso.sha256
+
+
+NETWORK TROUBLESHOOTING TIPS
+----------------------------
+1. If no IP, check cable/wifi and try dhclient or dhcpcd
+2. If IP but no internet, check gateway with ip route
+3. If gateway reachable but no internet, check DNS
+4. Use ping 1.1.1.1 to test IP connectivity without DNS
+5. sshfs is great for browsing before deciding what to copy
+6. rsync -avzP is better than scp for large transfers (resumable)
+7. Check firewall if services aren't reachable: iptables -L
+8. For WiFi issues, check rfkill: rfkill list
+
+================================================================================
+8. ENCRYPTION & GPG
+================================================================================
+
+QUICK REFERENCE
+---------------
+  tldr gpg            # GNU Privacy Guard
+  tldr cryptsetup     # LUKS disk encryption
+  man gpg             # Full GPG manual
+
+FIRST: Understand encryption types you may encounter
+----------------------------------------------------
+Common encryption scenarios in recovery:
+
+  GPG symmetric     - Password-protected files (gpg -c)
+  GPG asymmetric    - Public/private key encrypted files
+  LUKS              - Full disk/partition encryption (Linux standard)
+  BitLocker         - Windows disk encryption (see section 4)
+  ZFS encryption    - ZFS native encryption (see section 1)
+
+This section covers GPG and LUKS. For BitLocker, see section 4.
+For ZFS encryption, see section 1.
+
+
+SCENARIO: Decrypt a password-protected file (GPG symmetric)
+-----------------------------------------------------------
+Files encrypted with `gpg -c` use a password only, no keys needed.
+
+Decrypt to original filename:
+
+  gpg -d encrypted-file.gpg > decrypted-file
+
+Decrypt (GPG auto-detects output name if .gpg extension):
+
+  gpg encrypted-file.gpg
+
+You'll be prompted for the password.
+
+Decrypt with password on command line (less secure, visible in history):
+
+  gpg --batch --passphrase "password" -d file.gpg > file
+
+
+SCENARIO: Decrypt a file encrypted to your GPG key
+--------------------------------------------------
+Files encrypted with `gpg -e -r yourname@email.com` require your private key.
+
+If your private key is on this system:
+
+  gpg -d encrypted-file.gpg > decrypted-file
+
+If you need to import your private key first:
+
+  gpg --import /path/to/private-key.asc
+  gpg -d encrypted-file.gpg > decrypted-file
+
+You'll be prompted for your key's passphrase.
+
+
+SCENARIO: Import GPG keys (public or private)
+---------------------------------------------
+Import a public key (to verify signatures or encrypt to someone):
+
+  gpg --import public-key.asc
+
+Import from a keyserver:
+
+  gpg --keyserver keyserver.ubuntu.com --recv-keys KEYID
+
+Import your private key (for decryption):
+
+  gpg --import private-key.asc
+
+List keys on the system:
+
+  gpg --list-keys               # Public keys
+  gpg --list-secret-keys        # Private keys
+
+
+SCENARIO: Verify a signed file or ISO
+-------------------------------------
+Verify a detached signature (.sig or .asc file):
+
+  gpg --verify file.iso.sig file.iso
+
+If you don't have the signer's public key:
+
+  # Find the key ID in the error message, then:
+  gpg --keyserver keyserver.ubuntu.com --recv-keys KEYID
+  gpg --verify file.iso.sig file.iso
+
+Verify an inline-signed message:
+
+  gpg --verify signed-message.asc
+
+
+SCENARIO: Encrypt a file for safe transfer
+------------------------------------------
+Symmetric encryption (password only - recipient needs password):
+
+  gpg -c sensitive-file.txt
+  # Creates sensitive-file.txt.gpg
+
+With specific cipher and compression:
+
+  gpg -c --cipher-algo AES256 sensitive-file.txt
+
+Asymmetric encryption (to someone's public key):
+
+  gpg -e -r recipient@email.com sensitive-file.txt
+
+Encrypt to multiple recipients:
+
+  gpg -e -r alice@example.com -r bob@example.com file.txt
+
+
+SCENARIO: Unlock a LUKS-encrypted partition
+-------------------------------------------
+LUKS is the standard Linux disk encryption.
+
+Check if a partition is LUKS-encrypted:
+
+  cryptsetup isLuks /dev/sdX1 && echo "LUKS encrypted"
+  lsblk -f    # Shows "crypto_LUKS" for encrypted partitions
+
+Open (decrypt) a LUKS partition:
+
+  cryptsetup open /dev/sdX1 decrypted
+  # Enter passphrase when prompted
+  # Creates /dev/mapper/decrypted
+
+Mount the decrypted partition:
+
+  mount /dev/mapper/decrypted /mnt/recovery
+
+When done, unmount and close:
+
+  umount /mnt/recovery
+  cryptsetup close decrypted
+
+
+SCENARIO: Open LUKS with a key file
+-----------------------------------
+If LUKS was set up with a key file instead of (or in addition to) password:
+
+  cryptsetup open /dev/sdX1 decrypted --key-file /path/to/keyfile
+
+Key file might be on a USB drive:
+
+  mount /dev/sdb1 /mnt/usb
+  cryptsetup open /dev/sdX1 decrypted --key-file /mnt/usb/luks-key
+
+
+SCENARIO: Recover data from damaged LUKS header
+-----------------------------------------------
+If LUKS header is damaged, you need a header backup (hopefully you made one).
+
+Restore LUKS header from backup:
+
+  cryptsetup luksHeaderRestore /dev/sdX1 --header-backup-file header-backup.img
+
+If no backup exists and header is damaged, data is likely unrecoverable.
+This is why LUKS header backups are critical:
+
+  # How to create a header backup (do this BEFORE disaster):
+  cryptsetup luksHeaderBackup /dev/sdX1 --header-backup-file header-backup.img
+
+
+SCENARIO: Access eCryptfs encrypted home directory
+--------------------------------------------------
+Ubuntu's legacy home encryption uses eCryptfs.
+
+Mount an eCryptfs-encrypted home:
+
+  # You need the user's login password
+  ecryptfs-recover-private
+
+Or manually:
+
+  mount -t ecryptfs /home/.ecryptfs/username/.Private /mnt/recovery
+
+
+ENCRYPTION TIPS
+---------------
+1. GPG symmetric encryption (gpg -c) only needs the password to decrypt
+2. GPG asymmetric encryption requires the private key - no key = no access
+3. Always keep LUKS header backups separate from the encrypted drive
+4. BitLocker recovery keys are often in Microsoft accounts
+5. ZFS encryption keys are derived from passphrase - no separate key file
+6. eCryptfs wrapped passphrase is in ~/.ecryptfs/wrapped-passphrase
+7. If you forget encryption passwords and have no backups, data is gone
+8. Hardware security keys (YubiKey) may be required for some GPG keys
 
 ================================================================================
                               END OF GUIDE
