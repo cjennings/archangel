@@ -170,7 +170,7 @@ gather_input() {
         [[ -n "$RAID_LEVEL" ]] && info "  RAID: $RAID_LEVEL"
         info "  SSH: $ENABLE_SSH"
         [[ -n "$WIFI_SSID" ]] && info "  WiFi: $WIFI_SSID"
-        return
+        return 0
     fi
 
     echo ""
