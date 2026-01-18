@@ -7,3 +7,4 @@ profile/
 zfs-packages/
 vm/*.qcow2
 vm/OVMF_VARS.fd
+test-logs/
