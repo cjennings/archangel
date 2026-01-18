@@ -1,0 +1,399 @@
+#+TITLE: archzfs - Arch Linux ZFS Root Installation ISO
+#+AUTHOR:
+#+OPTIONS: toc:3
+
+* Overview
+
+archzfs is a custom Arch Linux ISO build system that creates a live environment
+optimized for installing Arch Linux on ZFS root filesystems. It provides an
+interactive installer with support for encrypted ZFS, multi-disk RAID
+configurations, and automatic snapshot management.
+
+The ISO includes all necessary ZFS tools pre-loaded, eliminating the need for
+manual module loading or package installation during the install process.
+
+* Features
+
+- *ZFS Root Filesystem* - Full ZFS installation with native encryption
+- *Multi-Disk RAID* - Support for mirror, stripe, raidz1/2/3 configurations
+- *EFI Boot Redundancy* - GRUB installed on all disks for boot resilience
+- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi selection
+- *Genesis Snapshot* - Automatic pristine-state snapshot after installation
+- *Rollback Script* - One-command factory reset via ~/root/rollback-to-genesis~
+- *Pre-Pacman Snapshots* - Automatic snapshots before package operations
+- *NetworkManager* - WiFi configuration copied to installed system
+- *SSH Ready* - Optional SSH with root login for headless servers
+- *LTS Kernel* - Uses linux-lts for stability with ZFS
+
+* Quick Start
+
+#+BEGIN_SRC bash
+# Build the ISO (requires root)
+sudo ./build.sh
+
+# Test in a VM
+./scripts/test-vm.sh
+
+# Or test with multiple disks for RAID
+./scripts/test-vm.sh --multi-disk
+#+END_SRC
+
+Boot the ISO and run ~install-archzfs~ to start the installation.
+
+* Prerequisites
+
+** Build Host Requirements
+- Arch Linux (or Arch-based distribution)
+- Root/sudo access
+- ~archiso~ package installed (~pacman -S archiso~)
+- ~10GB free disk space for build
+
+** Runtime Dependencies (included in ISO)
+- ZFS kernel modules (via zfs-dkms)
+- GRUB with ZFS support
+- NetworkManager
+- fzf for interactive selection
+
+* Building the ISO
+
+** Basic Build
+
+#+BEGIN_SRC bash
+sudo ./build.sh
+#+END_SRC
+
+The build script will:
+1. Copy the base Arch releng profile
+2. Switch to linux-lts kernel
+3. Add the archzfs repository
+4. Add custom packages (ZFS, NetworkManager, fzf, etc.)
+5. Copy the install-archzfs script
+6. Build the ISO using mkarchiso
+
+** Build Output
+
+- ISO location: ~out/archzfs-claude-YYYY.MM.DD-x86_64.iso~
+- Build logs: visible in terminal output
+- Build time: typically 5-15 minutes depending on cache
+
+** Clean Rebuild
+
+#+BEGIN_SRC bash
+sudo rm -rf work out
+sudo ./build.sh
+#+END_SRC
+
+* Project Structure
+
+#+BEGIN_EXAMPLE
+archzfs/
+├── build.sh                 # Main ISO build script
+├── custom/
+│   └── install-archzfs      # Interactive installation script
+├── scripts/
+│   └── test-vm.sh           # QEMU test VM launcher
+├── profile/                 # archiso profile (generated during build)
+│   ├── airootfs/            # Files copied to live ISO
+│   │   └── usr/local/bin/   # Contains install-archzfs
+│   ├── packages.x86_64      # Package list for ISO
+│   └── pacman.conf          # Pacman config with archzfs repo
+├── vm/                      # VM disk images (created by test-vm.sh)
+├── work/                    # Build working directory (created by build.sh)
+├── out/                     # Built ISO output (created by build.sh)
+└── docs/                    # Documentation
+#+END_EXAMPLE
+
+** Script Descriptions
+
+| Script | Description |
+|--------+-------------|
+| ~build.sh~ | Builds the ISO. Copies releng profile, adds ZFS packages, configures kernel, runs mkarchiso |
+| ~custom/install-archzfs~ | Interactive installer run on the live ISO. Handles disk partitioning, ZFS pool creation, base system install, bootloader setup |
+| ~scripts/test-vm.sh~ | Launches QEMU VM for testing. Supports single and multi-disk configurations |
+
+* Testing with VMs
+
+** Basic VM Test
+
+#+BEGIN_SRC bash
+./scripts/test-vm.sh
+#+END_SRC
+
+This creates a 50GB virtual disk and boots the ISO.
+
+** Multi-Disk RAID Test
+
+#+BEGIN_SRC bash
+# Two 50GB disks (for mirror or stripe)
+./scripts/test-vm.sh --multi-disk
+
+# Three 50GB disks (for raidz1)
+./scripts/test-vm.sh --multi-disk=3
+#+END_SRC
+
+** SSH Access to VM
+
+#+BEGIN_SRC bash
+# Password: archzfs
+ssh -p 2222 root@localhost
+
+# Or with sshpass
+sshpass -p archzfs ssh -p 2222 root@localhost
+#+END_SRC
+
+** Clean VM State
+
+#+BEGIN_SRC bash
+./scripts/test-vm.sh --clean
+#+END_SRC
+
+** Boot from Installed Disk
+
+#+BEGIN_SRC bash
+./scripts/test-vm.sh --boot-disk
+#+END_SRC
+
+* Development Workflow
+
+** Iterative Testing with Genesis Rollback
+
+After completing an installation in the VM, you can rollback to the genesis
+snapshot and re-test without reinstalling. This is useful for testing archsetup
+or other post-install scripts.
+
+*** In the VM (after installation and reboot):
+
+#+BEGIN_SRC bash
+# Rollback to pristine post-install state
+/root/rollback-to-genesis
+
+# Reboot to apply
+reboot
+#+END_SRC
+
+*** From the host:
+
+#+BEGIN_SRC bash
+# The VM disk retains the ZFS pool
+# Just boot from disk again
+./scripts/test-vm.sh --boot-disk
+#+END_SRC
+
+** Updating the Install Script
+
+#+BEGIN_SRC bash
+# Edit the script
+vim custom/install-archzfs
+
+# Copy to a running VM for immediate testing
+sshpass -p archzfs scp -P 2222 custom/install-archzfs root@localhost:/usr/local/bin/
+
+# Or rebuild the ISO for fresh testing
+sudo ./build.sh
+#+END_SRC
+
+* Installation Walkthrough
+
+The ~install-archzfs~ script provides a guided installation with fzf-based
+selection interfaces.
+
+** Phase 1: Configuration Gathering
+
+1. *Hostname* - System hostname
+2. *Timezone* - Fuzzy search through all timezones (preview shows current time)
+3. *Locale* - All locales available (preview shows format examples)
+4. *Keymap* - Console keyboard layout
+5. *Disk Selection* - Multi-select with TAB (preview shows disk details)
+6. *RAID Level* - For multi-disk: mirror, stripe, raidz1/2/3 (preview shows capacity calculations)
+7. *WiFi* - Scan and select network (preview shows signal/security)
+8. *ZFS Passphrase* - Encryption passphrase (required at every boot)
+9. *Root Password* - System root password
+10. *SSH* - Enable SSH with root login (default: yes)
+
+** Phase 2: Unattended Installation
+
+After configuration, the installation runs without intervention:
+- Disk partitioning (EFI + ZFS on each disk)
+- ZFS pool creation with encryption
+- Dataset creation (ROOT, home, var, etc.)
+- Base system installation via pacstrap
+- System configuration (locale, timezone, hostname)
+- Bootloader installation (GRUB on all EFI partitions)
+- Genesis snapshot creation
+
+** RAID Level Options
+
+| Disks | Available Options |
+|-------+-------------------|
+| 1     | Single (no RAID)  |
+| 2     | Mirror, Stripe    |
+| 3+    | Mirror, Stripe, RAIDZ1 |
+| 4+    | Mirror, Stripe, RAIDZ1, RAIDZ2 |
+| 5+    | Mirror, Stripe, RAIDZ1, RAIDZ2, RAIDZ3 |
+
+* Bare Metal Installation
+
+** Preparing Installation Media
+
+#+BEGIN_SRC bash
+# Write ISO to USB drive (replace /dev/sdX)
+sudo dd if=out/archzfs-claude-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+#+END_SRC
+
+** Booting
+
+1. Boot from USB (may need to disable Secure Boot)
+2. Wait for live environment to load
+3. Run ~install-archzfs~
+
+** WiFi Setup
+
+The installer will scan for WiFi networks and present them in fzf.
+Select your network and enter the password. The connection is tested
+before proceeding and will be copied to the installed system.
+
+** SSH Access After Reboot
+
+If you enabled SSH during installation:
+1. The system will have NetworkManager enabled
+2. WiFi credentials are copied from the live environment
+3. SSH is enabled with root password login
+4. Connect via: ~ssh root@<ip-address>~
+
+*Important*: Harden SSH after first login (disable password auth, use keys).
+
+** Post-Reboot Steps
+
+1. Enter ZFS encryption passphrase at boot
+2. Log in as root
+3. Run ~archsetup~ for further configuration
+
+* Post-Installation
+
+** Genesis Snapshot
+
+The installer creates a recursive snapshot of the entire pool named ~genesis~.
+This represents the pristine post-install state.
+
+#+BEGIN_SRC bash
+# View genesis snapshots
+zfs list -t snapshot | grep genesis
+#+END_SRC
+
+** Rollback to Factory State
+
+#+BEGIN_SRC bash
+# Interactive rollback with confirmation
+/root/rollback-to-genesis
+
+# Reboot to apply
+reboot
+#+END_SRC
+
+*Warning*: This destroys all changes since installation!
+
+** Useful ZFS Commands
+
+#+BEGIN_SRC bash
+# List all snapshots
+zfs list -t snapshot
+
+# Create manual snapshot
+zfs snapshot zroot/home@my-backup
+
+# Rollback to snapshot
+zfs rollback zroot/home@my-backup
+
+# Pool status
+zpool status
+
+# Pool usage
+zpool list
+#+END_SRC
+
+* Keeping Up-to-Date
+
+** When to Rebuild
+
+Rebuild the ISO when:
+- New Linux LTS kernel is released
+- New ZFS version is released
+- You've made changes to install-archzfs
+- archzfs repository packages are updated
+
+** Rebuild Process
+
+#+BEGIN_SRC bash
+# Clean and rebuild
+sudo rm -rf work out
+sudo ./build.sh
+#+END_SRC
+
+The build automatically pulls the latest packages from:
+- Official Arch repositories
+- archzfs repository (https://archzfs.com)
+
+** Checking for Updates
+
+#+BEGIN_SRC bash
+# Check current linux-lts version in repos
+pacman -Si linux-lts | grep Version
+
+# Check archzfs package versions
+curl -s https://archzfs.com/archzfs/x86_64/ | grep -o 'zfs-linux-lts-[^"]*'
+#+END_SRC
+
+* Troubleshooting
+
+** Build Fails with Package Conflicts
+
+Clean the work directory and rebuild:
+#+BEGIN_SRC bash
+sudo rm -rf work
+sudo ./build.sh
+#+END_SRC
+
+** ZFS Module Not Loading
+
+The ISO includes DKMS-built ZFS modules. If modules fail to load:
+- Check ~dmesg | grep -i zfs~ for errors
+- Ensure you're using the LTS kernel
+- The archzfs repo may be out of sync with kernel updates (wait for update)
+
+** Disk Not Showing in Selection
+
+- Ensure the disk is not mounted
+- Check ~lsblk~ to verify disk visibility
+- USB drives may need a moment to be detected
+
+** WiFi Networks Not Found
+
+- Verify WiFi hardware is present: ~ip link~
+- In VMs, there is no WiFi adapter (expected)
+- Try rescanning: ~nmcli device wifi rescan~
+
+** Boot Fails After Installation
+
+- Verify EFI boot entries: ~efibootmgr -v~
+- Check GRUB config: ~/boot/grub/grub.cfg~
+- Ensure ZFS modules in initramfs: ~lsinitcpio /boot/initramfs-linux-lts.img | grep zfs~
+
+** Encryption Passphrase Not Accepted
+
+- Keyboard layout at boot is US by default
+- Passphrase is case-sensitive
+- Check for num-lock state
+
+* Links
+
+- [[https://archzfs.com][archzfs Repository]] - ZFS packages for Arch Linux
+- [[https://openzfs.github.io/openzfs-docs/][OpenZFS Documentation]] - Official ZFS documentation
+- [[https://wiki.archlinux.org/title/ZFS][Arch Wiki - ZFS]] - Arch-specific ZFS information
+- [[https://wiki.archlinux.org/title/Archiso][Arch Wiki - Archiso]] - Building custom Arch ISOs
+- [[https://github.com/openzfs/zfs][OpenZFS on GitHub]] - ZFS source code
+
+* License
+
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
+
+See [[file:LICENSE][LICENSE]] file for the full license text.

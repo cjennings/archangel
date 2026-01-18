@@ -10,6 +10,11 @@
 # - Optional WiFi configuration with connection test
 # - ZFS native encryption (passphrase required at boot)
 # - Pre-pacman ZFS snapshots for safe upgrades
+#
+# UNATTENDED MODE:
+#   Use --config-file /path/to/install-archzfs.conf for automated installs.
+#   Config file must be explicitly specified to prevent accidental disk wipes.
+#   See /root/install-archzfs.conf.example for a template with all options.
 
 set -e
 
@@ -50,6 +55,72 @@ step()  { echo ""; echo "==> $1"; }
 prompt() { echo "$1"; }
 
 #############################
+# Config File Support
+#############################
+
+CONFIG_FILE=""
+UNATTENDED=false
+
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --config-file)
+                if [[ -n "$2" && ! "$2" =~ ^- ]]; then
+                    CONFIG_FILE="$2"
+                    shift 2
+                else
+                    error "--config-file requires a path argument"
+                fi
+                ;;
+            --help|-h)
+                echo "Usage: install-archzfs [OPTIONS]"
+                echo ""
+                echo "Options:"
+                echo "  --config-file PATH  Use config file for unattended installation"
+                echo "  --help, -h          Show this help message"
+                echo ""
+                echo "Without --config-file, runs in interactive mode."
+                echo "See /root/install-archzfs.conf.example for a config template."
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1 (use --help for usage)"
+                ;;
+        esac
+    done
+}
+
+load_config() {
+    local config_path="$1"
+
+    if [[ ! -f "$config_path" ]]; then
+        error "Config file not found: $config_path"
+    fi
+
+    info "Loading config from: $config_path"
+
+    # Source the config file (it's just key=value pairs)
+    # shellcheck disable=SC1090
+    source "$config_path"
+
+    # Convert DISKS from comma-separated string to array
+    if [[ -n "$DISKS" ]]; then
+        IFS=',' read -ra SELECTED_DISKS <<< "$DISKS"
+    fi
+
+    UNATTENDED=true
+    info "Running in unattended mode"
+}
+
+check_config() {
+    # Only use config when explicitly specified with --config-file
+    # This prevents accidental disk destruction from an unnoticed config file
+    if [[ -n "$CONFIG_FILE" ]]; then
+        load_config "$CONFIG_FILE"
+    fi
+}
+
+#############################
 # Pre-flight Checks
 #############################
 
@@ -71,6 +142,37 @@ preflight_checks() {
 #############################
 
 gather_input() {
+    if [[ "$UNATTENDED" == true ]]; then
+        # Validate required config values
+        [[ -z "$HOSTNAME" ]] && error "Config missing required: HOSTNAME"
+        [[ -z "$TIMEZONE" ]] && error "Config missing required: TIMEZONE"
+        [[ -z "$ZFS_PASSPHRASE" ]] && error "Config missing required: ZFS_PASSPHRASE"
+        [[ -z "$ROOT_PASSWORD" ]] && error "Config missing required: ROOT_PASSWORD"
+        [[ ${#SELECTED_DISKS[@]} -eq 0 ]] && error "Config missing required: DISKS"
+
+        # Set defaults for optional values
+        [[ -z "$LOCALE" ]] && LOCALE="en_US.UTF-8"
+        [[ -z "$KEYMAP" ]] && KEYMAP="us"
+        [[ -z "$ENABLE_SSH" ]] && ENABLE_SSH="yes"
+
+        # Determine RAID level if not specified
+        if [[ -z "$RAID_LEVEL" && ${#SELECTED_DISKS[@]} -gt 1 ]]; then
+            RAID_LEVEL="mirror"
+            info "Defaulting to mirror for ${#SELECTED_DISKS[@]} disks"
+        fi
+
+        info "Configuration loaded:"
+        info "  Hostname: $HOSTNAME"
+        info "  Timezone: $TIMEZONE"
+        info "  Locale: $LOCALE"
+        info "  Keymap: $KEYMAP"
+        info "  Disks: ${SELECTED_DISKS[*]}"
+        [[ -n "$RAID_LEVEL" ]] && info "  RAID: $RAID_LEVEL"
+        info "  SSH: $ENABLE_SSH"
+        [[ -n "$WIFI_SSID" ]] && info "  WiFi: $WIFI_SSID"
+        return
+    fi
+
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════╗"
     echo "║                     Arch Linux ZFS Root                       ║"
@@ -731,7 +833,8 @@ EOF
 
     info "Installing base packages (this takes a while)..."
     info "ZFS will be built from source via DKMS - this ensures kernel compatibility."
-    pacstrap -K /mnt \
+    # Use yes to auto-select defaults for provider prompts
+    yes "" | pacstrap -K /mnt \
         base \
         base-devel \
         linux-lts \
@@ -843,7 +946,8 @@ configure_initramfs() {
     cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
 
     # Configure hooks for ZFS
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems fsck)/' /mnt/etc/mkinitcpio.conf
+    # ZFS doesn't use fsck - remove it to avoid confusing error messages
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
 
     info "Regenerating initramfs..."
     arch-chroot /mnt mkinitcpio -P
@@ -852,13 +956,17 @@ configure_initramfs() {
 configure_bootloader() {
     step "Configuring GRUB Bootloader"
 
+    # Get hostid for kernel parameter
+    local host_id
+    host_id=$(hostid)
+
     # Configure GRUB defaults
     cat > /mnt/etc/default/grub << EOF
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="Arch Linux (ZFS)"
-GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
-GRUB_CMDLINE_LINUX="root=ZFS=$POOL_NAME/ROOT/default"
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3"
+GRUB_CMDLINE_LINUX="root=ZFS=$POOL_NAME/ROOT/default spl.spl_hostid=$host_id"
 GRUB_PRELOAD_MODULES="part_gpt part_msdos zfs"
 GRUB_TERMINAL_OUTPUT="console"
 GRUB_DISABLE_OS_PROBER=true
@@ -911,6 +1019,15 @@ configure_zfs_services() {
     arch-chroot /mnt systemctl enable zfs-import-cache
     arch-chroot /mnt systemctl enable zfs-mount
     arch-chroot /mnt systemctl enable zfs-import.target
+
+    # Copy hostid to installed system (ZFS uses this for pool ownership)
+    if [[ -f /etc/hostid ]]; then
+        cp /etc/hostid /mnt/etc/hostid
+    else
+        # Generate hostid if it doesn't exist
+        zgenhostid
+        cp /etc/hostid /mnt/etc/hostid
+    fi
 
     # Generate zpool cache
     mkdir -p /mnt/etc/zfs
@@ -1118,7 +1235,9 @@ print_summary() {
 #############################
 
 main() {
+    parse_args "$@"
     preflight_checks
+    check_config
     gather_input
 
     # Unattended installation begins

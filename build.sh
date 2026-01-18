@@ -168,6 +168,10 @@ cp "$CUSTOM_DIR/install-archzfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
+# Copy example config for unattended installs
+mkdir -p "$PROFILE_DIR/airootfs/root"
+cp "$CUSTOM_DIR/install-archzfs.conf.example" "$PROFILE_DIR/airootfs/root/"
+
 # Set permissions in profiledef.sh
 info "Setting file permissions..."
 if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then

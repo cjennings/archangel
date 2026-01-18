@@ -1,0 +1,77 @@
+# install-archzfs.conf - Unattended Installation Configuration
+#
+# Copy this file to /root/install-archzfs.conf and edit values.
+# Or use: install-archzfs --config-file /path/to/your-config.conf
+#
+# Required fields: HOSTNAME, TIMEZONE, DISKS, ZFS_PASSPHRASE, ROOT_PASSWORD
+# All other fields have sensible defaults.
+
+#############################
+# System Configuration
+#############################
+
+# Hostname for the installed system (required)
+HOSTNAME=archzfs
+
+# Timezone (required) - Use format: Region/City
+# Examples: America/Los_Angeles, Europe/London, Asia/Tokyo
+TIMEZONE=America/Los_Angeles
+
+# Locale (optional, default: en_US.UTF-8)
+LOCALE=en_US.UTF-8
+
+# Console keymap (optional, default: us)
+KEYMAP=us
+
+#############################
+# Disk Configuration
+#############################
+
+# Disks to use for installation (required)
+# Single disk: DISKS=/dev/vda
+# Multiple disks: DISKS=/dev/vda,/dev/vdb,/dev/vdc
+DISKS=/dev/vda
+
+# RAID level for multi-disk setups (optional)
+# Options: mirror, stripe, raidz1, raidz2, raidz3
+# Default: mirror (when multiple disks specified)
+# Leave empty for single disk
+RAID_LEVEL=
+
+#############################
+# Security
+#############################
+
+# ZFS encryption passphrase (required)
+# This will be required at every boot to unlock the pool
+ZFS_PASSPHRASE=changeme
+
+# Root password (required)
+ROOT_PASSWORD=changeme
+
+#############################
+# Network Configuration
+#############################
+
+# Enable SSH with root login (optional, default: yes)
+# Set to "no" to disable SSH
+ENABLE_SSH=yes
+
+# WiFi configuration (optional)
+# Leave empty for ethernet-only or to skip WiFi setup
+WIFI_SSID=
+WIFI_PASSWORD=
+
+#############################
+# Advanced ZFS Options
+#############################
+
+# Pool name (optional, default: zroot)
+#POOL_NAME=zroot
+
+# Compression algorithm (optional, default: zstd)
+#COMPRESSION=zstd
+
+# Sector size shift (optional, default: 12 for 4K sectors)
+# Use 13 for 8K sector drives
+#ASHIFT=12

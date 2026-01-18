@@ -5,3 +5,5 @@ profile/
 
 # Downloaded packages
 zfs-packages/
+vm/*.qcow2
+vm/OVMF_VARS.fd

@@ -1,0 +1,67 @@
+#+TITLE: Session Context - archzfs
+#+DATE: 2026-01-18
+
+* Current Session State
+
+** What We're Working On
+Testing unattended installation with --config-file option. Currently running 2-disk mirror test.
+
+** Key Progress This Session
+
+*** Config File Support for Unattended Installs
+- Added --config-file /path/to/config argument
+- Config only used when explicitly specified (prevents accidental disk wipes)
+- Example config at /root/install-archzfs.conf.example on ISO
+- Validates required fields: HOSTNAME, TIMEZONE, DISKS, ZFS_PASSPHRASE, ROOT_PASSWORD
+- Sets sensible defaults for optional fields
+
+*** Boot Fixes for ZFS
+- Removed fsck from mkinitcpio HOOKS (ZFS doesn't use fsck)
+- Added hostid generation/copy to installed system
+- Added spl.spl_hostid to kernel command line
+- Removed 'quiet' from kernel params for visible boot messages
+
+*** Multi-Disk RAID Support
+- RAID level selection: mirror, stripe, raidz1/2/3
+- EFI partitions on all disks for boot redundancy
+- Stripe option for max capacity (no redundancy)
+- Dynamic capacity calculations in preview
+
+*** fzf-Based User Interface
+- Replaced all select menus with fzf fuzzy finder
+- Timezone: fuzzy search with current time preview
+- Locale: all locales shown, format examples in preview
+- Keymap: all keymaps with layout info
+- Disk selection: multi-select (TAB), disk details preview
+- RAID level: explanatory preview with capacity calculations
+- WiFi: network list by signal strength, security info preview
+
+*** Documentation
+- Created comprehensive README.org (15 sections)
+- TODO.org with project tasks
+
+** Files Modified This Session
+- custom/install-archzfs - Config file support, boot fixes
+- custom/install-archzfs.conf.example - NEW: template for unattended installs
+- build.sh - Copies example config to ISO
+- README.org - Comprehensive documentation
+- TODO.org - Project task tracking
+
+** Bugs Being Investigated
+- Install script exiting early in unattended mode - FIXED with return 0
+- Still need to verify full installation completes and boots successfully
+
+** Testing Status
+- Test 1: 2-disk mirror - IN PROGRESS (packages installing)
+- Test 2: 2-disk stripe - PENDING
+- Test 3: Single disk - PENDING
+
+** Test Configuration
+- VM: ./scripts/test-vm.sh --multi-disk
+- SSH: sshpass -p archzfs ssh -p 2222 root@localhost
+- Config file: /root/test-mirror.conf
+
+** Test Credentials
+- Live ISO root password: archzfs
+- Test ZFS passphrase: testpass123
+- Test root password: testpass123
