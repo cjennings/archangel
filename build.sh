@@ -1,6 +1,9 @@
 #!/bin/bash
 # build.sh - Build the custom Arch ZFS installation ISO
 # Must be run as root
+#
+# Uses linux-lts kernel with zfs-dkms from archzfs.com repository.
+# DKMS builds ZFS from source, ensuring it always matches the kernel version.
 
 set -e
 
@@ -9,7 +12,9 @@ PROFILE_DIR="$SCRIPT_DIR/profile"
 WORK_DIR="$SCRIPT_DIR/work"
 OUT_DIR="$SCRIPT_DIR/out"
 CUSTOM_DIR="$SCRIPT_DIR/custom"
-ZFS_PKG_DIR="$SCRIPT_DIR/zfs-packages"
+
+# Live ISO root password (for SSH access during testing/emergencies)
+LIVE_ROOT_PASSWORD="archzfs"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,40 +35,6 @@ command -v mkarchiso >/dev/null 2>&1 || {
     pacman -Sy --noconfirm archiso
 }
 
-# Get current kernel version
-KERNEL_VER=$(pacman -Si linux | grep Version | awk '{print $3}')
-info "Current Arch kernel version: $KERNEL_VER"
-
-# Download ZFS packages from GitHub releases
-info "Downloading ZFS packages for kernel $KERNEL_VER..."
-mkdir -p "$ZFS_PKG_DIR"
-
-# Find matching ZFS packages from experimental release
-ZFS_LINUX_URL=$(curl -s https://api.github.com/repos/archzfs/archzfs/releases/tags/experimental | \
-    jq -r ".assets[] | select(.name | contains(\"zfs-linux-\") and contains(\"${KERNEL_VER}\") and (contains(\"-headers\") | not) and contains(\".pkg.tar.zst\") and (contains(\".sig\") | not)) | .browser_download_url" | head -1)
-
-ZFS_UTILS_URL=$(curl -s https://api.github.com/repos/archzfs/archzfs/releases/tags/experimental | \
-    jq -r '.assets[] | select(.name | contains("zfs-utils-") and contains(".pkg.tar.zst") and (contains(".sig") | not) and (contains("debug") | not)) | .browser_download_url' | head -1)
-
-if [[ -z "$ZFS_LINUX_URL" ]]; then
-    warn "No ZFS package found for kernel $KERNEL_VER in experimental"
-    warn "Checking other releases..."
-
-    # Try to find any recent zfs-linux package
-    ZFS_LINUX_URL=$(curl -s https://api.github.com/repos/archzfs/archzfs/releases | \
-        jq -r ".[].assets[] | select(.name | contains(\"zfs-linux-\") and contains(\"6.18\") and (contains(\"-headers\") | not) and contains(\".pkg.tar.zst\") and (contains(\".sig\") | not)) | .browser_download_url" | head -1)
-fi
-
-if [[ -z "$ZFS_LINUX_URL" || -z "$ZFS_UTILS_URL" ]]; then
-    error "Could not find matching ZFS packages. The archzfs repo may not have packages for kernel $KERNEL_VER yet."
-fi
-
-info "Downloading: $(basename "$ZFS_LINUX_URL")"
-wget -q -N -P "$ZFS_PKG_DIR" "$ZFS_LINUX_URL" || error "Failed to download zfs-linux"
-
-info "Downloading: $(basename "$ZFS_UTILS_URL")"
-wget -q -N -P "$ZFS_PKG_DIR" "$ZFS_UTILS_URL" || error "Failed to download zfs-utils"
-
 # Clean previous builds
 if [[ -d "$WORK_DIR" ]]; then
     warn "Removing previous work directory..."
@@ -75,12 +46,72 @@ info "Copying base releng profile..."
 rm -rf "$PROFILE_DIR"
 cp -r /usr/share/archiso/configs/releng "$PROFILE_DIR"
 
-# Add our custom packages (NOT zfs - we'll install that separately)
-info "Adding custom packages..."
+# Switch from linux to linux-lts
+info "Switching to linux-lts kernel..."
+sed -i 's/^linux$/linux-lts/' "$PROFILE_DIR/packages.x86_64"
+sed -i 's/^linux-headers$/linux-lts-headers/' "$PROFILE_DIR/packages.x86_64"
+# broadcom-wl depends on linux, use DKMS version instead
+sed -i 's/^broadcom-wl$/broadcom-wl-dkms/' "$PROFILE_DIR/packages.x86_64"
+
+# Update bootloader configs to use linux-lts kernel
+info "Updating bootloader configurations for linux-lts..."
+
+# UEFI systemd-boot entries
+for entry in "$PROFILE_DIR"/efiboot/loader/entries/*.conf; do
+    if [[ -f "$entry" ]]; then
+        sed -i 's/vmlinuz-linux/vmlinuz-linux-lts/g' "$entry"
+        sed -i 's/initramfs-linux\.img/initramfs-linux-lts.img/g' "$entry"
+    fi
+done
+
+# BIOS syslinux entries
+for cfg in "$PROFILE_DIR"/syslinux/*.cfg; do
+    if [[ -f "$cfg" ]]; then
+        sed -i 's/vmlinuz-linux/vmlinuz-linux-lts/g' "$cfg"
+        sed -i 's/initramfs-linux\.img/initramfs-linux-lts.img/g' "$cfg"
+    fi
+done
+
+# GRUB config
+if [[ -f "$PROFILE_DIR/grub/grub.cfg" ]]; then
+    sed -i 's/vmlinuz-linux/vmlinuz-linux-lts/g' "$PROFILE_DIR/grub/grub.cfg"
+    sed -i 's/initramfs-linux\.img/initramfs-linux-lts.img/g' "$PROFILE_DIR/grub/grub.cfg"
+fi
+
+# Update mkinitcpio preset for linux-lts (archiso uses custom preset)
+if [[ -f "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux.preset" ]]; then
+    # Rename to linux-lts.preset and update paths
+    mv "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux.preset" \
+       "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux-lts.preset"
+    sed -i 's/vmlinuz-linux/vmlinuz-linux-lts/g' \
+        "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux-lts.preset"
+    sed -i 's/initramfs-linux/initramfs-linux-lts/g' \
+        "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux-lts.preset"
+    sed -i "s/'linux' package/'linux-lts' package/g" \
+        "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux-lts.preset"
+fi
+
+# Add archzfs repository to pacman.conf
+info "Adding archzfs repository..."
+cat >> "$PROFILE_DIR/pacman.conf" << 'EOF'
+
+[archzfs]
+Server = https://archzfs.com/$repo/$arch
+SigLevel = Optional TrustAll
+EOF
+
+# Add ZFS and our custom packages
+info "Adding ZFS and custom packages..."
 cat >> "$PROFILE_DIR/packages.x86_64" << 'EOF'
+
+# ZFS support (DKMS builds from source - always matches kernel)
+zfs-dkms
+zfs-utils
+linux-lts-headers
 
 # Additional networking
 wget
+networkmanager
 
 # Development tools for Claude Code
 nodejs
@@ -106,37 +137,36 @@ sed -i 's/^iso_name=.*/iso_name="archzfs-claude"/' "$PROFILE_DIR/profiledef.sh"
 # Create airootfs directories
 mkdir -p "$PROFILE_DIR/airootfs/usr/local/bin"
 mkdir -p "$PROFILE_DIR/airootfs/code"
-mkdir -p "$PROFILE_DIR/airootfs/var/cache/zfs-packages"
+mkdir -p "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants"
 
-# Copy ZFS packages to airootfs for installation during boot
-info "Copying ZFS packages to ISO..."
-cp "$ZFS_PKG_DIR"/*.pkg.tar.zst "$PROFILE_DIR/airootfs/var/cache/zfs-packages/"
+# Enable SSH on live ISO
+info "Enabling SSH on live ISO..."
+ln -sf /usr/lib/systemd/system/sshd.service \
+    "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/sshd.service"
+
+# Set root password for live ISO
+info "Setting root password for live ISO..."
+mkdir -p "$PROFILE_DIR/airootfs/etc"
+# Generate password hash
+PASS_HASH=$(openssl passwd -6 "$LIVE_ROOT_PASSWORD")
+# Create shadow file entry (will be merged with existing)
+cat > "$PROFILE_DIR/airootfs/etc/shadow" << EOF
+root:${PASS_HASH}:19000:0:99999:7:::
+EOF
+chmod 400 "$PROFILE_DIR/airootfs/etc/shadow"
+
+# Allow root SSH login with password (for testing)
+mkdir -p "$PROFILE_DIR/airootfs/etc/ssh/sshd_config.d"
+cat > "$PROFILE_DIR/airootfs/etc/ssh/sshd_config.d/allow-root.conf" << 'EOF'
+PermitRootLogin yes
+PasswordAuthentication yes
+EOF
 
 # Copy our custom scripts
 info "Copying custom scripts..."
 cp "$CUSTOM_DIR/install-archzfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
-
-# Create ZFS setup script that runs on boot
-cat > "$PROFILE_DIR/airootfs/usr/local/bin/zfs-setup" << 'ZFSSETUP'
-#!/bin/bash
-# Install ZFS packages and load module
-# Run this first after booting the ISO
-
-set -e
-
-echo "Installing ZFS packages..."
-pacman -U --noconfirm /var/cache/zfs-packages/*.pkg.tar.zst
-
-echo "Loading ZFS module..."
-modprobe zfs
-
-echo ""
-echo "ZFS is ready! You can now run:"
-echo "  install-archzfs"
-echo ""
-ZFSSETUP
 
 # Set permissions in profiledef.sh
 info "Setting file permissions..."
@@ -151,7 +181,7 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
         /)/ i\  ["/usr/local/bin/archsetup-zfs"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
-        /)/ i\  ["/usr/local/bin/zfs-setup"]="0:0:755"
+        /)/ i\  ["/etc/shadow"]="0:0:400"
     }' "$PROFILE_DIR/profiledef.sh"
 fi
 
@@ -180,9 +210,13 @@ if [[ -f "$ISO_FILE" ]]; then
     echo ""
     info "To test: ./scripts/test-vm.sh"
     echo ""
-    info "After booting, run:"
-    echo "  zfs-setup        # Install ZFS and load module"
-    echo "  install-archzfs  # Run the installer"
+    info "After booting:"
+    echo "  - ZFS is pre-loaded (no setup needed)"
+    echo "  - SSH is enabled (root password: $LIVE_ROOT_PASSWORD)"
+    echo "  - Run 'install-archzfs' to start installation"
+    echo ""
+    info "SSH access (from host):"
+    echo "  ssh -p 2222 root@localhost"
 else
     error "Build failed - no ISO file found"
 fi
