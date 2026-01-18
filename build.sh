@@ -130,9 +130,21 @@ fzf
 dialog
 EOF
 
+# Get kernel version for ISO naming
+info "Querying kernel version..."
+KERNEL_VER=$(pacman -Si linux-lts 2>/dev/null | grep "^Version" | awk '{print $3}' | cut -d- -f1)
+if [[ -z "$KERNEL_VER" ]]; then
+    KERNEL_VER="unknown"
+    warn "Could not determine kernel version, using 'unknown'"
+fi
+info "LTS Kernel version: $KERNEL_VER"
+
 # Update profiledef.sh with our ISO name
 info "Updating ISO metadata..."
-sed -i 's/^iso_name=.*/iso_name="archzfs-claude"/' "$PROFILE_DIR/profiledef.sh"
+# Format: archzfs-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso
+ISO_DATE=$(date +%Y-%m-%d)
+sed -i "s/^iso_name=.*/iso_name=\"archzfs-vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
+sed -i "s/^iso_version=.*/iso_version=\"${ISO_DATE}\"/" "$PROFILE_DIR/profiledef.sh"
 
 # Create airootfs directories
 mkdir -p "$PROFILE_DIR/airootfs/usr/local/bin"

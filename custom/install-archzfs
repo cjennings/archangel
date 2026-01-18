@@ -949,6 +949,25 @@ configure_initramfs() {
     # ZFS doesn't use fsck - remove it to avoid confusing error messages
     sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
 
+    # Get the installed kernel version (not the running kernel)
+    local kernel_ver
+    kernel_ver=$(ls /mnt/usr/lib/modules | grep lts | head -1)
+    if [[ -z "$kernel_ver" ]]; then
+        error "Could not find LTS kernel modules"
+    fi
+    info "Installed kernel: $kernel_ver"
+
+    # Ensure kernel module dependencies are up to date after DKMS build
+    # Must specify kernel version since running kernel differs from installed kernel
+    info "Updating module dependencies..."
+    arch-chroot /mnt depmod "$kernel_ver"
+
+    # Verify ZFS module exists
+    if ! [[ -f "/mnt/usr/lib/modules/$kernel_ver/updates/dkms/zfs.ko.zst" ]]; then
+        error "ZFS module not found! DKMS build may have failed."
+    fi
+    info "ZFS module verified for kernel $kernel_ver"
+
     info "Regenerating initramfs..."
     arch-chroot /mnt mkinitcpio -P
 }
@@ -966,7 +985,7 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="Arch Linux (ZFS)"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3"
-GRUB_CMDLINE_LINUX="root=ZFS=$POOL_NAME/ROOT/default spl.spl_hostid=$host_id"
+GRUB_CMDLINE_LINUX="root=ZFS=$POOL_NAME/ROOT/default spl.spl_hostid=0x$host_id"
 GRUB_PRELOAD_MODULES="part_gpt part_msdos zfs"
 GRUB_TERMINAL_OUTPUT="console"
 GRUB_DISABLE_OS_PROBER=true

@@ -29,6 +29,9 @@ OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
 OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
 OVMF_VARS="$VM_DIR/OVMF_VARS.fd"
 
+# QEMU monitor socket for automation
+MONITOR_SOCKET="$VM_DIR/qemu-monitor.sock"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -138,7 +141,11 @@ boot_iso() {
     echo "  - Serial console output appears in this terminal"
     echo "  - SSH: ssh -p 2222 root@localhost (password: archzfs)"
     echo "  - Run 'install-archzfs' to start installation"
+    echo "  - Monitor socket: $MONITOR_SOCKET"
     echo ""
+
+    # Remove stale monitor socket
+    rm -f "$MONITOR_SOCKET"
 
     # Build disk arguments
     local disk_args=(-drive "file=$VM_DISK,format=qcow2,if=virtio")
@@ -165,6 +172,7 @@ boot_iso() {
         -device virtio-vga-gl \
         -display gtk,gl=on \
         -serial mon:stdio \
+        -monitor unix:"$MONITOR_SOCKET",server,nowait \
         -audiodev pipewire,id=audio0 \
         -device ich9-intel-hda \
         -device hda-duplex,audiodev=audio0 \
@@ -194,7 +202,11 @@ boot_disk() {
     echo ""
     echo "SSH access: ssh -p 2222 root@localhost"
     echo "Serial console output appears in this terminal"
+    echo "Monitor socket: $MONITOR_SOCKET"
     echo ""
+
+    # Remove stale monitor socket
+    rm -f "$MONITOR_SOCKET"
 
     # Build disk arguments
     local disk_args=(-drive "file=$VM_DISK,format=qcow2,if=virtio")
@@ -220,6 +232,7 @@ boot_disk() {
         -device virtio-vga-gl \
         -display gtk,gl=on \
         -serial mon:stdio \
+        -monitor unix:"$MONITOR_SOCKET",server,nowait \
         -audiodev pipewire,id=audio0 \
         -device ich9-intel-hda \
         -device hda-duplex,audiodev=audio0 \
