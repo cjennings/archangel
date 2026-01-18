@@ -271,10 +271,10 @@ get_raid_level() {
 get_wifi() {
     step "WiFi Configuration (Optional)"
     echo ""
-    prompt "Do you want to configure WiFi? [y/N]:"
+    prompt "Do you want to configure WiFi? [Y/n]:"
     read -p "> " configure_wifi
 
-    if [[ "$configure_wifi" =~ ^[Yy]$ ]]; then
+    if [[ ! "$configure_wifi" =~ ^[Nn]$ ]]; then
         # Ensure NetworkManager is running
         systemctl start NetworkManager 2>/dev/null || true
         sleep 2
