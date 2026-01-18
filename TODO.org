@@ -188,18 +188,44 @@ Make the ISO double as a general-purpose recovery disk.
 | baobab | Disk usage analyzer | ~3MB |
 | gnome-disk-utility | GNOME Disks | ~5MB |
 
+*** Summary Table (Quick Reference)
+| Category | Key Tools | Est. Size |
+|----------+-----------+-----------|
+| Data Recovery | testdisk, ddrescue, foremost, sleuthkit | ~10MB |
+| Disk Cloning | partclone, fsarchiver | ~4MB |
+| Windows Recovery | chntpw, dislocker, hivex, ms-sys | ~3MB |
+| Filesystem | ntfs-3g, exfatprogs, btrfs-progs, xfsprogs, hfsprogs | ~12MB |
+| Hardware Diag | smartmontools, hdparm, nvme-cli, lshw, memtester, stress-ng, lm_sensors | ~8MB |
+| Network | nmap, tcpdump, iperf3, mtr, iftop, bind | ~35MB |
+| Security | clamav, rkhunter, chkrootkit | ~150MB |
+| Boot Repair | os-prober, syslinux | ~2MB |
+| File Mgmt | mc, ncdu, p7zip, unrar | ~6MB |
+| Remote | screen, tmux, tigervnc | ~7MB |
+| Monitoring | htop, iotop, inxi | ~2MB |
+
 *** Size Estimate
-- Core recovery tools: ~50MB
-- Network diagnostics: ~80MB
-- ClamAV (optional): ~150MB
+- Core recovery tools (no ClamAV/Wireshark): ~90MB
+- With ClamAV: +150MB
+- With Wireshark CLI: +50MB
 - GUI tools (optional): ~20MB
 - Total estimate: ~150-300MB additional
+- Current ISO size: 5.1GB
+- Projected size with all tools: ~5.4GB
+
+*** Discussion Notes
+- SystemRescue is also Arch-based, making it a good reference for package names
+- Hiren's BootCD PE is now Windows-based, but older Linux version had good tool selection
+- Most recovery scenarios need: testdisk, ddrescue, chntpw, smartmontools, ntfs-3g
+- For Windows malware scanning, ClamAV is the standard open-source option
+- Consider: could offer two ISO variants (minimal vs full rescue)
 
 *** Questions to Resolve
 - Include ClamAV? Adds ~150MB but very useful for Windows malware scanning
-- Include Wireshark CLI (tshark)? Adds ~50MB
-- Keep ISO under specific size target?
+- Include Wireshark CLI (tshark)? Adds ~50MB for network forensics
+- Keep ISO under specific size target (e.g., 6GB for single-layer DVD)?
 - Add GUI tools or keep it minimal/CLI-focused?
+- Create separate "rescue" build profile or add to main ISO?
+- Priority order for implementation?
 
 ** TODO [#C] Check for methods to abstract
 
