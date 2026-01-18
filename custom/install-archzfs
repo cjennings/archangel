@@ -105,109 +105,137 @@ get_hostname() {
 
 get_timezone() {
     step "Timezone"
-    prompt "Select timezone region:"
-    PS3="Region: "
-    select region in "America" "Europe" "Asia" "Australia" "Pacific" "Other"; do
-        if [[ -n "$region" ]]; then
-            break
-        fi
-    done
+    echo ""
+    info "Type to search, ENTER to select"
+    echo ""
 
-    if [[ "$region" == "Other" ]]; then
-        prompt "Enter timezone (e.g., Etc/UTC):"
-        read -p "> " TIMEZONE
-    else
-        echo ""
-        prompt "Select city:"
-        mapfile -t cities < <(find /usr/share/zoneinfo/"$region" -maxdepth 1 -type f -printf '%f\n' | sort)
-        PS3="City: "
-        select city in "${cities[@]}"; do
-            if [[ -n "$city" ]]; then
-                TIMEZONE="$region/$city"
-                break
-            fi
-        done
+    TIMEZONE=$(find /usr/share/zoneinfo -type f ! -path '*/posix/*' ! -path '*/right/*' \
+        | sed 's|/usr/share/zoneinfo/||' \
+        | sort \
+        | fzf --height=20 --layout=reverse --border \
+              --header="Select Timezone" \
+              --preview='echo "Timezone: {}"; echo ""; TZ={} date "+Current time: %Y-%m-%d %H:%M:%S %Z"' \
+              --preview-window=right:40%)
+
+    if [[ -z "$TIMEZONE" ]]; then
+        error "No timezone selected!"
     fi
+    info "Selected: $TIMEZONE"
 }
 
 get_locale() {
     step "Locale"
-    prompt "Select locale:"
-    PS3="Locale: "
-    select loc in "en_US.UTF-8" "en_GB.UTF-8" "de_DE.UTF-8" "fr_FR.UTF-8" "es_ES.UTF-8" "Other"; do
-        if [[ -n "$loc" ]]; then
-            if [[ "$loc" == "Other" ]]; then
-                prompt "Enter locale (e.g., ja_JP.UTF-8):"
-                read -p "> " LOCALE
-            else
-                LOCALE="$loc"
-            fi
-            break
-        fi
-    done
+    echo ""
+    info "Type to search, ENTER to select"
+    echo ""
+
+    # Get available locales from locale.gen
+    LOCALE=$(grep -E "^#?[a-z]" /etc/locale.gen \
+        | sed 's/^#//' \
+        | awk '{print $1}' \
+        | sort -u \
+        | fzf --height=20 --layout=reverse --border \
+              --header="Select Locale" \
+              --query="en_US" \
+              --preview='
+                  loc={}
+                  echo "Locale: $loc"
+                  echo ""
+                  lang=${loc%%_*}
+                  country=${loc#*_}
+                  country=${country%%.*}
+                  echo "Language: $lang"
+                  echo "Country:  $country"
+                  echo ""
+                  echo "Example formats:"
+                  echo "  Date:     $(LC_ALL={} date "+%x" 2>/dev/null || echo "N/A")"
+                  echo "  Currency: $(LC_ALL={} locale currency_symbol 2>/dev/null || echo "N/A")"
+              ' \
+              --preview-window=right:45%)
+
+    if [[ -z "$LOCALE" ]]; then
+        error "No locale selected!"
+    fi
+    info "Selected: $LOCALE"
 }
 
 get_keymap() {
     step "Keyboard Layout"
-    prompt "Select keyboard layout:"
-    PS3="Keymap: "
-    select km in "us" "uk" "de" "fr" "es" "dvorak" "Other"; do
-        if [[ -n "$km" ]]; then
-            if [[ "$km" == "Other" ]]; then
-                prompt "Enter keymap (e.g., jp106):"
-                read -p "> " KEYMAP
-            else
-                KEYMAP="$km"
-            fi
-            break
-        fi
-    done
+    echo ""
+    info "Type to search, ENTER to select"
+    echo ""
+
+    KEYMAP=$(localectl list-keymaps \
+        | fzf --height=20 --layout=reverse --border \
+              --header="Select Keyboard Layout" \
+              --query="us" \
+              --preview='
+                  echo "Keymap: {}"
+                  echo ""
+                  echo "This will set your console keyboard layout."
+                  echo ""
+                  echo "Common layouts:"
+                  echo "  us      - US English (QWERTY)"
+                  echo "  uk      - UK English"
+                  echo "  de      - German (QWERTZ)"
+                  echo "  fr      - French (AZERTY)"
+                  echo "  dvorak  - Dvorak"
+              ' \
+              --preview-window=right:45%)
+
+    if [[ -z "$KEYMAP" ]]; then
+        error "No keymap selected!"
+    fi
+    info "Selected: $KEYMAP"
 }
 
 get_disks() {
     step "Disk Selection"
     echo ""
-    echo "Available disks:"
-    echo "----------------"
-    lsblk -d -o NAME,SIZE,MODEL,TYPE | grep disk
+    info "TAB to select multiple disks, ENTER to confirm"
     echo ""
 
-    # Get list of available disks
-    mapfile -t AVAILABLE_DISKS < <(lsblk -d -n -o NAME,TYPE | awk '$2=="disk"{print $1}')
+    # Get list of available disks with info
+    local disk_list
+    disk_list=$(lsblk -d -n -o NAME,SIZE,MODEL,TYPE | awk '$4=="disk"{printf "/dev/%-8s %8s  %s\n", $1, $2, $3}')
 
-    if [[ ${#AVAILABLE_DISKS[@]} -eq 0 ]]; then
+    if [[ -z "$disk_list" ]]; then
         error "No disks found!"
     fi
 
-    # Build dialog checklist items
-    local dialog_items=()
-    for disk in "${AVAILABLE_DISKS[@]}"; do
-        local size=$(lsblk -d -n -o SIZE "/dev/$disk" | tr -d ' ')
-        local model=$(lsblk -d -n -o MODEL "/dev/$disk" | tr -d ' ' | head -c 20)
-        dialog_items+=("$disk" "$size $model" "off")
-    done
+    # Use fzf for multi-select with disk details preview
+    local selected
+    selected=$(echo "$disk_list" \
+        | fzf --multi --height=20 --layout=reverse --border \
+              --header="Select Disks (TAB to toggle, ENTER to confirm)" \
+              --preview='
+                  disk=$(echo {} | awk "{print \$1}")
+                  echo "Disk: $disk"
+                  echo ""
+                  echo "Details:"
+                  lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT "$disk" 2>/dev/null
+                  echo ""
+                  echo "Disk info:"
+                  udevadm info --query=property "$disk" 2>/dev/null | grep -E "ID_MODEL=|ID_SERIAL=" | sed "s/^/  /"
+              ' \
+              --preview-window=right:50%)
 
-    # Use dialog for multi-select
-    local result
-    result=$(dialog --stdout --checklist "Select disks for installation (SPACE to select, ENTER to confirm):" \
-        20 70 10 "${dialog_items[@]}") || error "Disk selection cancelled"
-
-    if [[ -z "$result" ]]; then
+    if [[ -z "$selected" ]]; then
         error "No disks selected!"
     fi
 
     # Parse selected disks
     SELECTED_DISKS=()
-    for disk in $result; do
-        SELECTED_DISKS+=("/dev/$disk")
-    done
+    while IFS= read -r line; do
+        local disk=$(echo "$line" | awk '{print $1}')
+        SELECTED_DISKS+=("$disk")
+    done <<< "$selected"
 
-    clear
     echo ""
     warn "Selected ${#SELECTED_DISKS[@]} disk(s):"
     for disk in "${SELECTED_DISKS[@]}"; do
-        echo "  - $disk"
-        lsblk "$disk" | sed 's/^/    /'
+        local size=$(lsblk -d -n -o SIZE "$disk" | tr -d ' ')
+        echo "  - $disk ($size)"
     done
     echo ""
 
@@ -228,44 +256,140 @@ get_raid_level() {
 
     step "RAID Configuration"
     echo ""
-    echo "You have selected $disk_count disks."
+    info "Select RAID level (ENTER to confirm)"
     echo ""
 
-    # Build options based on disk count
-    local options=("mirror" "stripe")
-    local descriptions=(
-        "mirror - All disks mirror each other (max redundancy, ${disk_count}x durability)"
-        "stripe - Combine disks for max capacity (NO redundancy, ${disk_count}x space)"
-    )
-
-    if [[ $disk_count -ge 3 ]]; then
-        options+=("raidz1")
-        descriptions+=("raidz1 - Single parity (can lose 1 disk)")
-    fi
-    if [[ $disk_count -ge 4 ]]; then
-        options+=("raidz2")
-        descriptions+=("raidz2 - Double parity (can lose 2 disks)")
-    fi
-    if [[ $disk_count -ge 5 ]]; then
-        options+=("raidz3")
-        descriptions+=("raidz3 - Triple parity (can lose 3 disks)")
-    fi
-
-    echo "Available RAID levels:"
-    for i in "${!descriptions[@]}"; do
-        echo "  $((i+1))) ${descriptions[$i]}"
-    done
-    echo ""
-
-    PS3="Select RAID level: "
-    select level in "${options[@]}"; do
-        if [[ -n "$level" ]]; then
-            RAID_LEVEL="$level"
-            break
+    # Calculate total raw size for preview
+    local total_bytes=0
+    local smallest_bytes=0
+    for disk in "${SELECTED_DISKS[@]}"; do
+        local bytes=$(lsblk -b -d -n -o SIZE "$disk")
+        total_bytes=$((total_bytes + bytes))
+        if [[ $smallest_bytes -eq 0 ]] || [[ $bytes -lt $smallest_bytes ]]; then
+            smallest_bytes=$bytes
         fi
     done
+    local total_gb=$((total_bytes / 1073741824))
+    local smallest_gb=$((smallest_bytes / 1073741824))
 
-    info "RAID level: $RAID_LEVEL"
+    # Build options based on disk count
+    local options="mirror\nstripe"
+    [[ $disk_count -ge 3 ]] && options+="\nraidz1"
+    [[ $disk_count -ge 4 ]] && options+="\nraidz2"
+    [[ $disk_count -ge 5 ]] && options+="\nraidz3"
+
+    # Export variables for preview subshell
+    export RAID_DISK_COUNT=$disk_count
+    export RAID_TOTAL_GB=$total_gb
+    export RAID_SMALLEST_GB=$smallest_gb
+
+    RAID_LEVEL=$(echo -e "$options" \
+        | fzf --height=20 --layout=reverse --border \
+              --header="Select RAID Level ($disk_count disks, ${total_gb}GB total)" \
+              --preview='
+                  n=$RAID_DISK_COUNT
+                  total=$RAID_TOTAL_GB
+                  small=$RAID_SMALLEST_GB
+
+                  case {} in
+                    mirror)
+                      echo "MIRROR"
+                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                      echo ""
+                      echo "All disks contain identical copies of data."
+                      echo "Maximum redundancy - can survive loss of"
+                      echo "all disks except one."
+                      echo ""
+                      echo "Redundancy:    Can lose $((n-1)) of $n disks"
+                      echo "Usable space:  ~${small}GB (smallest disk)"
+                      echo "Read speed:    Fast (parallel reads)"
+                      echo "Write speed:   Normal"
+                      echo ""
+                      echo "Best for:"
+                      echo "  - Boot drives"
+                      echo "  - Critical data"
+                      echo "  - Maximum safety"
+                      ;;
+                    stripe)
+                      echo "STRIPE (RAID0)"
+                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                      echo ""
+                      echo "WARNING: NO REDUNDANCY!"
+                      echo "Data is striped across all disks."
+                      echo "ANY disk failure = ALL data lost!"
+                      echo ""
+                      echo "Redundancy:    NONE"
+                      echo "Usable space:  ~${total}GB (all disks)"
+                      echo "Read speed:    Very fast"
+                      echo "Write speed:   Very fast"
+                      echo ""
+                      echo "Best for:"
+                      echo "  - Scratch/temp space"
+                      echo "  - Replaceable data"
+                      echo "  - Maximum performance"
+                      ;;
+                    raidz1)
+                      usable=$(( (n-1) * small ))
+                      echo "RAIDZ1 (Single Parity)"
+                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                      echo ""
+                      echo "One disk worth of parity distributed"
+                      echo "across all disks."
+                      echo ""
+                      echo "Redundancy:    Can lose 1 disk"
+                      echo "Usable space:  ~${usable}GB ($((n-1)) of $n disks)"
+                      echo "Read speed:    Fast"
+                      echo "Write speed:   Good"
+                      echo ""
+                      echo "Best for:"
+                      echo "  - General storage"
+                      echo "  - Good balance of space/safety"
+                      ;;
+                    raidz2)
+                      usable=$(( (n-2) * small ))
+                      echo "RAIDZ2 (Double Parity)"
+                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                      echo ""
+                      echo "Two disks worth of parity distributed"
+                      echo "across all disks."
+                      echo ""
+                      echo "Redundancy:    Can lose 2 disks"
+                      echo "Usable space:  ~${usable}GB ($((n-2)) of $n disks)"
+                      echo "Read speed:    Fast"
+                      echo "Write speed:   Good"
+                      echo ""
+                      echo "Best for:"
+                      echo "  - Large arrays (5+ disks)"
+                      echo "  - Important data"
+                      ;;
+                    raidz3)
+                      usable=$(( (n-3) * small ))
+                      echo "RAIDZ3 (Triple Parity)"
+                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                      echo ""
+                      echo "Three disks worth of parity distributed"
+                      echo "across all disks."
+                      echo ""
+                      echo "Redundancy:    Can lose 3 disks"
+                      echo "Usable space:  ~${usable}GB ($((n-3)) of $n disks)"
+                      echo "Read speed:    Fast"
+                      echo "Write speed:   Moderate"
+                      echo ""
+                      echo "Best for:"
+                      echo "  - Very large arrays (8+ disks)"
+                      echo "  - Archival storage"
+                      ;;
+                  esac
+              ' \
+              --preview-window=right:50%)
+
+    # Clean up exported variables
+    unset RAID_DISK_COUNT RAID_TOTAL_GB RAID_SMALLEST_GB
+
+    if [[ -z "$RAID_LEVEL" ]]; then
+        error "No RAID level selected!"
+    fi
+    info "Selected: $RAID_LEVEL"
 }
 
 get_wifi() {

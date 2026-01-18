@@ -1,5 +1,6 @@
 * Open Work
 ** TODO [#C] Consider Dialog-Based Interface for Status, Information, and Questions
 ** TODO [#C] Check for methods to abstract
+** TODO [#C] Consider fzf interface for choices
 
 * Resolved
