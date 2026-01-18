@@ -1,6 +1,59 @@
 * Open Work
-** TODO [#C] Consider Dialog-Based Interface for Status, Information, and Questions
+** TODO [#A] Create comprehensive project documentation (README.org)
+*** Proposed sections in order
+1. Overview - What this project is
+2. Features - Key capabilities
+3. Quick Start - Minimal steps to build/boot/install
+4. Prerequisites - Arch Linux host, sudo, dependencies
+5. Building the ISO - build.sh usage and output
+6. Project Structure - File/script locations and descriptions
+7. Testing with VMs - test-vm.sh options, SSH access, multi-disk
+8. Development Workflow - Rollback to genesis, re-run VM, iterative testing
+9. Installation Walkthrough - fzf interface, RAID options, each step explained
+10. Bare Metal Installation - Laptop/server installs, WiFi, SSH access after reboot
+11. Post-Installation - Genesis snapshot, rollback script, archsetup
+12. Keeping Up-to-Date - Rebuilding for new kernel/ZFS versions
+13. Troubleshooting - Common pitfalls, known issues, tips
+14. Links - archzfs.com, ZFS documentation, Arch Wiki
+15. License - GPL
+
+*** Also needed
+- Add GPL header to all scripts (build.sh, install-archzfs, test-vm.sh)
+- Create LICENSE file in project root
+
+** TODO [#B] Set up CI/CD pipeline for automated ISO builds
+*** Options to evaluate
+- Self-hosted on TrueNAS (primary target)
+  - Gitea + Gitea Actions or Drone CI
+  - Jenkins in a jail/VM
+  - Woodpecker CI (lightweight Drone fork)
+- GitHub Actions (if repo mirrored to GitHub)
+- GitLab CI (self-hosted or gitlab.com)
+
+*** Requirements
+- Arch Linux build environment (container or VM)
+- Sudo/root access for mkarchiso
+- ~10GB disk space per build
+- Caching for pacman packages to speed builds
+
+*** Considerations
+- Trigger builds on push to main
+- Scheduled builds (weekly?) to catch upstream updates
+- Store artifacts (ISO) with retention policy
+- Notifications on build failure
+- Test automation (boot ISO in QEMU, run checks)
+
+*** TrueNAS-specific tips
+- Use a jail or VM for the CI runner
+- Consider bhyve VM with Arch Linux for native builds
+- Mount dataset for build artifacts and cache
+- Snapshot before/after builds for easy cleanup
+
 ** TODO [#C] Check for methods to abstract
-** TODO [#C] Consider fzf interface for choices
 
 * Resolved
+** CANCELLED [#C] Consider Dialog-Based Interface for Status, Information, and Questions
+Using fzf instead.
+
+** DONE [#C] Consider fzf interface for choices
+Implemented fzf for timezone, locale, keymap, disk, RAID, and WiFi selection.
