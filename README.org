@@ -72,7 +72,8 @@ The build script will:
 
 ** Build Output
 
-- ISO location: ~out/archzfs-claude-YYYY.MM.DD-x86_64.iso~
+- ISO location: ~out/archzfs-vmlinuz-{version}-lts-YYYY-MM-DD-x86_64.iso~
+- Example: ~archzfs-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso~
 - Build logs: visible in terminal output
 - Build time: typically 5-15 minutes depending on cache
 
@@ -87,20 +88,21 @@ sudo ./build.sh
 
 #+BEGIN_EXAMPLE
 archzfs/
-├── build.sh                 # Main ISO build script
+├── build.sh                       # Main ISO build script
 ├── custom/
-│   └── install-archzfs      # Interactive installation script
+│   ├── install-archzfs            # Interactive installation script
+│   └── install-archzfs.conf.example  # Example config for unattended install
 ├── scripts/
-│   └── test-vm.sh           # QEMU test VM launcher
-├── profile/                 # archiso profile (generated during build)
-│   ├── airootfs/            # Files copied to live ISO
-│   │   └── usr/local/bin/   # Contains install-archzfs
-│   ├── packages.x86_64      # Package list for ISO
-│   └── pacman.conf          # Pacman config with archzfs repo
-├── vm/                      # VM disk images (created by test-vm.sh)
-├── work/                    # Build working directory (created by build.sh)
-├── out/                     # Built ISO output (created by build.sh)
-└── docs/                    # Documentation
+│   └── test-vm.sh                 # QEMU test VM launcher
+├── profile/                       # archiso profile (generated during build)
+│   ├── airootfs/                  # Files copied to live ISO
+│   │   └── usr/local/bin/         # Contains install-archzfs
+│   ├── packages.x86_64            # Package list for ISO
+│   └── pacman.conf                # Pacman config with archzfs repo
+├── vm/                            # VM disk images (created by test-vm.sh)
+├── work/                          # Build working directory (created by build.sh)
+├── out/                           # Built ISO output (created by build.sh)
+└── docs/                          # Documentation
 #+END_EXAMPLE
 
 ** Script Descriptions
@@ -231,13 +233,149 @@ After configuration, the installation runs without intervention:
 | 4+    | Mirror, Stripe, RAIDZ1, RAIDZ2 |
 | 5+    | Mirror, Stripe, RAIDZ1, RAIDZ2, RAIDZ3 |
 
+* Unattended Installation
+
+For automated or headless installations, use a config file to provide all
+configuration values upfront. The installer will run without any user
+interaction.
+
+** Using a Config File
+
+#+BEGIN_SRC bash
+# Copy and edit the example config
+cp /root/install-archzfs.conf.example /root/my-install.conf
+vim /root/my-install.conf
+
+# Run with config file
+install-archzfs --config-file /root/my-install.conf
+#+END_SRC
+
+*Important*: The config file is ONLY used when explicitly specified with
+~--config-file~. The installer will never automatically read a config file
+to prevent accidental disk destruction.
+
+** Config File Reference
+
+Example config file (~install-archzfs.conf.example~ is included on the ISO):
+
+#+BEGIN_SRC bash
+#############################
+# System Configuration
+#############################
+
+# Hostname for the installed system (required)
+HOSTNAME=archzfs
+
+# Timezone (required) - Use format: Region/City
+# Examples: America/Los_Angeles, Europe/London, Asia/Tokyo
+TIMEZONE=America/Los_Angeles
+
+# Locale (optional, default: en_US.UTF-8)
+LOCALE=en_US.UTF-8
+
+# Console keymap (optional, default: us)
+KEYMAP=us
+
+#############################
+# Disk Configuration
+#############################
+
+# Disks to use for installation (required)
+# Single disk: DISKS=/dev/vda
+# Multiple disks: DISKS=/dev/vda,/dev/vdb,/dev/vdc
+DISKS=/dev/vda
+
+# RAID level for multi-disk setups (optional)
+# Options: mirror, stripe, raidz1, raidz2, raidz3
+# Default: mirror (when multiple disks specified)
+# Leave empty for single disk
+RAID_LEVEL=
+
+#############################
+# Security
+#############################
+
+# ZFS encryption passphrase (required)
+# This will be required at every boot to unlock the pool
+ZFS_PASSPHRASE=changeme
+
+# Root password (required)
+ROOT_PASSWORD=changeme
+
+#############################
+# Network Configuration
+#############################
+
+# Enable SSH with root login (optional, default: yes)
+# Set to "no" to disable SSH
+ENABLE_SSH=yes
+
+# WiFi configuration (optional)
+# Leave empty for ethernet-only or to skip WiFi setup
+WIFI_SSID=
+WIFI_PASSWORD=
+#+END_SRC
+
+** Required vs Optional Fields
+
+| Field | Required | Default | Description |
+|-------+----------+---------+-------------|
+| ~HOSTNAME~ | Yes | - | System hostname |
+| ~TIMEZONE~ | Yes | - | Timezone (Region/City format) |
+| ~DISKS~ | Yes | - | Comma-separated disk paths |
+| ~ZFS_PASSPHRASE~ | Yes | - | ZFS encryption passphrase |
+| ~ROOT_PASSWORD~ | Yes | - | Root user password |
+| ~LOCALE~ | No | en_US.UTF-8 | System locale |
+| ~KEYMAP~ | No | us | Console keyboard layout |
+| ~RAID_LEVEL~ | No | mirror | RAID type for multi-disk |
+| ~ENABLE_SSH~ | No | yes | Enable SSH server |
+| ~WIFI_SSID~ | No | - | WiFi network name |
+| ~WIFI_PASSWORD~ | No | - | WiFi password |
+
+** Example Configurations
+
+*** Single Disk Server
+
+#+BEGIN_SRC bash
+HOSTNAME=webserver
+TIMEZONE=UTC
+DISKS=/dev/sda
+ZFS_PASSPHRASE=MySecurePass123
+ROOT_PASSWORD=RootPass456
+ENABLE_SSH=yes
+#+END_SRC
+
+*** Two-Disk Mirror (Recommended for Servers)
+
+#+BEGIN_SRC bash
+HOSTNAME=fileserver
+TIMEZONE=America/New_York
+DISKS=/dev/sda,/dev/sdb
+RAID_LEVEL=mirror
+ZFS_PASSPHRASE=MySecurePass123
+ROOT_PASSWORD=RootPass456
+ENABLE_SSH=yes
+#+END_SRC
+
+*** Three-Disk RAIDZ1
+
+#+BEGIN_SRC bash
+HOSTNAME=storage
+TIMEZONE=Europe/London
+DISKS=/dev/sda,/dev/sdb,/dev/sdc
+RAID_LEVEL=raidz1
+ZFS_PASSPHRASE=MySecurePass123
+ROOT_PASSWORD=RootPass456
+ENABLE_SSH=yes
+#+END_SRC
+
 * Bare Metal Installation
 
 ** Preparing Installation Media
 
 #+BEGIN_SRC bash
 # Write ISO to USB drive (replace /dev/sdX)
-sudo dd if=out/archzfs-claude-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=out/archzfs-vmlinuz-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
 #+END_SRC
 
 ** Booting
