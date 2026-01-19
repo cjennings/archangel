@@ -910,7 +910,8 @@ EOF
         npm \
         ttf-dejavu \
         fzf \
-        wget
+        wget \
+        wireless-regdb
 
     info "Base system installed."
 }
