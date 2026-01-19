@@ -95,8 +95,9 @@ else
         exit 0
     fi
 
-    # Find all datasets with this snapshot
-    mapfile -t targets < <(echo "$snapshots" | grep "@${snap_name}$")
+    # Find all datasets with this snapshot, sorted by depth (deepest first)
+    # This ensures children are rolled back before parents
+    mapfile -t targets < <(echo "$snapshots" | grep "@${snap_name}$" | awk -F'@' '{print length($1), $0}' | sort -rn | cut -d' ' -f2-)
 
     if [ ${#targets[@]} -eq 0 ]; then
         echo "Error: No datasets found with snapshot @${snap_name}"
