@@ -959,6 +959,23 @@ EOF
     arch-chroot /mnt pacman-key -r DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
     arch-chroot /mnt pacman-key --lsign-key DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
 
+    # Configure journald for ZFS
+    # Problem: journald starts before ZFS mounts /var/log, so journal files
+    # get created in tmpfs then hidden when ZFS mounts over it.
+    # Solution: Make journal-flush wait for zfs-mount, and enable persistent storage.
+    info "Configuring journald for ZFS..."
+    mkdir -p /mnt/etc/systemd/journald.conf.d
+    cat > /mnt/etc/systemd/journald.conf.d/persistent.conf << 'EOF'
+[Journal]
+Storage=persistent
+EOF
+
+    mkdir -p /mnt/etc/systemd/system/systemd-journal-flush.service.d
+    cat > /mnt/etc/systemd/system/systemd-journal-flush.service.d/zfs.conf << 'EOF'
+[Unit]
+After=zfs-mount.service
+EOF
+
     # Set root password
     info "Setting root password..."
     echo "root:$ROOT_PASSWORD" | arch-chroot /mnt chpasswd
