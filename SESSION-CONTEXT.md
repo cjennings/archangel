@@ -140,5 +140,29 @@ Distributed to:
 
 ## Pending/Future Work
 - User should run archsetup on ratio after genesis rollback
-- Consider adding `--full-test` option to build-release for comprehensive testing
 - archsetup inbox task: remove duplicate zfssnapshot/zfsrollback scripts
+
+## Session 2026-01-19 (continued)
+
+### Added --full-test to build-release
+
+Created comprehensive installation test framework:
+
+**New File: `scripts/full-test.sh`**
+- Automated installation testing for all disk configurations
+- Tests: single-disk, mirror (2 disks), raidz1 (3 disks)
+- Each test: boots ISO, runs unattended install, reboots, verifies ZFS health
+- Options: `--quick` (single-disk only), `--verbose`
+- Runs sanity-test.sh first, then install tests
+
+**Modified: `scripts/build-release`**
+- Added `--full-test` option
+- When specified, runs full-test.sh instead of sanity-test.sh
+- Usage: `sudo ./scripts/build-release --full-test`
+
+**Usage:**
+```bash
+sudo ./scripts/build-release              # Sanity test only (fast)
+sudo ./scripts/build-release --full-test  # All install tests (~30-45 min)
+sudo ./scripts/build-release --skip-test  # No testing
+```

@@ -1187,9 +1187,13 @@ EOF
 configure_snapshot_retention() {
     step "Configuring Snapshot Retention"
 
-    # Copy the prune script
+    # Copy ZFS management scripts
     cp /usr/local/bin/zfs-snap-prune /mnt/usr/local/bin/zfs-snap-prune
+    cp /usr/local/bin/zfssnapshot /mnt/usr/local/bin/zfssnapshot
+    cp /usr/local/bin/zfsrollback /mnt/usr/local/bin/zfsrollback
     chmod +x /mnt/usr/local/bin/zfs-snap-prune
+    chmod +x /mnt/usr/local/bin/zfssnapshot
+    chmod +x /mnt/usr/local/bin/zfsrollback
 
     # Create systemd service for pruning
     cat > /mnt/etc/systemd/system/zfs-snap-prune.service << 'EOF'
@@ -1219,7 +1223,8 @@ EOF
     # Enable the timer
     arch-chroot /mnt systemctl enable zfs-snap-prune.timer
 
-    info "Snapshot retention configured."
+    info "ZFS management scripts installed: zfssnapshot, zfsrollback, zfs-snap-prune"
+    info "Snapshot retention configured (daily pruning enabled)."
     info "Policy: Keep 20 recent, delete if older than 180 days"
     info "Genesis snapshot is always preserved."
 }

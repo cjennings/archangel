@@ -1,0 +1,17 @@
+Framework Desktop ML (cogito) Hardware Specifications
+
+Model:      AMD Ryzen AI MAX+ 395 (Strix Halo)
+CPU:        16 cores Zen 5
+GPU:        Radeon 8060S (40 RDNA 3.5 CUs)
+Total RAM:  128GB unified memory
+Max VRAM:   96GB (via AMD Variable Graphics Memory)
+NPU:        XDNA 2, 50+ peak AI TOPS
+GPU Arch:   gfx1151
+Peak Perf:  59.4 FP16/BF16 TFLOPS @ 2.9GHz
+
+Inference Performance (AMD testing with LM Studio 0.3.11 / llama.cpp 1.18):
+- Small models (1-3B):      ~100+ tokens/sec
+- Medium models (7-8B):     ~60-80 tokens/sec
+- Large models (20B):       ~58 tokens/sec
+- Very large models (120B): ~38 tokens/sec
+- Context support:          Up to 256K tokens with Flash Attention
