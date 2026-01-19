@@ -143,6 +143,72 @@ fi
 - arch-wiki-lite: ~200MB (text only, smaller)
 - Could include both for ~600MB total
 
+** TODO [#B] Add zfsrollback and zfssnapshot scripts to ISO
+Include dedicated ZFS snapshot management scripts in the archzfs ISO rather than archsetup.
+These tools belong here since they're useful for rescue scenarios and post-install management.
+
+*** Scripts to create
+
+**** zfssnapshot
+Create manual or automated snapshots with consistent naming:
+#+BEGIN_SRC bash
+#!/bin/bash
+# zfssnapshot - Create ZFS snapshots with optional retention
+# Usage: zfssnapshot <dataset> [label]
+# Example: zfssnapshot zroot/ROOT/arch pre-upgrade
+
+DATASET="$1"
+LABEL="${2:-manual}"
+TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+SNAPNAME="${DATASET}@${LABEL}_${TIMESTAMP}"
+
+zfs snapshot "$SNAPNAME"
+echo "Created snapshot: $SNAPNAME"
+#+END_SRC
+
+Features to consider:
+- Recursive snapshots (-r flag)
+- Pre-defined labels (pre-upgrade, daily, hourly)
+- Integration with pacman hooks for automatic pre-upgrade snapshots
+- Quiet mode for cron/systemd usage
+
+**** zfsrollback
+Interactive rollback with safety checks:
+#+BEGIN_SRC bash
+#!/bin/bash
+# zfsrollback - Safely rollback to a previous ZFS snapshot
+# Usage: zfsrollback [dataset]
+# Without args, shows all snapshots and prompts for selection
+
+# List snapshots with fzf for selection
+SNAP=$(zfs list -t snapshot -o name,creation -s creation | \
+       fzf --header "Select snapshot to rollback to")
+
+# Confirm before destructive operation
+echo "WARNING: This will destroy all data created after the snapshot"
+read -p "Rollback to $SNAP? [y/N] " confirm
+[[ "$confirm" == "y" ]] && zfs rollback -r "$SNAP"
+#+END_SRC
+
+Features to consider:
+- Show snapshot diff (what will be lost)
+- Create safety snapshot before rollback
+- Boot environment awareness (warn if rolling back root)
+- Clone instead of rollback option (preserve current state)
+
+*** Implementation
+1. Create scripts in custom/zfssnapshot and custom/zfsrollback
+2. Add to build.sh to copy to /usr/local/bin/
+3. Add file_permissions entries in profiledef.sh
+4. Document in RESCUE-GUIDE.txt
+5. Consider systemd timers for automated snapshots
+
+*** Why in archzfs instead of archsetup
+- Rescue scenarios: rollback from live USB when system won't boot
+- Standalone utility: works on any ZFS system, not just archsetup installs
+- ISO always available: no need to install archsetup first
+- Simpler: self-contained scripts vs. dependency on archsetup
+
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 *** Options to evaluate
 - Self-hosted on TrueNAS (primary target)
