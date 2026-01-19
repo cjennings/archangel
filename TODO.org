@@ -7,6 +7,23 @@ Package is AUR-only, so needs pre-building or AUR helper integration in build pr
 - Option 1: Pre-build with yay/paru and add to zfs-packages/
 - Option 2: Add AUR repo to pacman.conf in build
 
+** TODO [#A] Install Arch Wiki on ISO for offline package help
+Include offline Arch Wiki on the ISO for package documentation and troubleshooting.
+Would be invaluable for rescue scenarios without network access.
+
+Options to research:
+- arch-wiki-docs package (official, ~500MB compressed)
+- arch-wiki-lite for terminal viewing
+- Custom subset focusing on ZFS, recovery, and commonly needed topics
+
+Reference in RESCUE-GUIDE.txt and README.org.
+
+** TODO [#B] Research mkosi as alternative to mkarchiso
+Investigate whether mkosi offers advantages over mkarchiso for building the ISO.
+
+*** Reference
+- https://wiki.archlinux.org/title/Mkosi
+
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 *** Options to evaluate
 - Self-hosted on TrueNAS (primary target)
