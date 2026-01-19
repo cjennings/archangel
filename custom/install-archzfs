@@ -919,7 +919,7 @@ configure_system() {
     # fstab (only for EFI)
     info "Generating fstab..."
     echo "# /boot - EFI System Partition" > /mnt/etc/fstab
-    echo "UUID=$(blkid -s UUID -o value "$EFI_PART")  /boot  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
+    echo "UUID=$(blkid -s UUID -o value "${EFI_PARTS[0]}")  /boot  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
 
     # Timezone
     info "Setting timezone to $TIMEZONE..."
