@@ -79,28 +79,13 @@ build_iso() {
     find_iso
 }
 
-# Run sanity test in QEMU
+# Run sanity test in QEMU (automated)
 sanity_test() {
-    step "Sanity Test"
-    info "Booting ISO in QEMU for verification..."
-    info "Please verify:"
-    echo "  1. System boots to login prompt"
-    echo "  2. ZFS module loads (run 'zpool status' or 'lsmod | grep zfs')"
-    echo "  3. Custom scripts are present (ls /usr/local/bin/)"
-    echo ""
+    step "Sanity Test (Automated)"
 
-    # Start QEMU in background
-    "$SCRIPT_DIR/test-vm.sh" &
-    QEMU_PID=$!
-
-    echo ""
-    read -p "Press Enter once you've verified the ISO works (or Ctrl+C to abort)... "
-
-    # Kill QEMU if still running
-    if kill -0 $QEMU_PID 2>/dev/null; then
-        info "Shutting down test VM..."
-        kill $QEMU_PID 2>/dev/null || true
-        wait $QEMU_PID 2>/dev/null || true
+    if ! "$SCRIPT_DIR/sanity-test.sh"; then
+        error "Sanity test failed!"
+        exit 1
     fi
 
     info "Sanity test passed!"
