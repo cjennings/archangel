@@ -57,8 +57,10 @@ Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no
 - Would you want this integrated into the installer (auto-create recovery partition)?
 - Or just document how to set it up manually?
 
-** TODO [#B] Add common recovery tools to archzfs ISO
+** DONE [#B] Add common recovery tools to archzfs ISO
+CLOSED: [2026-01-18 Sat]
 Make the ISO double as a general-purpose recovery disk.
+See custom/RESCUE-GUIDE.txt for comprehensive documentation of all tools.
 
 *** Research Sources
 - [[https://www.system-rescue.org/Detailed-packages-list/][SystemRescue Package List]] - Arch-based rescue distro with 1000+ packages

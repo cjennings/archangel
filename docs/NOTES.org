@@ -329,6 +329,48 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-18 Sat @ 16:30 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Completed RESCUE-GUIDE.txt with all 8 sections fully documented
+- Added final round of utility packages to ISO:
+  - Disk tools: ncdu, tree
+  - Hardware diagnostics: iotop
+  - Network: speedtest-cli, mosh, aria2, tmate, sshuttle
+  - Security: pass (password manager)
+- Removed AUR-only packages that broke build: safecopy, ms-sys, dislocker, nwipe
+- Successfully rebuilt ISO (5.1GB)
+- Copied ISO to truenas.local:/mnt/vault/isos and ~/downloads/isos
+- Wrote ISO to USB drives (/dev/sda 1TB, /dev/sdb 240GB)
+- Ran all tests:
+  - zfs-snap-prune unit tests: 22/22 PASSED
+  - VM install test (single-disk): PASSED
+  - VM install test (mirror): PASSED
+  - VM install test (raidz1): PASSED
+- Marked "Add common recovery tools" TODO as DONE
+
+*Commits Made:*
+- 36aa130: Add utility tools and rescue guide documentation
+- 6f4fd68: Remove AUR-only packages from ISO build
+
+*Files Modified:*
+- [[file:../build.sh][build.sh]] - Added utility packages, removed AUR-only packages
+- [[file:../custom/RESCUE-GUIDE.txt][custom/RESCUE-GUIDE.txt]] - Completed all 8 sections
+- [[file:../TODO.org][TODO.org]] - Marked recovery tools task as DONE
+- [[file:session-context.org][docs/session-context.org]] - Updated session state
+
+*Key Technical Notes:*
+- AUR packages cannot be included in mkarchiso builds without custom AUR handling
+- Documented AUR tools (safecopy, ms-sys, dislocker, nwipe) in RESCUE-GUIDE with install instructions
+- ISO now doubles as a comprehensive rescue/recovery disk
+
+*Next Steps:*
+- Test booting from physical USB drive on real hardware
+- Consider CI/CD pipeline for automated ISO builds
+- Consider adding ISO to GRUB boot menu for on-disk recovery
+
 *** 2026-01-17 Sat @ 17:10 -0600
 
 *Status:* IN PROGRESS

@@ -5,28 +5,34 @@
 
 ** What We Completed This Session
 
-Completed rescue guide and recovery tools - all 8 sections done.
+Completed rescue guide with all 8 sections, added utility tools, built and tested ISO.
 
-*** Packages Added to build.sh (this session)
+*** Additional Packages Added (final round)
 
-Disk operations:
-- partimage (legacy partition imaging)
-- f2fs-tools (Flash-Friendly FS)
-- exfatprogs (exFAT filesystem)
+Disk tools:
+- ncdu (interactive disk usage analyzer)
+- tree (directory tree visualization)
 
-Utilities:
-- emacs (editor)
+Hardware diagnostics:
+- iotop (I/O usage by process)
 
-Network diagnostics:
-- mtr (combined ping + traceroute)
-- iperf3 (bandwidth testing)
-- iftop (live bandwidth monitor by connection)
-- nethogs (bandwidth monitor by process)
-- ethtool (NIC configuration and diagnostics)
-- tcpdump (packet capture)
-- bind (dig/nslookup DNS tools)
-- nmap (network scanner)
-- wireshark-cli (tshark packet analysis)
+Network tools:
+- speedtest-cli (internet speed testing)
+- mosh (mobile shell for unreliable connections)
+- aria2 (multi-protocol download accelerator)
+- tmate (instant terminal sharing)
+- sshuttle (VPN over SSH)
+
+Security:
+- pass (Unix password manager)
+
+*** Removed AUR-only Packages
+
+These were documented but removed from build.sh (AUR-only):
+- safecopy
+- ms-sys
+- dislocker
+- nwipe
 
 *** RESCUE-GUIDE.txt - All Sections Complete
 1. ZFS Recovery
@@ -34,25 +40,33 @@ Network diagnostics:
 3. Boot Repair
 4. Windows Recovery
 5. Hardware Diagnostics
-6. Disk Operations
-7. Network Troubleshooting (expanded with all diagnostic tools)
-8. Encryption & GPG
+6. Disk Operations (with ncdu, tree)
+7. Network Troubleshooting (expanded with all tools)
+8. Encryption & GPG (with pass)
 
 ** Commits Made This Session
 - 6df73f6: Add disk, network, and encryption tools with rescue guide sections
 - f53c951: Add network diagnostics tools and rescue guide documentation
+- 36aa130: Add utility tools and rescue guide documentation
+- 6f4fd68: Remove AUR-only packages from ISO build
+
+** Tests Run
+- zfs-snap-prune unit tests: 22/22 PASSED
+- VM install test (single-disk): PASSED
+- VM install test (mirror): PASSED
+- VM install test (raidz1): PASSED
+
+** ISO Built and Distributed
+- ISO: archzfs-vmlinuz-6.12.66-lts-2026-01-18-x86_64.iso (5.1GB)
+- Copied to: truenas.local:/mnt/vault/isos
+- Copied to: ~/downloads/isos
+- Written to USB: /dev/sda
 
 ** Git Status
 - All changes committed and pushed
 - Working tree clean
 - Up to date with origin/main
 
-** Project State
-- RESCUE-GUIDE.txt is complete (all 8 sections with comprehensive documentation)
-- ISO needs rebuild to include new packages
-- Estimated additional ISO size: ~90MB (mostly wireshark-cli and nmap)
-
 ** Next Steps
-- Rebuild ISO with new packages
-- Test that all rescue tools are present and functional
-- Consider testing some rescue scenarios in VM
+- Test booting from physical USB drive on real hardware
+- Consider adding any additional rescue tools as needed
