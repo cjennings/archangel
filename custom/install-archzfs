@@ -909,7 +909,8 @@ EOF
         nodejs \
         npm \
         ttf-dejavu \
-        fzf
+        fzf \
+        wget
 
     info "Base system installed."
 }
