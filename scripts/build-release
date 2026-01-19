@@ -111,14 +111,10 @@ find_archzfs_drive() {
         ARCHZFS_DISK=$(lsblk -no PKNAME "$ARCHZFS_DEV" 2>/dev/null | head -1)
         if [[ -n "$ARCHZFS_DISK" ]]; then
             ARCHZFS_DISK="/dev/$ARCHZFS_DISK"
-            # Verify it's removable (USB)
-            REMOVABLE=$(lsblk -no RM "$ARCHZFS_DISK" 2>/dev/null | head -1)
-            if [[ "$REMOVABLE" == "1" ]]; then
-                info "Found ARCHZFS USB drive: $ARCHZFS_DISK"
-                return 0
-            else
-                warn "ARCHZFS label found on $ARCHZFS_DISK but it's not removable, skipping"
-            fi
+            # Note: Don't check for removable - Framework expansion cards
+            # show as internal drives but are actually hot-swappable
+            info "Found ARCHZFS drive: $ARCHZFS_DISK"
+            return 0
         fi
     fi
     ARCHZFS_DISK=""
@@ -217,10 +213,10 @@ distribute_truenas() {
 
     # Remove old ISOs and copy new one
     info "Removing old ISOs from TrueNAS..."
-    $ssh_cmd "root@$TRUENAS_HOST" "rm -f $TRUENAS_PATH/archzfs-*.iso" 2>/dev/null || true
+    $ssh_cmd "cjennings@$TRUENAS_HOST" "rm -f $TRUENAS_PATH/archzfs-*.iso" 2>/dev/null || true
 
     info "Copying to $TRUENAS_HOST:$TRUENAS_PATH/"
-    if $scp_cmd "$ISO_FILE" "root@$TRUENAS_HOST:$TRUENAS_PATH/"; then
+    if $scp_cmd "$ISO_FILE" "cjennings@$TRUENAS_HOST:$TRUENAS_PATH/"; then
         info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
         TRUENAS_SUCCESS=true
     else
