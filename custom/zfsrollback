@@ -67,10 +67,10 @@ fi
 
 if $single_mode; then
     # Single mode: show full dataset@snapshot names (sorted newest first)
-    selected=$(zfs list -t snapshot -H -o name -S creation | fzf --height=40% --reverse \
+    selected=$(zfs list -t snapshot -H -o name -S creation | fzf --height=70% --reverse \
         --header="Select snapshot to roll back (ESC to cancel)" \
         --preview="zfs list -t snapshot -o name,creation,used,refer -r {1}" \
-        --preview-window=down:3)
+        --preview-window=down:5)
 
     if [ -z "$selected" ]; then
         echo "No snapshot selected, exiting"
@@ -85,7 +85,7 @@ else
     # Sort reverse so newest (latest date) appears at top
     unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
 
-    snap_name=$(echo "$unique_snaps" | fzf --height=40% --reverse \
+    snap_name=$(echo "$unique_snaps" | fzf --height=70% --reverse \
         --header="Select snapshot name to roll back ALL matching datasets (ESC to cancel)" \
         --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}$' | column -t" \
         --preview-window=down:10)
