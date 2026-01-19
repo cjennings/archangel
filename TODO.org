@@ -33,9 +33,9 @@ This would make SSH access easier without needing to find the IP address.
 
 Already have avahi package installed - just need to configure/enable it.
 
-** DONE [#C] Add date/timestamp to install-archzfs.log
-Add a date/timestamp header to /tmp/install-archzfs.log when the installer starts.
-This helps identify when an installation was run when reviewing logs later.
+** DONE [#C] Add date/timestamp to install-archzfs log
+Log filename now includes timestamp: /tmp/install-archzfs-YYYY-MM-DD-HH-MM-SS.log
+Also includes header with start time inside the log file.
 
 ** TODO [#B] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
