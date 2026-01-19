@@ -46,7 +46,7 @@ ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
 NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
 
 # Logging
-LOGFILE="/tmp/install-archzfs.log"
+LOGFILE="/tmp/install-archzfs-$(date +'%Y-%m-%d-%H-%M-%S').log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 # Log header with timestamp

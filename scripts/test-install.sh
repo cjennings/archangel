@@ -248,7 +248,7 @@ verify_install() {
     if [[ "$enable_ssh" == "yes" ]]; then
         # Check if we can still SSH (install script reboots, so this won't work)
         # Instead, check the install log for success indicators
-        if ssh_cmd "grep -q 'Installation complete' /tmp/install-archzfs.log"; then
+        if ssh_cmd "grep -q 'Installation complete' /tmp/install-archzfs-*.log 2>/dev/null"; then
             info "Install log shows success"
         else
             warn "Could not verify install log"
@@ -342,7 +342,7 @@ run_test() {
         stop_vm "$config_name"
 
         # Save logs
-        ssh_cmd "cat /tmp/install-archzfs.log" > "$LOG_DIR/${config_name}-install.log" 2>/dev/null || true
+        ssh_cmd "cat /tmp/install-archzfs-*.log" > "$LOG_DIR/${config_name}-install.log" 2>/dev/null || true
         cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-serial.log" 2>/dev/null || true
 
         cleanup_disks "$config_name"
