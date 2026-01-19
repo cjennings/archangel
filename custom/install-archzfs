@@ -2,13 +2,13 @@
 # install-archzfs - Arch Linux ZFS Root Installation Script
 # Craig Jennings <c@cjennings.net>
 #
-# Installs Arch Linux on ZFS root with native encryption.
+# Installs Arch Linux on ZFS root with optional native encryption.
 # Designed to be run from the custom archzfs ISO.
 #
 # Features:
 # - All questions asked upfront, then unattended installation
 # - Optional WiFi configuration with connection test
-# - ZFS native encryption (passphrase required at boot)
+# - Optional ZFS native encryption (passphrase required at boot)
 # - Pre-pacman ZFS snapshots for safe upgrades
 #
 # UNATTENDED MODE:
@@ -73,16 +73,11 @@ parse_args() {
                     error "--config-file requires a path argument"
                 fi
                 ;;
-            --no-encrypt)
-                NO_ENCRYPT="yes"
-                shift
-                ;;
             --help|-h)
                 echo "Usage: install-archzfs [OPTIONS]"
                 echo ""
                 echo "Options:"
                 echo "  --config-file PATH  Use config file for unattended installation"
-                echo "  --no-encrypt        Skip ZFS encryption (for testing only)"
                 echo "  --help, -h          Show this help message"
                 echo ""
                 echo "Without --config-file, runs in interactive mode."
@@ -196,6 +191,7 @@ gather_input() {
     get_disks
     get_raid_level
     get_wifi
+    get_encryption_choice
     [[ "$NO_ENCRYPT" != "yes" ]] && get_zfs_passphrase
     get_root_password
     get_ssh_config
@@ -572,6 +568,29 @@ get_wifi() {
     fi
 }
 
+get_encryption_choice() {
+    step "ZFS Encryption"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "ZFS native encryption protects your data at rest."
+    echo ""
+    echo "  - Passphrase required at every boot"
+    echo "  - If forgotten, data is UNRECOVERABLE"
+    echo "  - Recommended for laptops and sensitive data"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    prompt "Enable ZFS encryption? [Y/n]:"
+    read -p "> " encrypt_choice
+
+    if [[ "$encrypt_choice" =~ ^[Nn]$ ]]; then
+        NO_ENCRYPT="yes"
+        warn "Encryption DISABLED - data will not be encrypted at rest"
+    else
+        NO_ENCRYPT="no"
+        info "Encryption enabled - you'll set a passphrase next"
+    fi
+}
+
 get_zfs_passphrase() {
     step "ZFS Encryption Passphrase"
     echo ""
@@ -662,7 +681,11 @@ show_summary() {
     echo "  RAID Level:   ${RAID_LEVEL:-single (no RAID)}"
     echo "  WiFi:         ${WIFI_SSID:-Not configured}"
     echo "  SSH:          ${ENABLE_SSH:-yes} (root login)"
-    echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+    if [[ "$NO_ENCRYPT" == "yes" ]]; then
+        echo "  ZFS Pool:     $POOL_NAME (NOT encrypted)"
+    else
+        echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+    fi
     echo "  Boot:         EFI on all disks (redundant)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
@@ -1321,7 +1344,11 @@ print_summary() {
     echo "System Configuration:"
     echo "  Hostname:     $HOSTNAME"
     echo "  Timezone:     $TIMEZONE"
-    echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+    if [[ "$NO_ENCRYPT" == "yes" ]]; then
+        echo "  ZFS Pool:     $POOL_NAME (not encrypted)"
+    else
+        echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+    fi
     echo ""
     echo "ZFS Features:"
     echo "  - Genesis snapshot: pristine post-install state"

@@ -47,8 +47,13 @@ RAID_LEVEL=
 # This will be required at every boot to unlock the pool
 ZFS_PASSPHRASE=changeme
 
-# Disable ZFS encryption (optional, for testing only)
-# Set to "yes" to skip encryption - NOT recommended for real installs
+# Skip ZFS encryption (optional, default: no)
+# Set to "yes" to create an unencrypted pool
+# Use cases:
+#   - VMs or test environments
+#   - Systems with hardware encryption (SED drives)
+#   - Data that doesn't require encryption
+# WARNING: Without encryption, anyone with physical access can read your data
 #NO_ENCRYPT=no
 
 # Root password (required)

@@ -232,8 +232,8 @@ run_install() {
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -P "$SSH_PORT" "$config" root@localhost:/root/test.conf 2>/dev/null
 
-    # Run the installer
-    ssh_cmd "install-archzfs --config-file /root/test.conf --no-encrypt" || return 1
+    # Run the installer (NO_ENCRYPT is set in the config file, not via flag)
+    ssh_cmd "install-archzfs --config-file /root/test.conf" || return 1
 
     return 0
 }

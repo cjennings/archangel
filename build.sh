@@ -210,6 +210,8 @@ info "Updating ISO metadata..."
 ISO_DATE=$(date +%Y-%m-%d)
 sed -i "s/^iso_name=.*/iso_name=\"archzfs-vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
 sed -i "s/^iso_version=.*/iso_version=\"${ISO_DATE}\"/" "$PROFILE_DIR/profiledef.sh"
+# Fixed label for stable GRUB boot entry (default is date-based ARCH_YYYYMM)
+sed -i "s/^iso_label=.*/iso_label=\"ARCHZFS\"/" "$PROFILE_DIR/profiledef.sh"
 
 # Create airootfs directories
 mkdir -p "$PROFILE_DIR/airootfs/usr/local/bin"

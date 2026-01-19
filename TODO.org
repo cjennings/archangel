@@ -27,6 +27,16 @@
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
 
+** TODO [#B] Consider Avahi for USB boot disk discoverability
+Make the live ISO discoverable on the network by name (e.g., archzfs.local) when booted.
+This would make SSH access easier without needing to find the IP address.
+
+Already have avahi package installed - just need to configure/enable it.
+
+** TODO [#C] Add date/timestamp to install-archzfs.log
+Add a date/timestamp header to /tmp/install-archzfs.log when the installer starts.
+This helps identify when an installation was run when reviewing logs later.
+
 ** TODO [#B] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
 
