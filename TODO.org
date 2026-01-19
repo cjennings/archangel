@@ -57,6 +57,7 @@ cp -r /usr/share/aur-packages /mnt/usr/share/
 | downgrade | Roll back to previous package versions | Essential for recovery when updates break |
 | yay | AUR helper | Users can install additional AUR packages |
 | informant | Check Arch news before upgrading | Prevents breaking changes from surprises |
+| arch-wiki-lite | Offline Arch Wiki with CLI reader | Documentation when network is down |
 
 **** ZFS Management (Priority A)
 | Package | Description | Why needed |
@@ -100,18 +101,47 @@ cp -r /usr/share/aur-packages /mnt/usr/share/
 Most AUR packages are small (<5MB each). Estimate ~50-100MB for full suite.
 Significantly less than pre-cloning git repos.
 
-** TODO [#B] Install Arch Wiki on ISO for offline package help
+** TODO [#A] Install Arch Wiki on ISO for offline package help
 Include offline Arch Wiki on the ISO for package documentation and troubleshooting.
-Would be invaluable for rescue scenarios without network access.
+Invaluable for rescue scenarios when networking is broken - exactly when you need docs most.
 
-Options to research:
-- arch-wiki-docs package (official, ~500MB compressed)
-- arch-wiki-lite for terminal viewing
-- Custom subset focusing on ZFS, recovery, and commonly needed topics
+*** Reader Options
 
-Reference in RESCUE-GUIDE.txt and README.org.
+**** Option 1: arch-wiki-lite (AUR) - Recommended
+Purpose-built CLI reader for offline Arch Wiki.
+#+BEGIN_SRC bash
+$ wiki-search zfs
+$ wiki-search mkinitcpio
+#+END_SRC
+- Searches articles by keyword
+- Displays content as plain text in terminal
+- Add to our AUR package build list
 
-Note: Adds ~500MB to ISO. Network is usually available, so demoted from Priority A.
+**** Option 2: arch-wiki-docs (official) + text browser
+- Package installs HTML to /usr/share/doc/arch-wiki/html/
+- Use w3m, lynx, or elinks to browse
+- Would need wrapper script for searching:
+#+BEGIN_SRC bash
+#!/bin/bash
+# archwiki - search and display offline Arch Wiki
+WIKI_DIR="/usr/share/doc/arch-wiki/html"
+SEARCH="$1"
+MATCHES=$(find "$WIKI_DIR" -iname "*${SEARCH}*" -type f)
+if [[ -n "$MATCHES" ]]; then
+    echo "$MATCHES" | fzf --preview 'w3m -dump {}' | xargs w3m
+fi
+#+END_SRC
+
+*** Implementation
+1. Add arch-wiki-lite to AUR package list (leverages existing AUR infrastructure)
+2. Also install arch-wiki-docs for complete HTML version
+3. Add w3m for HTML viewing as backup
+4. Document in RESCUE-GUIDE.txt
+
+*** Size
+- arch-wiki-docs: ~500MB compressed
+- arch-wiki-lite: ~200MB (text only, smaller)
+- Could include both for ~600MB total
 
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 *** Options to evaluate
