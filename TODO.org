@@ -1,11 +1,104 @@
 * Open Work
-** TODO [#A] Add downgrade package to ISO
-The downgrade utility allows rolling back to previous package versions from the Arch Linux Archive.
-Essential for recovery scenarios when an update breaks something.
+** TODO [#A] Build AUR packages and include in ISO as local repository
+Build AUR packages during ISO creation and include them in a local pacman repository.
+This allows AUR software to work both in the live environment AND be installable to target systems.
 
-Package is AUR-only, so needs pre-building or AUR helper integration in build process.
-- Option 1: Pre-build with yay/paru and add to zfs-packages/
-- Option 2: Add AUR repo to pacman.conf in build
+*** Implementation Plan
+
+**** 1. Create build infrastructure
+Add to build.sh or separate script (build-aur.sh):
+#+BEGIN_SRC bash
+build_aur_packages() {
+    local aur_packages=(downgrade yay sanoid informant rate-mirrors)
+    local repo_dir="$PROJECT_DIR/aur-packages"
+    local build_dir="/tmp/aur-build"
+
+    mkdir -p "$repo_dir" "$build_dir"
+
+    for pkg in "${aur_packages[@]}"; do
+        info "Building AUR package: $pkg"
+        git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "$build_dir/${pkg}"
+        (cd "$build_dir/${pkg}" && makepkg -s --noconfirm --needed)
+        cp "$build_dir/${pkg}"/*.pkg.tar.zst "$repo_dir/"
+    done
+
+    # Create/update repo database
+    repo-add "$repo_dir/aur.db.tar.gz" "$repo_dir"/*.pkg.tar.zst
+}
+#+END_SRC
+
+**** 2. Add local repo to ISO's pacman.conf
+In profile/pacman.conf, add:
+#+BEGIN_SRC ini
+[aur]
+SigLevel = Optional TrustAll
+Server = file:///usr/share/aur-packages
+#+END_SRC
+
+**** 3. Copy repo into ISO
+In build.sh, copy aur-packages/ to profile/airootfs/usr/share/aur-packages/
+
+**** 4. Add packages to packages.x86_64
+Once in local repo, packages can be listed normally and pacman will find them.
+
+**** 5. Make available during installation
+In install-archzfs, copy local repo to target or mount it:
+#+BEGIN_SRC bash
+# Copy AUR repo to target for installation
+cp -r /usr/share/aur-packages /mnt/usr/share/
+# Add repo to target's pacman.conf temporarily
+#+END_SRC
+
+*** AUR Packages to Include
+
+**** Essential (Priority A)
+| Package | Description | Why needed |
+|---------+-------------+------------|
+| downgrade | Roll back to previous package versions | Essential for recovery when updates break |
+| yay | AUR helper | Users can install additional AUR packages |
+| informant | Check Arch news before upgrading | Prevents breaking changes from surprises |
+
+**** ZFS Management (Priority A)
+| Package | Description | Why needed |
+|---------+-------------+------------|
+| sanoid | ZFS snapshot policy management | Automated snapshot creation/pruning |
+| syncoid | ZFS replication tool (part of sanoid) | Backup to remote systems |
+| zrepl | ZFS replication daemon | Alternative to sanoid for replication |
+
+**** System Maintenance (Priority B)
+| Package | Description | Why needed |
+|---------+-------------+------------|
+| rate-mirrors | Fast Arch mirror selection | Better than reflector for speed |
+| paru | Alternative AUR helper (Rust) | Some prefer over yay |
+| pacman-cleanup-hook | Auto-remove old package cache | Disk space management |
+| arch-audit | CVE security monitoring | Check for vulnerable packages |
+
+**** Recovery Tools (Priority B)
+| Package | Description | Why needed |
+|---------+-------------+------------|
+| ventoy-bin | Create multiboot USB drives | Useful rescue tool |
+| topgrade | Universal upgrade tool | Update everything at once |
+| mkinitcpio-firmware | Suppress firmware warnings | Cleaner initramfs builds |
+
+**** Nice to Have (Priority C)
+| Package | Description | Why needed |
+|---------+-------------+------------|
+| zfs-auto-snapshot | Automatic ZFS snapshots | Simple cron-based snapshots |
+| btop | Modern resource monitor | Better than htop |
+| duf | Modern disk usage viewer | Better than df |
+| dust | Modern du replacement | Intuitive disk usage |
+| procs | Modern ps replacement | Better process viewer |
+
+*** Considerations
+- Build must run on Arch Linux (or in Arch container)
+- Some AUR packages have dependencies that are also AUR - need to handle build order
+- Package versions will be frozen at ISO build time
+- Consider caching built packages to speed rebuilds
+- May want to GPG sign the local repo for security
+
+*** Size Estimate
+Most AUR packages are small (<5MB each). Estimate ~50-100MB for full suite.
+Significantly less than pre-cloning git repos.
 
 ** TODO [#A] Install Arch Wiki on ISO for offline package help
 Include offline Arch Wiki on the ISO for package documentation and troubleshooting.
