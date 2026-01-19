@@ -46,16 +46,19 @@ step()  { echo -e "\n${CYAN}=== $1 ===${NC}\n"; }
 # Parse arguments
 SKIP_BUILD=false
 SKIP_TEST=false
+AUTO_CONFIRM=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-build) SKIP_BUILD=true; shift ;;
         --skip-test)  SKIP_TEST=true; shift ;;
+        --yes|-y)     AUTO_CONFIRM=true; shift ;;
         -h|--help)
-            echo "Usage: $0 [--skip-build] [--skip-test]"
+            echo "Usage: $0 [--skip-build] [--skip-test] [--yes]"
             echo ""
             echo "Options:"
             echo "  --skip-build  Skip ISO build, distribute existing ISO"
             echo "  --skip-test   Skip QEMU sanity test"
+            echo "  --yes, -y     Auto-confirm dd to ARCHZFS drive (no prompt)"
             exit 0
             ;;
         *) error "Unknown option: $1" ;;
@@ -234,17 +237,21 @@ distribute_archzfs_usb() {
         return 0
     fi
 
-    # Confirm before writing
+    # Confirm before writing (unless --yes flag)
     echo ""
     warn "About to write ISO to $ARCHZFS_DISK"
-    warn "This will ERASE ALL DATA on the drive!"
     lsblk "$ARCHZFS_DISK"
     echo ""
-    read -p "Type 'yes' to confirm: " confirm
 
-    if [[ "$confirm" != "yes" ]]; then
-        warn "Skipping USB write"
-        return 0
+    if ! $AUTO_CONFIRM; then
+        warn "This will ERASE ALL DATA on the drive!"
+        read -p "Type 'yes' to confirm: " confirm
+        if [[ "$confirm" != "yes" ]]; then
+            warn "Skipping USB write"
+            return 0
+        fi
+    else
+        info "Auto-confirmed (--yes flag)"
     fi
 
     # Unmount any mounted partitions
