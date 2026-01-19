@@ -221,6 +221,31 @@ When Craig says this phrase:
    - Say: "I don't see '[workflow-name]' yet. Create it using create-workflow process?"
    - If yes: Run create-workflow to define it, then use immediately (validates new workflow)
 
+** Long-Running Process Status Updates
+
+When monitoring a long-running process (rsync, large downloads, builds, etc.), provide status updates every 5 minutes.
+
+***Format:***
+#+begin_example
+**14:32** - Rsync in progress: 312GB of 640GB transferred (~49%), ETA ~25 min
+**14:37** - Rsync continuing: 389GB of 640GB (~61%), ETA ~18 min
+#+end_example
+
+***Guidelines:***
+- Check in approximately every 5 minutes
+- Include current time (run =date= to get accurate time)
+- Brief description of what's happening
+- Progress indication (percentage, files transferred, etc.)
+- ETA when possible (even a ballpark estimate is helpful)
+- Format doesn't need to be strict - just be descriptive
+- If ETA cannot be determined, omit it rather than guessing wildly
+
+***Why This Matters:***
+- Craig may be working on other things while waiting
+- Status updates provide confidence the process is still running
+- ETAs help with planning (e.g., "I have time for coffee" vs "stay close")
+- If something stalls, the updates make it obvious
+
 ** "Wrap it up" / "That's a wrap" / "Let's call it a wrap"
 
 When Craig says any of these phrases (or variations), execute wrap-up workflow:
