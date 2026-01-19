@@ -143,7 +143,8 @@ fi
 - arch-wiki-lite: ~200MB (text only, smaller)
 - Could include both for ~600MB total
 
-** TODO [#B] Add zfsrollback and zfssnapshot scripts to ISO
+** DONE [#B] Add zfsrollback and zfssnapshot scripts to ISO
+CLOSED: [2026-01-19 Sun]
 Include dedicated ZFS snapshot management scripts in the archzfs ISO rather than archsetup.
 These tools belong here since they're useful for rescue scenarios and post-install management.
 

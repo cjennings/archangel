@@ -266,6 +266,11 @@ cp "$CUSTOM_DIR/zz-grub-zfs-snap.hook" "$PROFILE_DIR/airootfs/usr/local/share/gr
 info "Copying zfs-snap-prune..."
 cp "$CUSTOM_DIR/zfs-snap-prune" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
+# Copy zfssnapshot and zfsrollback for ZFS management
+info "Copying zfssnapshot and zfsrollback..."
+cp "$CUSTOM_DIR/zfssnapshot" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$CUSTOM_DIR/zfsrollback" "$PROFILE_DIR/airootfs/usr/local/bin/"
+
 # Copy example config for unattended installs
 mkdir -p "$PROFILE_DIR/airootfs/root"
 cp "$CUSTOM_DIR/install-archzfs.conf.example" "$PROFILE_DIR/airootfs/root/"
@@ -291,6 +296,12 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/zfs-snap-prune"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/zfssnapshot"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/zfsrollback"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/etc/shadow"]="0:0:400"

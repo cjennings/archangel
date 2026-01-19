@@ -1,0 +1,110 @@
+#!/bin/env bash
+# Craig Jennings <c@cjennings.net>
+# Create a ZFS snapshot across all datasets with a dated, descriptive name.
+
+set -euo pipefail
+
+# Usage info
+show_help() {
+    cat << EOF
+Usage: ${0##*/} [-h] [DESCRIPTION]
+Create a ZFS snapshot across all datasets.
+
+    -h              display this help and exit
+    DESCRIPTION     short description for the snapshot (optional, will prompt if omitted)
+
+Snapshot names are formatted as: YYYY-MM-DD_HH-MM-SS_description
+Only alphanumeric characters, hyphens, and underscores are allowed in descriptions.
+Spaces are converted to underscores automatically.
+
+Examples:
+    ${0##*/} before-upgrade
+    ${0##*/} "pre system update"
+    ${0##*/}                        # prompts for description
+EOF
+}
+
+# Check for ZFS
+if ! command -v zfs &> /dev/null; then
+    echo "Error: zfs command not found. Is ZFS installed?"
+    exit 1
+fi
+
+# Check for root/sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "Error: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+# Parse arguments
+while getopts ":h" opt; do
+    case ${opt} in
+        h)
+            show_help
+            exit 0
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+# Get description from argument or prompt
+if [ $# -ge 1 ]; then
+    description="$*"
+else
+    read -r -p "Enter snapshot description: " description
+    if [ -z "$description" ]; then
+        echo "Error: Description cannot be empty"
+        exit 1
+    fi
+fi
+
+# Sanitize description: convert spaces to underscores, lowercase
+description=$(echo "$description" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
+
+# Validate description: only allow alphanumeric, hyphens, underscores
+if [[ ! "$description" =~ ^[a-z0-9_-]+$ ]]; then
+    echo "Error: Description contains invalid characters"
+    echo "Only letters, numbers, hyphens, and underscores are allowed"
+    echo "Sanitized input was: $description"
+    exit 1
+fi
+
+# Create snapshot name with timestamp prefix (matches pre-pacman format)
+timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+snapshot_name="${timestamp}_${description}"
+
+# Get all pools
+pools=$(zpool list -H -o name)
+
+if [ -z "$pools" ]; then
+    echo "Error: No ZFS pools found"
+    exit 1
+fi
+
+echo "Creating snapshots with name: @${snapshot_name}"
+echo ""
+
+# Create recursive snapshots on each pool
+for pool in $pools; do
+    echo "Snapshotting pool: $pool"
+    if zfs snapshot -r "${pool}@${snapshot_name}"; then
+        echo "  ✓ Created ${pool}@${snapshot_name} (recursive)"
+    else
+        echo "  ✗ Failed to snapshot $pool"
+    fi
+done
+
+echo ""
+echo "Snapshot complete. Verify with: zfs list -t snapshot | grep $snapshot_name"
+
+# Update GRUB boot menu if grub-zfs-snap is available
+if command -v grub-zfs-snap &> /dev/null; then
+    echo ""
+    echo "Updating GRUB boot menu..."
+    grub-zfs-snap
+fi

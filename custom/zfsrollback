@@ -1,0 +1,184 @@
+#!/bin/env bash
+# Craig Jennings <c@cjennings.net>
+# Roll back ZFS datasets to a selected snapshot using fzf.
+
+set -euo pipefail
+
+# Usage info
+show_help() {
+    cat << EOF
+Usage: ${0##*/} [-h] [-s]
+Roll back ZFS datasets to a selected snapshot.
+
+    -h              display this help and exit
+    -s              single dataset mode (roll back only the selected dataset,
+                    not all datasets with matching snapshot name)
+
+By default, rolling back a snapshot will roll back ALL datasets that share
+that snapshot name. Use -s for single dataset rollback.
+
+WARNING: Rolling back destroys all data and snapshots newer than the target.
+         This operation cannot be undone!
+
+Requires: fzf, zfs
+EOF
+}
+
+# Check dependencies
+for cmd in zfs fzf; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "Error: $cmd command not found"
+        exit 1
+    fi
+done
+
+# Check for root/sudo
+if [ "$EUID" -ne 0 ]; then
+    echo "Error: This script must be run as root (use sudo)"
+    exit 1
+fi
+
+# Parse arguments
+single_mode=false
+while getopts ":hs" opt; do
+    case ${opt} in
+        h)
+            show_help
+            exit 0
+            ;;
+        s)
+            single_mode=true
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" >&2
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Get all snapshots
+snapshots=$(zfs list -t snapshot -H -o name 2>/dev/null)
+
+if [ -z "$snapshots" ]; then
+    echo "No ZFS snapshots found"
+    exit 0
+fi
+
+if $single_mode; then
+    # Single mode: show full dataset@snapshot names (sorted newest first)
+    selected=$(zfs list -t snapshot -H -o name -S creation | fzf --height=40% --reverse \
+        --header="Select snapshot to roll back (ESC to cancel)" \
+        --preview="zfs list -t snapshot -o name,creation,used,refer -r {1}" \
+        --preview-window=down:3)
+
+    if [ -z "$selected" ]; then
+        echo "No snapshot selected, exiting"
+        exit 0
+    fi
+
+    dataset="${selected%@*}"
+    snap_name="${selected#*@}"
+    targets=("$selected")
+else
+    # Multi mode: show unique snapshot names, roll back all matching datasets
+    # Sort reverse so newest (latest date) appears at top
+    unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
+
+    snap_name=$(echo "$unique_snaps" | fzf --height=40% --reverse \
+        --header="Select snapshot name to roll back ALL matching datasets (ESC to cancel)" \
+        --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}$' | column -t" \
+        --preview-window=down:10)
+
+    if [ -z "$snap_name" ]; then
+        echo "No snapshot selected, exiting"
+        exit 0
+    fi
+
+    # Find all datasets with this snapshot
+    mapfile -t targets < <(echo "$snapshots" | grep "@${snap_name}$")
+
+    if [ ${#targets[@]} -eq 0 ]; then
+        echo "Error: No datasets found with snapshot @${snap_name}"
+        exit 1
+    fi
+fi
+
+# Display what will happen
+echo ""
+echo "═══════════════════════════════════════════════════════════════════"
+echo "                        ⚠️  WARNING ⚠️"
+echo "═══════════════════════════════════════════════════════════════════"
+echo ""
+
+# Special warning for genesis rollback
+if [[ "$snap_name" == "genesis" ]]; then
+    echo "  🚨 GENESIS ROLLBACK DETECTED 🚨"
+    echo ""
+    echo "  Rolling back to genesis will destroy ALL changes since installation!"
+    echo "  This includes all packages installed, configurations, and user data."
+    echo ""
+fi
+
+echo "You are about to roll back to snapshot: @${snap_name}"
+echo ""
+echo "The following datasets will be rolled back:"
+for target in "${targets[@]}"; do
+    dataset="${target%@*}"
+    echo "  • $dataset"
+
+    # Show newer snapshots that will be destroyed
+    newer=$(zfs list -t snapshot -H -o name -S creation "$dataset" 2>/dev/null | \
+        awk -v snap="$target" 'found {print "      ✗ " $0 " (will be DESTROYED)"} $0 == snap {found=1}')
+    if [ -n "$newer" ]; then
+        echo "$newer"
+    fi
+done
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════════"
+echo "  THIS OPERATION CANNOT BE UNDONE!"
+echo "  All data written after the snapshot will be permanently lost."
+echo "  All snapshots newer than the target will be destroyed."
+echo "═══════════════════════════════════════════════════════════════════"
+echo ""
+
+# Require explicit confirmation
+read -r -p "Type 'yes' to confirm rollback: " confirmation
+
+if [ "$confirmation" != "yes" ]; then
+    echo "Rollback cancelled"
+    exit 0
+fi
+
+echo ""
+echo "Rolling back..."
+
+# Perform rollbacks
+failed=0
+for target in "${targets[@]}"; do
+    dataset="${target%@*}"
+    echo -n "  Rolling back $dataset... "
+    if zfs rollback -r "$target" 2>&1; then
+        echo "✓"
+    else
+        echo "✗ FAILED"
+        ((failed++))
+    fi
+done
+
+echo ""
+if [ $failed -eq 0 ]; then
+    echo "Rollback complete."
+
+    # Update GRUB boot menu if grub-zfs-snap is available
+    # (destroyed snapshots need to be removed from menu)
+    if command -v grub-zfs-snap &> /dev/null; then
+        echo ""
+        echo "Updating GRUB boot menu..."
+        grub-zfs-snap
+    fi
+else
+    echo "Rollback completed with $failed failure(s)"
+    exit 1
+fi
