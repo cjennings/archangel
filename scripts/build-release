@@ -2,9 +2,10 @@
 # build-release - Build and distribute the archzfs ISO
 #
 # Usage:
-#   ./scripts/build-release              # Full build, test, and distribute
+#   ./scripts/build-release              # Full build, sanity test, and distribute
+#   ./scripts/build-release --full-test  # Full build with comprehensive install tests
 #   ./scripts/build-release --skip-build # Skip build, just distribute existing ISO
-#   ./scripts/build-release --skip-test  # Skip sanity test
+#   ./scripts/build-release --skip-test  # Skip all testing
 #
 # Distribution targets:
 #   - ~/Downloads/isos (always)
@@ -46,18 +47,21 @@ step()  { echo -e "\n${CYAN}=== $1 ===${NC}\n"; }
 # Parse arguments
 SKIP_BUILD=false
 SKIP_TEST=false
+FULL_TEST=false
 AUTO_CONFIRM=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         --skip-build) SKIP_BUILD=true; shift ;;
         --skip-test)  SKIP_TEST=true; shift ;;
+        --full-test)  FULL_TEST=true; shift ;;
         --yes|-y)     AUTO_CONFIRM=true; shift ;;
         -h|--help)
-            echo "Usage: $0 [--skip-build] [--skip-test] [--yes]"
+            echo "Usage: $0 [--skip-build] [--skip-test] [--full-test] [--yes]"
             echo ""
             echo "Options:"
             echo "  --skip-build  Skip ISO build, distribute existing ISO"
             echo "  --skip-test   Skip QEMU sanity test"
+            echo "  --full-test   Run comprehensive install tests (single, mirror, raidz1)"
             echo "  --yes, -y     Auto-confirm dd to ARCHZFS drive (no prompt)"
             exit 0
             ;;
@@ -104,6 +108,18 @@ sanity_test() {
     fi
 
     info "Sanity test passed!"
+}
+
+# Run full installation tests (automated)
+full_test() {
+    step "Full Installation Tests"
+
+    if ! "$SCRIPT_DIR/full-test.sh"; then
+        error "Full installation test failed!"
+        exit 1
+    fi
+
+    info "All installation tests passed!"
 }
 
 # Find ARCHZFS labeled USB drive
@@ -342,10 +358,12 @@ main() {
         build_iso
     fi
 
-    if ! $SKIP_TEST; then
+    if $FULL_TEST; then
+        full_test
+    elif ! $SKIP_TEST; then
         sanity_test
     else
-        step "Skipping Sanity Test"
+        step "Skipping Tests"
     fi
 
     distribute_local

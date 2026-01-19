@@ -26,6 +26,25 @@ This file contains instructions and protocols for how Claude should behave when 
 
 * IMPORTANT - MUST DO
 
+** CRITICAL: Always Check the Time with =date= Command
+
+***NEVER GUESS THE TIME. ALWAYS RUN =date= TO CHECK.***
+
+Claude's internal sense of time is unreliable. When mentioning what time it is - whether in conversation, session notes, timestamps, or scheduling - ALWAYS run:
+
+#+begin_src bash
+date "+%A %Y-%m-%d %H:%M %Z"
+#+end_src
+
+This applies to:
+- "What time is it?"
+- Session start/end timestamps
+- Calculating time until appointments
+- Setting alarms
+- Any time-related statement
+
+Do NOT estimate, guess, or rely on memory. Just run the command. It takes one second and prevents errors.
+
 ** CRITICAL: Session Context File (docs/session-context.org)
 
 ***THIS IS NON-NEGOTIABLE. FAILURE TO MAINTAIN THIS FILE CAUSES LOST WORK.***
