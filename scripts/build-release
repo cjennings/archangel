@@ -17,8 +17,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
+# Get actual user (not root when running with sudo)
+if [[ -n "$SUDO_USER" ]]; then
+    REAL_USER="$SUDO_USER"
+    REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    REAL_USER="$USER"
+    REAL_HOME="$HOME"
+fi
+
 # Distribution targets
-LOCAL_ISO_DIR="$HOME/Downloads/isos"
+LOCAL_ISO_DIR="$REAL_HOME/Downloads/isos"
 TRUENAS_HOST="truenas.local"
 TRUENAS_PATH="/mnt/vault/isos"
 
@@ -52,6 +61,9 @@ while [[ $# -gt 0 ]]; do
         *) error "Unknown option: $1" ;;
     esac
 done
+
+# Distribution status tracking
+TRUENAS_SUCCESS=false
 
 # Check root for build
 check_root() {
@@ -195,13 +207,26 @@ distribute_truenas() {
 
     info "TrueNAS is reachable"
 
+    # Run SSH/SCP as the real user (not root) to use their SSH keys
+    local ssh_cmd="ssh"
+    local scp_cmd="scp"
+    if [[ -n "$SUDO_USER" ]]; then
+        ssh_cmd="sudo -u $SUDO_USER ssh"
+        scp_cmd="sudo -u $SUDO_USER scp"
+    fi
+
     # Remove old ISOs and copy new one
     info "Removing old ISOs from TrueNAS..."
-    ssh "root@$TRUENAS_HOST" "rm -f $TRUENAS_PATH/archzfs-*.iso" 2>/dev/null || true
+    $ssh_cmd "root@$TRUENAS_HOST" "rm -f $TRUENAS_PATH/archzfs-*.iso" 2>/dev/null || true
 
     info "Copying to $TRUENAS_HOST:$TRUENAS_PATH/"
-    scp "$ISO_FILE" "root@$TRUENAS_HOST:$TRUENAS_PATH/"
-    info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
+    if $scp_cmd "$ISO_FILE" "root@$TRUENAS_HOST:$TRUENAS_PATH/"; then
+        info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
+        TRUENAS_SUCCESS=true
+    else
+        warn "Failed to copy to TrueNAS (SSH key issue?), skipping"
+        return 0
+    fi
 }
 
 # Write to ARCHZFS USB drive
@@ -284,10 +309,10 @@ show_summary() {
     echo "Distributed to:"
     echo "  ✓ $LOCAL_ISO_DIR/"
 
-    if ping -c 1 -W 1 "$TRUENAS_HOST" &>/dev/null; then
+    if $TRUENAS_SUCCESS; then
         echo "  ✓ $TRUENAS_HOST:$TRUENAS_PATH/"
     else
-        echo "  ✗ $TRUENAS_HOST (not reachable)"
+        echo "  ✗ $TRUENAS_HOST (failed or skipped)"
     fi
 
     if [[ -n "$ARCHZFS_DISK" ]]; then
