@@ -1,0 +1,70 @@
+#+TITLE: Session Context
+#+DATE: 2026-01-19
+
+* Current Session: Monday 2026-01-19 13:12 CST
+
+** Summary
+
+Diagnosed journald issue on ratio (slow shutdown), fixed for future installs, rebuilt ISO.
+
+** What We Completed
+
+*** Committed Previous Session Changes
+- scripts/full-test.sh (new) - comprehensive install tests
+- scripts/build-release - added --full-test option
+- custom/install-archzfs - deploys zfssnapshot/zfsrollback to target
+- assets/cogito-hardware-specs.txt
+- Commit: c57f1a1
+
+*** Added wget to Target System
+- Added wget to pacstrap package list in install-archzfs
+- Commit: a6fa09b
+
+*** Diagnosed Slow Shutdown on ratio
+- SSHed into ratio (root / cmjdase1n)
+- Found journald wasn't creating journal files
+- Root cause: journald starts ~650ms BEFORE ZFS mounts /var/log
+- Journal files created in tmpfs, then hidden when ZFS mounts over it
+- No logs from problematic shutdown (lost due to this issue)
+
+*** Fixed journald for ZFS (on ratio)
+Applied two drop-in configs:
+- /etc/systemd/journald.conf.d/persistent.conf - enables persistent storage
+- /etc/systemd/system/systemd-journal-flush.service.d/zfs.conf - waits for zfs-mount.service
+
+*** Added journald Fix to install-archzfs
+- Added same drop-in configs to configure_system() function
+- Future installs will have proper journal persistence
+- Commit: 24ede61
+
+*** Built and Distributed New ISO
+- ISO: archzfs-vmlinuz-6.12.66-lts-2026-01-19-x86_64.iso (5.2GB)
+- Sanity test: 13/13 passed
+- Distributed to all targets:
+  - ~/Downloads/isos/
+  - truenas.local:/mnt/vault/isos/
+  - /dev/sda (ARCHZFS USB)
+  - /dev/sdb1 (Ventoy)
+
+** Commits This Session
+- c57f1a1 Add comprehensive installation tests and ZFS script deployment
+- a6fa09b Add wget to target system packages
+- 24ede61 Fix journald on ZFS: wait for mounts, enable persistent storage
+
+** Technical Notes
+
+*** journald + ZFS Race Condition
+- journald.socket starts at ~309ms
+- zfs-mount.service completes at ~978ms
+- Fix: Make systemd-journal-flush.service wait for zfs-mount.service
+- This ensures logs flush to persistent storage after ZFS is mounted
+
+*** ratio Machine
+- Host: ratio (192.168.86.48)
+- Login: root / cmjdase1n
+- journald fix applied manually
+- Next reboot should capture proper shutdown logs
+
+** Next Steps
+- Test ratio shutdown to see if issue is resolved (now have proper logs)
+- If slow shutdown recurs, check journalctl -b -1 for details
