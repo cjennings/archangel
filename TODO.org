@@ -33,7 +33,7 @@ This would make SSH access easier without needing to find the IP address.
 
 Already have avahi package installed - just need to configure/enable it.
 
-** TODO [#C] Add date/timestamp to install-archzfs.log
+** DONE [#C] Add date/timestamp to install-archzfs.log
 Add a date/timestamp header to /tmp/install-archzfs.log when the installer starts.
 This helps identify when an installation was run when reviewing logs later.
 

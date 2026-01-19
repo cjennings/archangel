@@ -49,6 +49,13 @@ NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
 LOGFILE="/tmp/install-archzfs.log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
+# Log header with timestamp
+echo ""
+echo "================================================================================"
+echo "install-archzfs started @ $(date +'%Y-%m-%d %H:%M:%S')"
+echo "================================================================================"
+echo ""
+
 info()  { echo "[INFO] $1"; }
 warn()  { echo "[WARN] $1"; }
 error() { echo "[ERROR] $1"; exit 1; }
