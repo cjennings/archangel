@@ -908,7 +908,8 @@ EOF
         zsh \
         nodejs \
         npm \
-        ttf-dejavu
+        ttf-dejavu \
+        fzf
 
     info "Base system installed."
 }
