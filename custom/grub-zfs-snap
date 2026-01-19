@@ -103,7 +103,7 @@ SUBMENU_START
         insmod part_gpt
         insmod fat
         insmod zfs
-        search --no-floppy --fs-uuid --set=root \$(grub-probe --target=fs_uuid /boot)
+        search --no-floppy --fs-uuid --set=root $(grub-probe --target=fs_uuid /boot)
         echo 'Loading Linux kernel...'
         linux /${KERNEL_FILE} root=ZFS=${snapshot} ro spl.spl_hostid=0x${hostid}
         echo 'Loading initial ramdisk...'
