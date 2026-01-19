@@ -90,6 +90,104 @@ Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no
 
 ** TODO [#C] Check for methods to abstract
 
+** Ideas from arch-linux-live-cd-iso-with-zfs project
+Reference: /home/cjennings/code/arch-linux-live-cd-iso-with-zfs
+GitHub: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+*** TODO [#A] Integrate ZFSBootMenu as alternative boot manager
+ZFSBootMenu is a powerful boot manager specifically designed for ZFS root systems.
+It provides boot environment selection, snapshot rollback from boot menu, and recovery options.
+
+Benefits:
+- Boot directly into any ZFS snapshot
+- Rollback to previous boot environment without booting first
+- Better ZFS-native boot experience than GRUB
+- Single EFI file (~15MB) that can be updated independently
+
+Implementation:
+- Download portable EFI from https://get.zfsbootmenu.org/efi
+- Include in ISO's /root/software/zfsbootmenu/
+- Add update script for post-installation updates
+- Consider as GRUB alternative or supplement
+
+Reference: https://zfsbootmenu.org/
+
+*** TODO [#B] Add Docker/Podman container support for builds
+The reference project uses containers with minimal capabilities instead of full root/privileged mode.
+This improves security and reproducibility.
+
+Capabilities needed for mkarchiso:
+- DAC_OVERRIDE
+- SYS_ADMIN
+- SYS_CHROOT
+- SYS_MODULE
+- Device: /dev/loop-control
+
+Benefits:
+- Reproducible builds across different host systems
+- No need to install archiso on host
+- Cleaner build environment
+- Easier CI/CD integration
+
+*** TODO [#B] Support building against Arch Linux Archive snapshots
+When archzfs lags behind the main Arch repos, builds can fail due to kernel version mismatch.
+The reference project supports pinning to historical repo snapshots.
+
+Implementation:
+- Add -r/--repo-date flag to build.sh
+- Use archive.archlinux.org for historical packages
+- Example: ./build.sh -r 2026/01/15 or ./build.sh -r week
+
+This solves the common problem of ZFS packages not being available for the latest kernel.
+
+*** TODO [#B] Add build logging with tee
+Capture all build output to a log file for debugging and CI artifact collection.
+
+Implementation:
+#+BEGIN_SRC bash
+exec &> >(tee "build-$(date +%Y%m%d-%H%M%S).log")
+#+END_SRC
+
+Also useful: Check log for known error patterns (e.g., DKMS failures) and fail fast.
+
+*** TODO [#C] Support multi-variant ISO builds
+The reference project builds 8 variants automatically:
+- linux vs linux-lts kernel
+- DKMS vs native ZFS packages
+- Default vs experimental archzfs repos
+
+Could be useful for offering users choice between stability and bleeding-edge.
+Lower priority since we currently focus on linux-lts + DKMS for maximum compatibility.
+
+*** TODO [#C] Pre-clone useful tools and documentation into ISO
+The reference project bundles Git repos (without .git dirs) into /root:
+- archinstall (official installer)
+- downgrade (package rollback)
+- ZFS howtos and documentation
+- Recovery scripts
+
+Already partially implemented (have rescue tools), but could expand with:
+- Pre-cloned arch-linux-configuration scripts
+- ZFS administration cheatsheets
+- Offline troubleshooting guides
+
+*** TODO [#C] Add environment file configuration (.env pattern)
+Allow build customization via .env file instead of command-line flags.
+Useful for CI/CD and reproducible builds.
+
+Example .env:
+#+BEGIN_SRC
+KERNEL=linux-lts
+USE_DKMS=1
+BE_VERBOSE=0
+PACKAGES_TO_ADD=git,vim
+PACKAGES_TO_REMOVE=b43-fwcutter
+#+END_SRC
+
+*** TODO [#C] Add dry-run mode to build.sh
+Support --dry-run flag that shows what would be done without executing.
+Useful for testing configuration changes and debugging.
+
 * Resolved
 ** DONE [#B] Add config file information to README
 Config file format documented in README.org with full reference and examples.
