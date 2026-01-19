@@ -1019,6 +1019,23 @@ configure_initramfs() {
 
     cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
 
+    # Check for AMD ISP (Image Signal Processor) firmware needs
+    # ISP is used for camera processing on AMD APUs (Strix, Strix Halo, etc.)
+    # The firmware must be in initramfs since amdgpu loads before root is mounted
+    if lspci | grep -qi "amd.*display\|amd.*vga\|radeon"; then
+        local isp_firmware
+        isp_firmware=$(ls /mnt/usr/lib/firmware/amdgpu/isp_*.bin.zst 2>/dev/null | head -1)
+        if [[ -n "$isp_firmware" ]]; then
+            info "AMD APU detected with ISP firmware - adding to initramfs"
+            mkdir -p /mnt/etc/mkinitcpio.conf.d
+            cat > /mnt/etc/mkinitcpio.conf.d/amd-isp.conf << EOF
+# AMD ISP (Image Signal Processor) firmware for camera support
+# Loaded early so amdgpu can initialize ISP before root is mounted
+FILES+=($isp_firmware)
+EOF
+        fi
+    fi
+
     # Configure hooks for ZFS
     # - Remove autodetect: it filters modules based on live ISO hardware, not target
     #   This ensures NVMe, AHCI, and other storage drivers are always included
