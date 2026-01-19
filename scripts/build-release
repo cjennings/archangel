@@ -1,0 +1,346 @@
+#!/bin/bash
+# build-release - Build and distribute the archzfs ISO
+#
+# Usage:
+#   ./scripts/build-release              # Full build, test, and distribute
+#   ./scripts/build-release --skip-build # Skip build, just distribute existing ISO
+#   ./scripts/build-release --skip-test  # Skip sanity test
+#
+# Distribution targets:
+#   - ~/Downloads/isos (always)
+#   - truenas.local:/mnt/vault/isos (if reachable)
+#   - USB drive with ARCHZFS label (if present, writes via dd)
+#   - Ventoy USB drive (if detected, copies ISO file)
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Distribution targets
+LOCAL_ISO_DIR="$HOME/Downloads/isos"
+TRUENAS_HOST="truenas.local"
+TRUENAS_PATH="/mnt/vault/isos"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+step()  { echo -e "\n${CYAN}=== $1 ===${NC}\n"; }
+
+# Parse arguments
+SKIP_BUILD=false
+SKIP_TEST=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-build) SKIP_BUILD=true; shift ;;
+        --skip-test)  SKIP_TEST=true; shift ;;
+        -h|--help)
+            echo "Usage: $0 [--skip-build] [--skip-test]"
+            echo ""
+            echo "Options:"
+            echo "  --skip-build  Skip ISO build, distribute existing ISO"
+            echo "  --skip-test   Skip QEMU sanity test"
+            exit 0
+            ;;
+        *) error "Unknown option: $1" ;;
+    esac
+done
+
+# Check root for build
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run as root (for build and dd operations)"
+    fi
+}
+
+# Find the latest ISO
+find_iso() {
+    ISO_FILE=$(ls -t "$PROJECT_DIR/out/"*.iso 2>/dev/null | head -1)
+    if [[ -z "$ISO_FILE" ]]; then
+        error "No ISO found in $PROJECT_DIR/out/"
+    fi
+    ISO_NAME=$(basename "$ISO_FILE")
+    info "Found ISO: $ISO_NAME"
+    info "Size: $(du -h "$ISO_FILE" | cut -f1)"
+}
+
+# Build the ISO
+build_iso() {
+    step "Building ISO"
+    cd "$PROJECT_DIR"
+    ./build.sh
+    find_iso
+}
+
+# Run sanity test in QEMU
+sanity_test() {
+    step "Sanity Test"
+    info "Booting ISO in QEMU for verification..."
+    info "Please verify:"
+    echo "  1. System boots to login prompt"
+    echo "  2. ZFS module loads (run 'zpool status' or 'lsmod | grep zfs')"
+    echo "  3. Custom scripts are present (ls /usr/local/bin/)"
+    echo ""
+
+    # Start QEMU in background
+    "$SCRIPT_DIR/test-vm.sh" &
+    QEMU_PID=$!
+
+    echo ""
+    read -p "Press Enter once you've verified the ISO works (or Ctrl+C to abort)... "
+
+    # Kill QEMU if still running
+    if kill -0 $QEMU_PID 2>/dev/null; then
+        info "Shutting down test VM..."
+        kill $QEMU_PID 2>/dev/null || true
+        wait $QEMU_PID 2>/dev/null || true
+    fi
+
+    info "Sanity test passed!"
+}
+
+# Find ARCHZFS labeled USB drive
+find_archzfs_drive() {
+    ARCHZFS_DEV=$(blkid -L ARCHZFS 2>/dev/null | head -1)
+    if [[ -n "$ARCHZFS_DEV" ]]; then
+        # Get the parent device (e.g., /dev/sda from /dev/sda1)
+        ARCHZFS_DISK=$(lsblk -no PKNAME "$ARCHZFS_DEV" 2>/dev/null | head -1)
+        if [[ -n "$ARCHZFS_DISK" ]]; then
+            ARCHZFS_DISK="/dev/$ARCHZFS_DISK"
+            # Verify it's removable (USB)
+            REMOVABLE=$(lsblk -no RM "$ARCHZFS_DISK" 2>/dev/null | head -1)
+            if [[ "$REMOVABLE" == "1" ]]; then
+                info "Found ARCHZFS USB drive: $ARCHZFS_DISK"
+                return 0
+            else
+                warn "ARCHZFS label found on $ARCHZFS_DISK but it's not removable, skipping"
+            fi
+        fi
+    fi
+    ARCHZFS_DISK=""
+    return 1
+}
+
+# Find Ventoy USB drive
+find_ventoy_drive() {
+    VENTOY_PART=""
+    VENTOY_MOUNT=""
+
+    # Method 1: Look for partition labeled "Ventoy"
+    local ventoy_by_label=$(blkid -L Ventoy 2>/dev/null | head -1)
+    if [[ -n "$ventoy_by_label" ]]; then
+        VENTOY_PART="$ventoy_by_label"
+        info "Found Ventoy drive by label: $VENTOY_PART"
+        return 0
+    fi
+
+    # Method 2: Check mounted or mountable partitions for ventoy/ directory
+    # Look for removable drives with exfat/ntfs
+    while read -r dev fstype rm; do
+        [[ "$rm" != "1" ]] && continue  # Skip non-removable
+        [[ ! "$fstype" =~ ^(exfat|ntfs|vfat)$ ]] && continue  # Skip wrong fs types
+
+        local mount_point=$(lsblk -no MOUNTPOINT "/dev/$dev" 2>/dev/null)
+        local needs_unmount=false
+
+        if [[ -z "$mount_point" ]]; then
+            # Try mounting temporarily
+            mount_point=$(mktemp -d)
+            if mount -o ro "/dev/$dev" "$mount_point" 2>/dev/null; then
+                needs_unmount=true
+            else
+                rmdir "$mount_point"
+                continue
+            fi
+        fi
+
+        # Check for ventoy directory
+        if [[ -d "$mount_point/ventoy" ]] || [[ -f "$mount_point/ventoy/ventoy.json" ]]; then
+            VENTOY_PART="/dev/$dev"
+            info "Found Ventoy drive by content: $VENTOY_PART"
+            if $needs_unmount; then
+                umount "$mount_point"
+                rmdir "$mount_point"
+            fi
+            return 0
+        fi
+
+        if $needs_unmount; then
+            umount "$mount_point"
+            rmdir "$mount_point"
+        fi
+    done < <(lsblk -rno NAME,FSTYPE,RM 2>/dev/null | grep -v "^loop")
+
+    return 1
+}
+
+# Distribute to local directory
+distribute_local() {
+    step "Distributing to Local Directory"
+    mkdir -p "$LOCAL_ISO_DIR"
+
+    # Remove old archzfs ISOs
+    local old_isos=$(ls "$LOCAL_ISO_DIR"/archzfs-*.iso 2>/dev/null || true)
+    if [[ -n "$old_isos" ]]; then
+        info "Removing old ISOs..."
+        rm -f "$LOCAL_ISO_DIR"/archzfs-*.iso
+    fi
+
+    info "Copying to $LOCAL_ISO_DIR/"
+    cp "$ISO_FILE" "$LOCAL_ISO_DIR/"
+    info "Done: $LOCAL_ISO_DIR/$ISO_NAME"
+}
+
+# Distribute to TrueNAS
+distribute_truenas() {
+    step "Distributing to TrueNAS"
+
+    # Check if reachable
+    if ! ping -c 1 -W 2 "$TRUENAS_HOST" &>/dev/null; then
+        warn "TrueNAS ($TRUENAS_HOST) not reachable, skipping"
+        return 0
+    fi
+
+    info "TrueNAS is reachable"
+
+    # Remove old ISOs and copy new one
+    info "Removing old ISOs from TrueNAS..."
+    ssh "root@$TRUENAS_HOST" "rm -f $TRUENAS_PATH/archzfs-*.iso" 2>/dev/null || true
+
+    info "Copying to $TRUENAS_HOST:$TRUENAS_PATH/"
+    scp "$ISO_FILE" "root@$TRUENAS_HOST:$TRUENAS_PATH/"
+    info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
+}
+
+# Write to ARCHZFS USB drive
+distribute_archzfs_usb() {
+    step "Writing to ARCHZFS USB Drive"
+
+    if ! find_archzfs_drive; then
+        warn "No ARCHZFS USB drive found, skipping"
+        return 0
+    fi
+
+    # Confirm before writing
+    echo ""
+    warn "About to write ISO to $ARCHZFS_DISK"
+    warn "This will ERASE ALL DATA on the drive!"
+    lsblk "$ARCHZFS_DISK"
+    echo ""
+    read -p "Type 'yes' to confirm: " confirm
+
+    if [[ "$confirm" != "yes" ]]; then
+        warn "Skipping USB write"
+        return 0
+    fi
+
+    # Unmount any mounted partitions
+    for part in $(lsblk -rno NAME "$ARCHZFS_DISK" | tail -n +2); do
+        umount "/dev/$part" 2>/dev/null || true
+    done
+
+    info "Writing ISO to $ARCHZFS_DISK..."
+    dd if="$ISO_FILE" of="$ARCHZFS_DISK" bs=4M status=progress oflag=sync
+    sync
+    info "Done writing to $ARCHZFS_DISK"
+}
+
+# Copy to Ventoy USB drive
+distribute_ventoy() {
+    step "Copying to Ventoy USB Drive"
+
+    if ! find_ventoy_drive; then
+        warn "No Ventoy USB drive found, skipping"
+        return 0
+    fi
+
+    # Mount if needed
+    local mount_point=$(lsblk -no MOUNTPOINT "$VENTOY_PART" 2>/dev/null)
+    local needs_unmount=false
+
+    if [[ -z "$mount_point" ]]; then
+        mount_point=$(mktemp -d)
+        info "Mounting $VENTOY_PART to $mount_point"
+        mount "$VENTOY_PART" "$mount_point"
+        needs_unmount=true
+    fi
+
+    # Remove old archzfs ISOs
+    local old_isos=$(ls "$mount_point"/archzfs-*.iso 2>/dev/null || true)
+    if [[ -n "$old_isos" ]]; then
+        info "Removing old ISOs from Ventoy..."
+        rm -f "$mount_point"/archzfs-*.iso
+    fi
+
+    info "Copying ISO to Ventoy drive..."
+    cp "$ISO_FILE" "$mount_point/"
+    sync
+    info "Done: $mount_point/$ISO_NAME"
+
+    if $needs_unmount; then
+        info "Unmounting Ventoy drive..."
+        umount "$mount_point"
+        rmdir "$mount_point"
+    fi
+}
+
+# Summary
+show_summary() {
+    step "Distribution Complete"
+    echo "ISO: $ISO_NAME"
+    echo ""
+    echo "Distributed to:"
+    echo "  ✓ $LOCAL_ISO_DIR/"
+
+    if ping -c 1 -W 1 "$TRUENAS_HOST" &>/dev/null; then
+        echo "  ✓ $TRUENAS_HOST:$TRUENAS_PATH/"
+    else
+        echo "  ✗ $TRUENAS_HOST (not reachable)"
+    fi
+
+    if [[ -n "$ARCHZFS_DISK" ]]; then
+        echo "  ✓ $ARCHZFS_DISK (USB boot drive)"
+    else
+        echo "  - ARCHZFS USB drive (not found)"
+    fi
+
+    if [[ -n "$VENTOY_PART" ]]; then
+        echo "  ✓ $VENTOY_PART (Ventoy)"
+    else
+        echo "  - Ventoy drive (not found)"
+    fi
+}
+
+# Main
+main() {
+    check_root
+
+    if $SKIP_BUILD; then
+        step "Skipping Build"
+        find_iso
+    else
+        build_iso
+    fi
+
+    if ! $SKIP_TEST; then
+        sanity_test
+    else
+        step "Skipping Sanity Test"
+    fi
+
+    distribute_local
+    distribute_truenas
+    distribute_archzfs_usb
+    distribute_ventoy
+
+    show_summary
+}
+
+main "$@"
