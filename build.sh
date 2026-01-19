@@ -193,6 +193,14 @@ sshuttle
 # Security
 pass
 
+# System tracing and profiling (eBPF/DTrace-like)
+bpftrace
+bcc-tools
+perf
+
+# Terminal web browsers
+w3m
+
 EOF
 
 # Get kernel version for ISO naming

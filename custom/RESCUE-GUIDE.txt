@@ -14,6 +14,8 @@ Table of Contents:
   6. Disk Operations
   7. Network Troubleshooting
   8. Encryption & GPG
+  9. System Tracing (eBPF/bpftrace)
+  10. Terminal Web Browsing
 
 ================================================================================
 1. ZFS RECOVERY
@@ -2434,6 +2436,162 @@ ENCRYPTION TIPS
 7. If you forget encryption passwords and have no backups, data is gone
 8. Hardware security keys (YubiKey) may be required for some GPG keys
 9. pass stores passwords as GPG-encrypted files - need your GPG key to access
+
+================================================================================
+9. SYSTEM TRACING (eBPF/bpftrace)
+================================================================================
+
+Linux equivalent of DTrace. Uses eBPF (extended Berkeley Packet Filter) for
+safe, dynamic kernel tracing. Essential for diagnosing performance issues,
+kernel problems, and understanding system behavior.
+
+QUICK REFERENCE
+---------------
+  tldr bpftrace        # Quick examples
+  man bpftrace         # Full manual
+  bpftrace -l          # List available probes
+  bpftrace -e 'BEGIN { printf("hello\n"); }'  # Test it works
+
+TOOLS AVAILABLE
+---------------
+  bpftrace    - High-level tracing language (like DTrace)
+  bcc-tools   - 100+ pre-built diagnostic tools
+  perf        - Linux kernel profiler
+
+USEFUL BCC TOOLS (run as root)
+------------------------------
+  execsnoop        # Trace new process execution
+  opensnoop        # Trace file opens
+  biolatency       # Block I/O latency histogram
+  tcpconnect       # Trace TCP connections
+  tcpaccept        # Trace TCP accepts
+  ext4slower       # Trace slow ext4 operations
+  zfsslower        # Trace slow ZFS operations (if available)
+  runqlat          # CPU scheduler latency
+  cpudist          # CPU usage distribution
+  cachestat        # Page cache hit/miss stats
+  memleak          # Memory leak detector
+
+BPFTRACE ONE-LINERS
+-------------------
+Count system calls by process:
+
+  bpftrace -e 'tracepoint:raw_syscalls:sys_enter { @[comm] = count(); }'
+
+Trace disk I/O latency histogram:
+
+  bpftrace -e 'kprobe:blk_account_io_start { @start[arg0] = nsecs; }
+               kprobe:blk_account_io_done /@start[arg0]/
+               { @usecs = hist((nsecs - @start[arg0]) / 1000); delete(@start[arg0]); }'
+
+Trace file opens:
+
+  bpftrace -e 'tracepoint:syscalls:sys_enter_open { printf("%s %s\n", comm, str(args->filename)); }'
+
+Trace TCP connections:
+
+  bpftrace -e 'kprobe:tcp_connect { printf("%s connecting\n", comm); }'
+
+Profile kernel stacks at 99Hz:
+
+  bpftrace -e 'profile:hz:99 { @[kstack] = count(); }'
+
+ZFS-SPECIFIC TRACING
+--------------------
+Trace ZFS reads:
+
+  bpftrace -e 'kprobe:zfs_read { @[comm] = count(); }'
+
+Trace ZFS writes:
+
+  bpftrace -e 'kprobe:zfs_write { @[comm] = count(); }'
+
+PERF BASICS
+-----------
+Record CPU profile for 10 seconds:
+
+  perf record -g sleep 10
+
+View the report:
+
+  perf report
+
+List available events:
+
+  perf list
+
+Real-time top-like view:
+
+  perf top
+
+LEARN MORE
+----------
+  https://www.brendangregg.com/bpf-performance-tools-book.html
+  https://github.com/iovisor/bcc
+  https://github.com/iovisor/bpftrace
+  https://www.brendangregg.com/ebpf.html
+
+
+================================================================================
+10. TERMINAL WEB BROWSING
+================================================================================
+
+Two terminal web browsers available for documentation and troubleshooting.
+
+BROWSERS AVAILABLE
+------------------
+  lynx    - Classic text browser, most compatible, keyboard-driven
+  w3m     - Better table rendering, can display images in some terminals
+
+LYNX BASICS
+-----------
+Start browsing:
+
+  lynx https://wiki.archlinux.org
+  lynx file.html
+
+Navigation:
+  Arrow keys  - Move around
+  Enter       - Follow link
+  Backspace   - Go back
+  q           - Quit
+  /           - Search in page
+  g           - Go to URL
+  p           - Print/save page
+
+W3M BASICS
+----------
+Start browsing:
+
+  w3m https://wiki.archlinux.org
+  w3m file.html
+
+Navigation:
+  Arrow keys  - Scroll
+  Enter       - Follow link
+  B           - Go back
+  U           - Enter URL
+  q           - Quit (Q to quit without confirm)
+  /           - Search forward
+  Tab         - Next link
+  Shift+Tab   - Previous link
+
+USEFUL URLS FOR RESCUE
+----------------------
+  https://wiki.archlinux.org
+  https://wiki.archlinux.org/title/ZFS
+  https://wiki.archlinux.org/title/GRUB
+  https://wiki.archlinux.org/title/Mkinitcpio
+  https://bbs.archlinux.org
+  https://openzfs.github.io/openzfs-docs/
+
+SAVE PAGE FOR OFFLINE
+---------------------
+  lynx -dump URL > page.txt           # Save as text
+  w3m -dump URL > page.txt            # Save as text
+  wget -p -k URL                      # Download with assets
+  curl URL > page.html                # Just the HTML
+
 
 ================================================================================
                               END OF GUIDE
