@@ -1001,8 +1001,10 @@ configure_initramfs() {
     cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
 
     # Configure hooks for ZFS
-    # ZFS doesn't use fsck - remove it to avoid confusing error messages
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
+    # - Remove autodetect: it filters modules based on live ISO hardware, not target
+    #   This ensures NVMe, AHCI, and other storage drivers are always included
+    # - Remove fsck: ZFS doesn't use it, avoids confusing error messages
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
 
     # Get the installed kernel version (not the running kernel)
     local kernel_ver
