@@ -249,31 +249,16 @@ Implemented in commit 0bd172a:
 - Set hostname to "archzfs"
 - Live ISO now accessible as root@archzfs.local
 
-** TODO [#B] Add Avahi mDNS to installed systems
-Currently Avahi is only configured on the live ISO, not on the installed system.
-After install-archzfs completes and the user reboots, mDNS doesn't work.
+** DONE [#B] Add Avahi mDNS to installed systems
+CLOSED: [2026-01-19 Sun]
+Matches archsetup's implementation: install avahi + nss-mdns, enable avahi-daemon.
 
-*** Implementation
-Add to install-archzfs (during package installation or system configuration):
-#+BEGIN_SRC bash
-# Install Avahi for mDNS discovery
-pacstrap /mnt avahi nss-mdns
+Added to install-archzfs:
+- Packages: avahi, nss-mdns (in pacstrap)
+- Service: avahi-daemon enabled
 
-# Enable avahi-daemon
-arch-chroot /mnt systemctl enable avahi-daemon.service
-
-# Configure NSS for mDNS (if not automatic)
-# Ensure /etc/nsswitch.conf has mdns_minimal in hosts line
-#+END_SRC
-
-*** Result
 After installation, system will be accessible as <hostname>.local on the local network.
 Example: ratio.local, framework.local, etc.
-
-*** Notes
-- Hostname is already set during install (user provides it)
-- nss-mdns should auto-configure nsswitch.conf on install
-- Test on next install to verify it works
 
 ** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.

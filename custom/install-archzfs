@@ -901,6 +901,8 @@ EOF
         freetype2 \
         efibootmgr \
         networkmanager \
+        avahi \
+        nss-mdns \
         openssh \
         git \
         vim \
@@ -1176,6 +1178,7 @@ configure_zfs_services() {
 
     # Enable other services
     arch-chroot /mnt systemctl enable NetworkManager
+    arch-chroot /mnt systemctl enable avahi-daemon
     arch-chroot /mnt systemctl enable sshd
 
     info "ZFS services configured."
