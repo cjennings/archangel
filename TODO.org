@@ -238,13 +238,42 @@ Features to consider:
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
 
-** TODO [#C] Consider Avahi for USB boot disk discoverability
+** DONE [#C] Consider Avahi for USB boot disk discoverability
+CLOSED: [2026-01-19 Sun]
 Make the live ISO discoverable on the network by name (e.g., archzfs.local) when booted.
 This would make SSH access easier without needing to find the IP address.
 
-Already have avahi package installed - just need to configure/enable it.
+Implemented in commit 0bd172a:
+- Added avahi and nss-mdns packages to ISO
+- Enabled avahi-daemon.service
+- Set hostname to "archzfs"
+- Live ISO now accessible as root@archzfs.local
 
-Note: Nice to have but not critical. IP can be found via router or console.
+** TODO [#B] Add Avahi mDNS to installed systems
+Currently Avahi is only configured on the live ISO, not on the installed system.
+After install-archzfs completes and the user reboots, mDNS doesn't work.
+
+*** Implementation
+Add to install-archzfs (during package installation or system configuration):
+#+BEGIN_SRC bash
+# Install Avahi for mDNS discovery
+pacstrap /mnt avahi nss-mdns
+
+# Enable avahi-daemon
+arch-chroot /mnt systemctl enable avahi-daemon.service
+
+# Configure NSS for mDNS (if not automatic)
+# Ensure /etc/nsswitch.conf has mdns_minimal in hosts line
+#+END_SRC
+
+*** Result
+After installation, system will be accessible as <hostname>.local on the local network.
+Example: ratio.local, framework.local, etc.
+
+*** Notes
+- Hostname is already set during install (user provides it)
+- nss-mdns should auto-configure nsswitch.conf on install
+- Test on next install to verify it works
 
 ** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
