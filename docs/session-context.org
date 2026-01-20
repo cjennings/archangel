@@ -1,35 +1,68 @@
 #+TITLE: Session Context
 #+DATE: 2026-01-19
 
-* Current Session: Monday 2026-01-19 17:29 CST (ongoing)
+* Current Session: Monday 2026-01-19 17:29 CST
 
-** Summary
+** FIXED: Hostid mismatch bug causing boot failures
 
-Continued from interrupted session. Rebuilt ISO with Avahi/hostname fixes, tested successfully, deployed, committed. Verified ratio.local install - no errors.
+*** Problem
+ratio wouldn't boot - dropped to emergency mode with "Failed to mount /sysroot"
+Root account locked in initramfs, preventing debugging.
+
+*** Root Cause
+The install script was generating inconsistent hostids:
+- Line 1076: ~hostid~ command returned value X (used for GRUB cmdline)
+- Line 1163: ~zgenhostid~ created /etc/hostid with value Y
+
+The ~hostid~ command returns a value even without /etc/hostid, but ~zgenhostid~
+generates a DIFFERENT random value. ZFS refused to auto-import the pool because
+the hostids didn't match.
+
+*** Fix Applied (custom/install-archzfs)
+Move ~zgenhostid~ call to configure_bootloader() BEFORE reading hostid:
+
+#+BEGIN_SRC bash
+configure_bootloader() {
+    # Ensure hostid exists BEFORE reading it
+    if [[ ! -f /etc/hostid ]]; then
+        zgenhostid
+    fi
+    # Now get the consistent hostid for kernel parameter
+    local host_id
+    host_id=$(hostid)
+    ...
+}
+#+END_SRC
+
+Simplified configure_zfs_services() to just copy /etc/hostid (always exists now).
+
+*** Verification
+Tested in VM - after installation:
+- GRUB hostid: 073ad2a5
+- /etc/hostid: 073ad2a5
+- MATCH confirmed
+
+*** For ratio
+Needs reinstall with fixed ISO, or manual fix:
+#+BEGIN_SRC bash
+# From live ISO booted on ratio:
+printf '\x56\x19\xc0\xa8' > /mnt/etc/hostid  # 0xa8c01956 in little-endian
+arch-chroot /mnt mkinitcpio -P
+#+END_SRC
+
+** Earlier in Session
+
+- Rebuilt ISO with Avahi/hostname fixes
+- Tested: hostname "archzfs", avahi active, mDNS works
+- Deployed to ~/Downloads/isos/, TrueNAS, USB drives
+- Committed: 0bd172a (Avahi), 4f9eadb (TODO update)
+- Added TODO for Avahi on installed systems
+- Wrote ISO to new 115G flash drive (/dev/sdb)
 
 ** Commits This Session
 
 | Commit | Description |
 |--------|-------------|
 | 0bd172a | Add Avahi mDNS for easy SSH access, fix ISP firmware path |
-
-** What Was Done
-
-1. Recovered from interrupted session
-2. Built ISO with Avahi/hostname fixes
-3. Sanity tests: 13/13 PASSED
-4. Deployed to ~/Downloads/isos/, TrueNAS, USB drive
-5. VM test: hostname "archzfs", avahi active, mDNS working
-6. Committed and pushed
-7. Verified ratio.local install:
-   - ZFS pool ONLINE (mirror, 7.12TB)
-   - All 15 datasets mounted correctly
-   - No failed services
-   - Only benign warnings (RDSEED32, ZFS CDDL taint, amdgpu timeout)
-   - ISP firmware and journald fixes working
-
-** ratio.local Status
-
-- Framework Desktop, AMD Ryzen AI Max 300
-- Kernel 6.12.66-1-lts, ZFS 2.3.3-1
-- Install: SUCCESS, no errors
+| 4f9eadb | Add TODO for Avahi on installed systems, mark live ISO done |
+| PENDING | Fix hostid mismatch bug in install-archzfs |

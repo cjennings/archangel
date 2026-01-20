@@ -1071,7 +1071,14 @@ EOF
 configure_bootloader() {
     step "Configuring GRUB Bootloader"
 
-    # Get hostid for kernel parameter
+    # Ensure hostid exists BEFORE reading it
+    # This is critical: hostid command returns a value even without /etc/hostid,
+    # but zgenhostid creates a DIFFERENT value. We must generate first, then read.
+    if [[ ! -f /etc/hostid ]]; then
+        zgenhostid
+    fi
+
+    # Now get the consistent hostid for kernel parameter
     local host_id
     host_id=$(hostid)
 
@@ -1156,13 +1163,8 @@ configure_zfs_services() {
     arch-chroot /mnt systemctl enable zfs-import.target
 
     # Copy hostid to installed system (ZFS uses this for pool ownership)
-    if [[ -f /etc/hostid ]]; then
-        cp /etc/hostid /mnt/etc/hostid
-    else
-        # Generate hostid if it doesn't exist
-        zgenhostid
-        cp /etc/hostid /mnt/etc/hostid
-    fi
+    # Note: hostid is generated in configure_bootloader, so it always exists here
+    cp /etc/hostid /mnt/etc/hostid
 
     # Generate zpool cache
     mkdir -p /mnt/etc/zfs
