@@ -268,6 +268,20 @@ verify_install() {
         else
             warn "Genesis snapshot not found (may not have completed)"
         fi
+
+        # Check Avahi mDNS packages installed on target system
+        if ssh_cmd "arch-chroot /mnt pacman -Q avahi nss-mdns >/dev/null 2>&1"; then
+            info "Avahi packages installed"
+        else
+            warn "Avahi packages not found on installed system"
+        fi
+
+        # Check avahi-daemon enabled on target system
+        if ssh_cmd "arch-chroot /mnt systemctl is-enabled avahi-daemon >/dev/null 2>&1"; then
+            info "Avahi daemon enabled"
+        else
+            warn "Avahi daemon not enabled on installed system"
+        fi
     else
         # For no-SSH tests, check serial console output
         if grep -q "Installation complete" "$SERIAL_LOG" 2>/dev/null; then
