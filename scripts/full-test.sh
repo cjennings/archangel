@@ -71,7 +71,7 @@ FAILED_TESTS=()
 info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
-pass()  { echo -e "${GREEN}[PASS]${NC} $1"; ((TESTS_PASSED++)); }
+pass()  { echo -e "${GREEN}[PASS]${NC} $1"; ((++TESTS_PASSED)); }
 fail()  { echo -e "${RED}[FAIL]${NC} $1"; ((TESTS_FAILED++)); FAILED_TESTS+=("$1"); }
 
 banner() {
