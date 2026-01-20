@@ -1,68 +1,40 @@
 #+TITLE: Session Context
-#+DATE: 2026-01-19
+#+DATE: 2026-01-20
 
-* Current Session: Monday 2026-01-19 17:29 CST
+* Previous Session: Monday 2026-01-20
 
-** FIXED: Hostid mismatch bug causing boot failures
+** Completed
 
-*** Problem
-ratio wouldn't boot - dropped to emergency mode with "Failed to mount /sysroot"
-Root account locked in initramfs, preventing debugging.
+*** Fixed hostid mismatch bug (commit 0524467)
+- Root cause: ~hostid~ command returned value X, then ~zgenhostid~ created /etc/hostid with value Y
+- Fix: Call ~zgenhostid~ FIRST in configure_bootloader(), then read consistent value
+- Verified: GRUB and /etc/hostid match after installation
 
-*** Root Cause
-The install script was generating inconsistent hostids:
-- Line 1076: ~hostid~ command returned value X (used for GRUB cmdline)
-- Line 1163: ~zgenhostid~ created /etc/hostid with value Y
+*** Added Avahi mDNS to installed systems (commit f62bf9b)
+- Packages: avahi, nss-mdns added to pacstrap
+- Service: avahi-daemon enabled
+- Matches archsetup implementation
+- Systems now accessible as <hostname>.local after install
 
-The ~hostid~ command returns a value even without /etc/hostid, but ~zgenhostid~
-generates a DIFFERENT random value. ZFS refused to auto-import the pool because
-the hostids didn't match.
+*** Added Avahi validation to test scripts (commit 7b6c409)
+- sanity-test.sh: Check avahi-daemon enabled and running
+- test-install.sh: Verify packages and service on installed system
 
-*** Fix Applied (custom/install-archzfs)
-Move ~zgenhostid~ call to configure_bootloader() BEFORE reading hostid:
+*** Fixed full-test.sh bug (commit a774bae)
+- Bug: ((TESTS_PASSED++)) returns exit code 1 when starting at 0
+- Fix: Use pre-increment ((++TESTS_PASSED))
 
-#+BEGIN_SRC bash
-configure_bootloader() {
-    # Ensure hostid exists BEFORE reading it
-    if [[ ! -f /etc/hostid ]]; then
-        zgenhostid
-    fi
-    # Now get the consistent hostid for kernel parameter
-    local host_id
-    host_id=$(hostid)
-    ...
-}
-#+END_SRC
+** Test Results
+- Sanity test: 15/15 passed
+- Single-disk install: PASS
+- Mirror install: PASS
+- RAIDZ1 install: PASS
 
-Simplified configure_zfs_services() to just copy /etc/hostid (always exists now).
+** ISO Distributed
+- ~/Downloads/isos/
+- truenas.local:/mnt/vault/isos/
+- /dev/sda (ARCHZFS USB boot drive)
+- /dev/sdb1 (Ventoy)
 
-*** Verification
-Tested in VM - after installation:
-- GRUB hostid: 073ad2a5
-- /etc/hostid: 073ad2a5
-- MATCH confirmed
-
-*** For ratio
-Needs reinstall with fixed ISO, or manual fix:
-#+BEGIN_SRC bash
-# From live ISO booted on ratio:
-printf '\x56\x19\xc0\xa8' > /mnt/etc/hostid  # 0xa8c01956 in little-endian
-arch-chroot /mnt mkinitcpio -P
-#+END_SRC
-
-** Earlier in Session
-
-- Rebuilt ISO with Avahi/hostname fixes
-- Tested: hostname "archzfs", avahi active, mDNS works
-- Deployed to ~/Downloads/isos/, TrueNAS, USB drives
-- Committed: 0bd172a (Avahi), 4f9eadb (TODO update)
-- Added TODO for Avahi on installed systems
-- Wrote ISO to new 115G flash drive (/dev/sdb)
-
-** Commits This Session
-
-| Commit | Description |
-|--------|-------------|
-| 0bd172a | Add Avahi mDNS for easy SSH access, fix ISP firmware path |
-| 4f9eadb | Add TODO for Avahi on installed systems, mark live ISO done |
-| PENDING | Fix hostid mismatch bug in install-archzfs |
+** Notes
+- ratio needs reinstall with fixed ISO (or manual hostid fix)
