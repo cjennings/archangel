@@ -1,70 +1,107 @@
 #+TITLE: Session Context
 #+DATE: 2026-01-19
 
-* Current Session: Monday 2026-01-19 13:12 CST
+* Current Session: Monday 2026-01-19 13:12 - 17:25 CST (ongoing)
 
 ** Summary
 
-Diagnosed journald issue on ratio (slow shutdown), fixed for future installs, rebuilt ISO.
+Major session: Fixed journald/ZFS race condition, added AMD ISP firmware to initramfs, added wireless-regdb for WiFi regulatory compliance. Found and fixed ISP firmware path bug during ratio install. Added Avahi mDNS for easy SSH access. Fixed build.sh to include Avahi config (was being overwritten by releng profile copy).
 
-** What We Completed
+** IMPORTANT: Reboot Required
 
-*** Committed Previous Session Changes
-- scripts/full-test.sh (new) - comprehensive install tests
-- scripts/build-release - added --full-test option
-- custom/install-archzfs - deploys zfssnapshot/zfsrollback to target
-- assets/cogito-hardware-specs.txt
-- Commit: c57f1a1
+The work directory has stale bind mounts from a killed mkarchiso build. Need to reboot to clean them up before next build.
 
-*** Added wget to Target System
-- Added wget to pacstrap package list in install-archzfs
-- Commit: a6fa09b
-
-*** Diagnosed Slow Shutdown on ratio
-- SSHed into ratio (root / cmjdase1n)
-- Found journald wasn't creating journal files
-- Root cause: journald starts ~650ms BEFORE ZFS mounts /var/log
-- Journal files created in tmpfs, then hidden when ZFS mounts over it
-- No logs from problematic shutdown (lost due to this issue)
-
-*** Fixed journald for ZFS (on ratio)
-Applied two drop-in configs:
-- /etc/systemd/journald.conf.d/persistent.conf - enables persistent storage
-- /etc/systemd/system/systemd-journal-flush.service.d/zfs.conf - waits for zfs-mount.service
-
-*** Added journald Fix to install-archzfs
-- Added same drop-in configs to configure_system() function
-- Future installs will have proper journal persistence
-- Commit: 24ede61
-
-*** Built and Distributed New ISO
-- ISO: archzfs-vmlinuz-6.12.66-lts-2026-01-19-x86_64.iso (5.2GB)
-- Sanity test: 13/13 passed
-- Distributed to all targets:
-  - ~/Downloads/isos/
-  - truenas.local:/mnt/vault/isos/
-  - /dev/sda (ARCHZFS USB)
-  - /dev/sdb1 (Ventoy)
+After reboot:
+1. Run: sudo rm -rf /home/cjennings/code/archzfs/work
+2. Run: sudo ./scripts/build-release --yes
+3. Test in VM or on hardware that hostname is "archzfs" and avahi-daemon is running
 
 ** Commits This Session
-- c57f1a1 Add comprehensive installation tests and ZFS script deployment
-- a6fa09b Add wget to target system packages
-- 24ede61 Fix journald on ZFS: wait for mounts, enable persistent storage
 
-** Technical Notes
+| Commit | Description |
+|--------|-------------|
+| c57f1a1 | Add comprehensive installation tests and ZFS script deployment |
+| a6fa09b | Add wget to target system packages |
+| 24ede61 | Fix journald on ZFS: wait for mounts, enable persistent storage |
+| 11a141c | Sync templates, add session context |
+| d28890e | Add AMD ISP firmware to initramfs for APUs with cameras |
+| 59565e6 | Add wireless-regdb for proper WiFi regulatory compliance |
+| PENDING | Fix ISP firmware path, add Avahi mDNS to build.sh |
 
-*** journald + ZFS Race Condition
-- journald.socket starts at ~309ms
-- zfs-mount.service completes at ~978ms
-- Fix: Make systemd-journal-flush.service wait for zfs-mount.service
-- This ensures logs flush to persistent storage after ZFS is mounted
+** Key Fixes Made
 
-*** ratio Machine
-- Host: ratio (192.168.86.48)
-- Login: root / cmjdase1n
-- journald fix applied manually
-- Next reboot should capture proper shutdown logs
+*** 1. journald + ZFS Race Condition (24ede61)
+- Problem: journald starts ~650ms before ZFS mounts /var/log
+- Fix: Two systemd drop-ins in install-archzfs
 
-** Next Steps
-- Test ratio shutdown to see if issue is resolved (now have proper logs)
-- If slow shutdown recurs, check journalctl -b -1 for details
+*** 2. AMD ISP Firmware Path Bug (in install-archzfs)
+- Problem: ISP firmware config wrote /mnt/usr/lib/... path
+- mkinitcpio runs in chroot where /mnt doesn't exist
+- Fix: Strip /mnt prefix: local chroot_path="${isp_firmware#/mnt}"
+
+*** 3. Avahi mDNS for Easy SSH (in build.sh - PENDING COMMIT)
+- Problem: Had to physically check IP address on each machine
+- Root cause found: build.sh deletes profile/ and copies fresh from /usr/share/archiso/configs/releng
+- Fix: Added to build.sh (lines 234-241):
+  - Enable avahi-daemon.service symlink
+  - Set hostname to "archzfs"
+  - Add avahi + nss-mdns to packages (lines 116-118)
+- After rebuild, can SSH to: root@archzfs.local (password: archzfs)
+
+*** 4. WiFi Regulatory Database (59565e6)
+- Added wireless-regdb to pacstrap package list
+
+** Files Modified (Not Yet Committed)
+
+*** build.sh
+- Line 116-118: Added avahi and nss-mdns packages
+- Line 234-241: Added avahi-daemon.service enable and hostname set to "archzfs"
+
+*** custom/install-archzfs
+- ISP firmware path fix (strip /mnt prefix)
+
+** ratio Machine Status
+
+- Currently running another test
+- Last known IP: 192.168.86.56
+- Previous installs had "archiso" hostname (not "archzfs")
+- Avahi not enabled in previous builds
+
+** Why Previous Builds Failed
+
+The build.sh script does this at the start:
+#+begin_src bash
+rm -rf "$PROFILE_DIR"
+cp -r /usr/share/archiso/configs/releng "$PROFILE_DIR"
+#+end_src
+
+This deletes any manual changes to profile/airootfs/etc/hostname.
+The fix was to add the hostname and avahi setup INSIDE build.sh after the copy.
+
+** Next Steps After Reboot
+
+1. Clean work directory: sudo rm -rf /home/cjennings/code/archzfs/work
+2. Build ISO: sudo ./scripts/build-release --yes
+3. Test in VM that:
+   - hostname is "archzfs" (not "archiso")
+   - avahi-daemon.service is active
+4. If VM test passes, flash to USB and test on real hardware
+5. Commit all changes
+
+** ISO Distribution Targets
+
+- ~/Downloads/isos/
+- truenas.local:/mnt/vault/isos/
+- /dev/sda (ARCHZFS USB)
+- /dev/sdb1 (Ventoy)
+
+** Warnings Reviewed (ratio)
+
+| Warning | Status |
+|---------|--------|
+| watchdog did not stop | Benign - systemd takes over, no action needed |
+| RDSEED32 broken | AMD CPU quirk, unfixable, harmless |
+| ZFS taints kernel | Expected (CDDL license) |
+| ISP firmware missing | FIXED in install script |
+| regulatory.db missing | FIXED in install script |
+

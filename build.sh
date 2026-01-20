@@ -113,6 +113,10 @@ linux-lts-headers
 wget
 networkmanager
 
+# mDNS for network discovery (ssh root@archzfs.local)
+avahi
+nss-mdns
+
 # Development tools for Claude Code
 nodejs
 npm
@@ -230,6 +234,15 @@ mkdir -p "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants"
 info "Enabling SSH on live ISO..."
 ln -sf /usr/lib/systemd/system/sshd.service \
     "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/sshd.service"
+
+# Enable Avahi mDNS for network discovery (ssh root@archzfs.local)
+info "Enabling Avahi mDNS..."
+ln -sf /usr/lib/systemd/system/avahi-daemon.service \
+    "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/avahi-daemon.service"
+
+# Set hostname to "archzfs" for mDNS discovery
+info "Setting hostname to archzfs..."
+echo "archzfs" > "$PROFILE_DIR/airootfs/etc/hostname"
 
 # Set root password for live ISO
 info "Setting root password for live ISO..."
