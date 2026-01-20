@@ -1027,12 +1027,14 @@ configure_initramfs() {
         local isp_firmware
         isp_firmware=$(ls /mnt/usr/lib/firmware/amdgpu/isp_*.bin.zst 2>/dev/null | head -1)
         if [[ -n "$isp_firmware" ]]; then
+            # Remove /mnt prefix - config is used inside chroot where root is /
+            local chroot_path="${isp_firmware#/mnt}"
             info "AMD APU detected with ISP firmware - adding to initramfs"
             mkdir -p /mnt/etc/mkinitcpio.conf.d
             cat > /mnt/etc/mkinitcpio.conf.d/amd-isp.conf << EOF
 # AMD ISP (Image Signal Processor) firmware for camera support
 # Loaded early so amdgpu can initialize ISP before root is mounted
-FILES+=($isp_firmware)
+FILES+=($chroot_path)
 EOF
         fi
     fi
