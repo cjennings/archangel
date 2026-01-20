@@ -265,12 +265,21 @@ run_sanity_tests() {
         "systemctl is-enabled NetworkManager 2>/dev/null || echo 'available'" \
         ""
 
-    # Test 8: Kernel version (LTS)
+    # Test 8: Avahi mDNS for network discovery
+    run_test "Avahi daemon enabled" \
+        "systemctl is-enabled avahi-daemon" \
+        "enabled"
+
+    run_test "Avahi daemon running" \
+        "systemctl is-active avahi-daemon" \
+        "active"
+
+    # Test 9: Kernel version (LTS)
     run_test "Running LTS kernel" \
         "uname -r" \
         "lts"
 
-    # Test 9: archsetup directory present
+    # Test 10: archsetup directory present
     run_test "archsetup directory present" \
         "test -d /code/archsetup && echo 'exists'" \
         "exists"
