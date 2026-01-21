@@ -1091,7 +1091,7 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="Arch Linux (ZFS)"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3"
-GRUB_CMDLINE_LINUX="root=ZFS=$POOL_NAME/ROOT/default spl.spl_hostid=0x$host_id"
+GRUB_CMDLINE_LINUX="spl.spl_hostid=0x$host_id"
 GRUB_PRELOAD_MODULES="part_gpt part_msdos zfs"
 GRUB_TERMINAL_OUTPUT="console"
 GRUB_DISABLE_OS_PROBER=true
@@ -1161,11 +1161,15 @@ configure_zfs_services() {
     step "Configuring ZFS Services"
 
     arch-chroot /mnt systemctl enable zfs.target
+
     # Use zfs-import-scan instead of zfs-import-cache
     # This is the recommended method - it uses blkid to scan for pools
     # and doesn't require a cachefile
-    arch-chroot /mnt systemctl enable zfs-import-scan
-    arch-chroot /mnt systemctl enable zfs-mount
+    # Note: ZFS package preset enables zfs-import-cache by default, so we must
+    # explicitly disable it before enabling zfs-import-scan
+    arch-chroot /mnt systemctl disable zfs-import-cache.service
+    arch-chroot /mnt systemctl enable zfs-import-scan.service
+    arch-chroot /mnt systemctl enable zfs-mount.service
     arch-chroot /mnt systemctl enable zfs-import.target
 
     # Copy hostid to installed system (ZFS uses this for pool ownership)
@@ -1173,7 +1177,10 @@ configure_zfs_services() {
     cp /etc/hostid /mnt/etc/hostid
 
     # Disable cachefile - we use zfs-import-scan which doesn't need it
+    # Also remove any existing cachefile since zfs-import-scan has a condition
+    # that prevents it from running if /etc/zfs/zpool.cache exists
     zpool set cachefile=none "$POOL_NAME"
+    rm -f /mnt/etc/zfs/zpool.cache
 
     # Set bootfs
     zpool set bootfs="$POOL_NAME/ROOT/default" "$POOL_NAME"
