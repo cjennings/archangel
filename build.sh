@@ -26,6 +26,54 @@ info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
+# Safe cleanup function - unmounts bind mounts before removing work directory
+# This prevents damage to host /dev, /sys, /proc if build is interrupted
+safe_cleanup_work_dir() {
+    local airootfs="$WORK_DIR/x86_64/airootfs"
+
+    if [[ -d "$airootfs" ]]; then
+        # Unmount in reverse order of typical mount hierarchy
+        # Use lazy unmount (-l) to handle busy filesystems
+        for mount_point in \
+            "$airootfs/dev/pts" \
+            "$airootfs/dev/shm" \
+            "$airootfs/dev/mqueue" \
+            "$airootfs/dev/hugepages" \
+            "$airootfs/dev" \
+            "$airootfs/sys" \
+            "$airootfs/proc" \
+            "$airootfs/run"; do
+            if mountpoint -q "$mount_point" 2>/dev/null; then
+                umount -l "$mount_point" 2>/dev/null || true
+            fi
+        done
+
+        # Also catch any other mounts we might have missed
+        if findmnt --list -o TARGET 2>/dev/null | grep -q "$airootfs"; then
+            findmnt --list -o TARGET 2>/dev/null | grep "$airootfs" | sort -r | while read -r mp; do
+                umount -l "$mp" 2>/dev/null || true
+            done
+        fi
+
+        # Small delay to let lazy unmounts complete
+        sleep 1
+    fi
+
+    # Now safe to remove
+    rm -rf "$WORK_DIR"
+}
+
+# Trap to ensure cleanup on interruption (Ctrl+C, errors, etc.)
+# This prevents host /dev damage from interrupted builds
+cleanup_on_exit() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]] && [[ -d "$WORK_DIR" ]]; then
+        warn "Build interrupted or failed - cleaning up safely..."
+        safe_cleanup_work_dir
+    fi
+}
+trap cleanup_on_exit EXIT INT TERM
+
 # Check root
 [[ $EUID -ne 0 ]] && error "This script must be run as root"
 
@@ -35,10 +83,10 @@ command -v mkarchiso >/dev/null 2>&1 || {
     pacman -Sy --noconfirm archiso
 }
 
-# Clean previous builds
+# Clean previous builds (using safe cleanup to handle any leftover mounts)
 if [[ -d "$WORK_DIR" ]]; then
     warn "Removing previous work directory..."
-    rm -rf "$WORK_DIR"
+    safe_cleanup_work_dir
 fi
 
 # Always start fresh from releng profile
@@ -123,6 +171,7 @@ npm
 jq
 
 # Additional utilities
+inetutils
 zsh
 htop
 ripgrep
@@ -244,15 +293,70 @@ ln -sf /usr/lib/systemd/system/avahi-daemon.service \
 info "Setting hostname to archzfs..."
 echo "archzfs" > "$PROFILE_DIR/airootfs/etc/hostname"
 
+# Create /etc/hosts with proper hostname entries
+cat > "$PROFILE_DIR/airootfs/etc/hosts" << 'EOF'
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   archzfs.localdomain archzfs
+EOF
+
+# Configure nsswitch.conf for mDNS resolution
+# Add mdns_minimal before dns in hosts line
+info "Configuring nss-mdns..."
+mkdir -p "$PROFILE_DIR/airootfs/etc"
+cat > "$PROFILE_DIR/airootfs/etc/nsswitch.conf" << 'EOF'
+# Name Service Switch configuration file.
+# See nsswitch.conf(5) for details.
+
+passwd: files systemd
+group: files [SUCCESS=merge] systemd
+shadow: files systemd
+gshadow: files systemd
+
+publickey: files
+
+hosts: mymachines mdns_minimal [NOTFOUND=return] resolve [!UNAVAIL=return] files dns
+networks: files
+
+protocols: files
+services: files
+ethers: files
+rpc: files
+
+netgroup: files
+EOF
+
 # Set root password for live ISO
 info "Setting root password for live ISO..."
-mkdir -p "$PROFILE_DIR/airootfs/etc"
 # Generate password hash
 PASS_HASH=$(openssl passwd -6 "$LIVE_ROOT_PASSWORD")
-# Create shadow file entry (will be merged with existing)
-cat > "$PROFILE_DIR/airootfs/etc/shadow" << EOF
+# Modify the existing shadow file's root entry (don't replace entire file)
+# The releng template has multiple accounts; replacing breaks the file
+if [[ -f "$PROFILE_DIR/airootfs/etc/shadow" ]]; then
+    sed -i "s|^root:[^:]*:|root:${PASS_HASH}:|" "$PROFILE_DIR/airootfs/etc/shadow"
+else
+    # Fallback: create complete shadow file if it doesn't exist
+    cat > "$PROFILE_DIR/airootfs/etc/shadow" << EOF
 root:${PASS_HASH}:19000:0:99999:7:::
+bin:!*:19000::::::
+daemon:!*:19000::::::
+mail:!*:19000::::::
+ftp:!*:19000::::::
+http:!*:19000::::::
+nobody:!*:19000::::::
+dbus:!*:19000::::::
+systemd-coredump:!*:19000::::::
+systemd-network:!*:19000::::::
+systemd-oom:!*:19000::::::
+systemd-journal-remote:!*:19000::::::
+systemd-resolve:!*:19000::::::
+systemd-timesync:!*:19000::::::
+tss:!*:19000::::::
+uuidd:!*:19000::::::
+polkitd:!*:19000::::::
+avahi:!*:19000::::::
 EOF
+fi
 chmod 400 "$PROFILE_DIR/airootfs/etc/shadow"
 
 # Allow root SSH login with password (for testing)

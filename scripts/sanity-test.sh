@@ -260,12 +260,21 @@ run_sanity_tests() {
     # Test 6: SSH is working (implicit - we're connected)
     pass "SSH connectivity"
 
+    # Test 6b: Root password is set (not empty in shadow file)
+    run_test "Root password is set" \
+        "grep '^root:' /etc/shadow | cut -d: -f2 | grep -q '.' && echo 'password set'" \
+        "password set"
+
     # Test 7: Network manager available
     run_test "NetworkManager available" \
         "systemctl is-enabled NetworkManager 2>/dev/null || echo 'available'" \
         ""
 
     # Test 8: Avahi mDNS for network discovery
+    run_test "Avahi package installed" \
+        "command -v avahi-daemon && echo 'found'" \
+        "found"
+
     run_test "Avahi daemon enabled" \
         "systemctl is-enabled avahi-daemon" \
         "enabled"
@@ -274,7 +283,16 @@ run_sanity_tests() {
         "systemctl is-active avahi-daemon" \
         "active"
 
-    # Test 9: Kernel version (LTS)
+    run_test "nss-mdns configured" \
+        "grep -q 'mdns' /etc/nsswitch.conf && echo 'configured'" \
+        "configured"
+
+    # Test 9: Hostname set to archzfs
+    run_test "Hostname is archzfs" \
+        "cat /etc/hostname" \
+        "archzfs"
+
+    # Test 10: Kernel version (LTS)
     run_test "Running LTS kernel" \
         "uname -r" \
         "lts"
