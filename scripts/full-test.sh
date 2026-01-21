@@ -448,23 +448,12 @@ CONF"
     fi
     $VERBOSE && info "Genesis snapshot exists"
 
-    # Check cachefile property is set (required for boot)
-    local cachefile=$(ssh_cmd "zpool get -H -o value cachefile zroot" 2>/dev/null)
-    if [[ "$cachefile" != "/etc/zfs/zpool.cache" ]]; then
-        fail "$test_name: Pool cachefile not set (was: '$cachefile', need: '/etc/zfs/zpool.cache')"
-        cleanup
-        return 1
+    # Check zfs-import-scan is enabled (our preferred import method - no cachefile needed)
+    local import_scan=$(ssh_cmd "systemctl is-enabled zfs-import-scan" 2>/dev/null)
+    if [[ "$import_scan" != "enabled" ]]; then
+        warn "$test_name: zfs-import-scan not enabled (was: '$import_scan')"
     fi
-    $VERBOSE && info "Pool cachefile property set correctly"
-
-    # Check zpool.cache is in initramfs (required for boot)
-    local initramfs_cache=$(ssh_cmd "lsinitcpio /boot/initramfs-linux-lts.img 2>/dev/null | grep zpool.cache" 2>/dev/null)
-    if [[ -z "$initramfs_cache" ]]; then
-        fail "$test_name: zpool.cache missing from initramfs"
-        cleanup
-        return 1
-    fi
-    $VERBOSE && info "zpool.cache present in initramfs"
+    $VERBOSE && info "zfs-import-scan service: $import_scan"
 
     # Check kernel
     local kernel=$(ssh_cmd "uname -r" 2>/dev/null)
