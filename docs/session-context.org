@@ -1,40 +1,50 @@
 #+TITLE: Session Context
 #+DATE: 2026-01-20
 
-* Previous Session: Monday 2026-01-20
+* Current Session: Tuesday 2026-01-20 @ ~11:00 CST
 
-** Completed
+** Status: REBUILDING ISO
 
-*** Fixed hostid mismatch bug (commit 0524467)
-- Root cause: ~hostid~ command returned value X, then ~zgenhostid~ created /etc/hostid with value Y
-- Fix: Call ~zgenhostid~ FIRST in configure_bootloader(), then read consistent value
-- Verified: GRUB and /etc/hostid match after installation
+Build in progress with the following fixes:
+- Added /etc/hosts with archzfs hostname entries
+- Added /etc/nsswitch.conf with mdns_minimal for mDNS resolution
+- Added inetutils package (provides hostname command)
+- Updated sanity test to use `cat /etc/hostname` instead of `hostname`
 
-*** Added Avahi mDNS to installed systems (commit f62bf9b)
-- Packages: avahi, nss-mdns added to pacstrap
-- Service: avahi-daemon enabled
-- Matches archsetup implementation
-- Systems now accessible as <hostname>.local after install
+** Changes Made This Session (ALL UNCOMMITTED)
 
-*** Added Avahi validation to test scripts (commit 7b6c409)
-- sanity-test.sh: Check avahi-daemon enabled and running
-- test-install.sh: Verify packages and service on installed system
+*** build.sh
+- Added safe_cleanup_work_dir() function and trap (from interrupted session)
+- Fixed shadow file handling (sed instead of replace)
+- Added /etc/hosts file creation
+- Added nsswitch.conf configuration for nss-mdns
+- Added inetutils to package list
 
-*** Fixed full-test.sh bug (commit a774bae)
-- Bug: ((TESTS_PASSED++)) returns exit code 1 when starting at 0
-- Fix: Use pre-increment ((++TESTS_PASSED))
+*** scripts/sanity-test.sh
+- Added test: "Root password is set"
+- Added test: "Avahi package installed"
+- Added test: "nss-mdns configured"
+- Added test: "Hostname is archzfs"
+- Changed hostname test to use `cat /etc/hostname`
 
-** Test Results
-- Sanity test: 15/15 passed
-- Single-disk install: PASS
-- Mirror install: PASS
-- RAIDZ1 install: PASS
+*** ~/code/archsetup/inbox/console-display-issues.txt (NEW FILE)
+Documented 5 potential console issues from earlier investigation.
 
-** ISO Distributed
-- ~/Downloads/isos/
-- truenas.local:/mnt/vault/isos/
-- /dev/sda (ARCHZFS USB boot drive)
-- /dev/sdb1 (Ventoy)
+** After Build Completes
 
-** Notes
-- ratio needs reinstall with fixed ISO (or manual hostid fix)
+1. Write ISO to USB drives (/dev/sda and /dev/sdb)
+2. Wait for Craig's confirmation before testing on ratio
+3. Commit changes after successful test
+
+** Commit Message (After Testing Succeeds)
+
+#+begin_src bash
+git add -A
+git commit -m "Fix mDNS, hostname, and build safety
+
+- Add safe_cleanup_work_dir() to prevent /dev corruption on interrupted builds
+- Fix shadow file: use sed to modify root entry instead of replacing file
+- Add /etc/hosts and /etc/nsswitch.conf for proper hostname/mDNS
+- Add inetutils package for hostname command
+- Add sanity tests for password, avahi, mdns, and hostname"
+#+end_src

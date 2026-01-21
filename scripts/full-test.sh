@@ -448,6 +448,15 @@ CONF"
     fi
     $VERBOSE && info "Genesis snapshot exists"
 
+    # Check cachefile property is set (required for boot)
+    local cachefile=$(ssh_cmd "zpool get -H -o value cachefile zroot" 2>/dev/null)
+    if [[ "$cachefile" != "/etc/zfs/zpool.cache" ]]; then
+        fail "$test_name: Pool cachefile not set (was: '$cachefile', need: '/etc/zfs/zpool.cache')"
+        cleanup
+        return 1
+    fi
+    $VERBOSE && info "Pool cachefile property set correctly"
+
     # Check kernel
     local kernel=$(ssh_cmd "uname -r" 2>/dev/null)
     if [[ "$kernel" != *"lts"* ]]; then
