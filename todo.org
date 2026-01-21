@@ -143,73 +143,6 @@ fi
 - arch-wiki-lite: ~200MB (text only, smaller)
 - Could include both for ~600MB total
 
-** DONE [#B] Add zfsrollback and zfssnapshot scripts to ISO
-CLOSED: [2026-01-19 Sun]
-Include dedicated ZFS snapshot management scripts in the archzfs ISO rather than archsetup.
-These tools belong here since they're useful for rescue scenarios and post-install management.
-
-*** Scripts to create
-
-**** zfssnapshot
-Create manual or automated snapshots with consistent naming:
-#+BEGIN_SRC bash
-#!/bin/bash
-# zfssnapshot - Create ZFS snapshots with optional retention
-# Usage: zfssnapshot <dataset> [label]
-# Example: zfssnapshot zroot/ROOT/arch pre-upgrade
-
-DATASET="$1"
-LABEL="${2:-manual}"
-TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-SNAPNAME="${DATASET}@${LABEL}_${TIMESTAMP}"
-
-zfs snapshot "$SNAPNAME"
-echo "Created snapshot: $SNAPNAME"
-#+END_SRC
-
-Features to consider:
-- Recursive snapshots (-r flag)
-- Pre-defined labels (pre-upgrade, daily, hourly)
-- Integration with pacman hooks for automatic pre-upgrade snapshots
-- Quiet mode for cron/systemd usage
-
-**** zfsrollback
-Interactive rollback with safety checks:
-#+BEGIN_SRC bash
-#!/bin/bash
-# zfsrollback - Safely rollback to a previous ZFS snapshot
-# Usage: zfsrollback [dataset]
-# Without args, shows all snapshots and prompts for selection
-
-# List snapshots with fzf for selection
-SNAP=$(zfs list -t snapshot -o name,creation -s creation | \
-       fzf --header "Select snapshot to rollback to")
-
-# Confirm before destructive operation
-echo "WARNING: This will destroy all data created after the snapshot"
-read -p "Rollback to $SNAP? [y/N] " confirm
-[[ "$confirm" == "y" ]] && zfs rollback -r "$SNAP"
-#+END_SRC
-
-Features to consider:
-- Show snapshot diff (what will be lost)
-- Create safety snapshot before rollback
-- Boot environment awareness (warn if rolling back root)
-- Clone instead of rollback option (preserve current state)
-
-*** Implementation
-1. Create scripts in custom/zfssnapshot and custom/zfsrollback
-2. Add to build.sh to copy to /usr/local/bin/
-3. Add file_permissions entries in profiledef.sh
-4. Document in RESCUE-GUIDE.txt
-5. Consider systemd timers for automated snapshots
-
-*** Why in archzfs instead of archsetup
-- Rescue scenarios: rollback from live USB when system won't boot
-- Standalone utility: works on any ZFS system, not just archsetup installs
-- ISO always available: no need to install archsetup first
-- Simpler: self-contained scripts vs. dependency on archsetup
-
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 *** Options to evaluate
 - Self-hosted on TrueNAS (primary target)
@@ -238,91 +171,89 @@ Features to consider:
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
 
-** DONE [#C] Consider Avahi for USB boot disk discoverability
-CLOSED: [2026-01-19 Sun]
-Make the live ISO discoverable on the network by name (e.g., archzfs.local) when booted.
-This would make SSH access easier without needing to find the IP address.
+** TODO [#B] Add RAID configuration tests (mirror, raidz)
+Currently full-test.sh only tests single-disk installations.
+Add tests for multi-disk RAID configurations to catch regressions.
 
-Implemented in commit 0bd172a:
-- Added avahi and nss-mdns packages to ISO
-- Enabled avahi-daemon.service
-- Set hostname to "archzfs"
-- Live ISO now accessible as root@archzfs.local
+*** Test configurations to add
+- 2-disk mirror (most common RAID setup)
+- 3-disk raidz1 (if practical for VM testing)
+- Verify pool redundancy after installation
+- Test degraded pool boot scenario
 
-** DONE [#B] Add Avahi mDNS to installed systems
-CLOSED: [2026-01-19 Sun]
-Matches archsetup's implementation: install avahi + nss-mdns, enable avahi-daemon.
+*** Implementation
+- Add --raid flag to full-test.sh or separate test-raid.sh
+- Create multiple virtual disks for VM
+- Verify zpool status shows correct redundancy
+- Consider testing disk failure/resilience
 
-Added to install-archzfs:
-- Packages: avahi, nss-mdns (in pacstrap)
-- Service: avahi-daemon enabled
+** TODO [#B] Add pre-flight validation to install-archzfs
+Validate configuration and environment before any destructive operations.
+Fail fast with clear error messages rather than failing mid-install.
 
-After installation, system will be accessible as <hostname>.local on the local network.
-Example: ratio.local, framework.local, etc.
-
-** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
-Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
+*** Validations to add
+- Disk exists and is accessible
+- Disk is not mounted or in use
+- Sufficient disk space (minimum 20GB recommended)
+- Network connectivity (for package downloads)
+- Required commands available (zpool, zfs, etc.)
+- Config file syntax valid (if using unattended mode)
+- EFI variables accessible (for UEFI installs)
 
 *** Benefits
-- Always have a rescue environment available
-- Can reinstall or rollback without external media
-- Useful for remote/headless servers
+- Prevents partial installations that leave system in bad state
+- Clear error messages help users fix issues before starting
+- Reduces support burden from avoidable failures
+- Aligns with "fail fast" testing principle
 
-*** Challenges
-1. Storage location - ISO is 5GB. Can't live on ZFS (GRUB can't read it). Options:
-   - EFI partition (currently 1GB - would need to be larger)
-   - Dedicated recovery partition (ext4 or FAT32)
-   - Second EFI partition just for the ISO
+*** Implementation
+Add validate_environment() function called before any disk operations:
+#+BEGIN_SRC bash
+validate_environment() {
+    local errors=0
 
-2. GRUB loopback boot - Arch ISOs support this with the right kernel params:
-   #+BEGIN_SRC
-   menuentry "Archzfs Recovery" {
-       loopback loop /path/to/archzfs.iso
-       linux (loop)/arch/boot/x86_64/vmlinuz-linux archisolabel=ARCHZFS
-       initrd (loop)/arch/boot/x86_64/initramfs-linux.img
-   }
-   #+END_SRC
+    # Check disk exists
+    [[ -b "$INSTALL_DISK" ]] || { error "Disk $INSTALL_DISK not found"; ((errors++)); }
 
-3. Keeping it updated - Would need a mechanism to update the ISO when rebuilding
+    # Check not mounted
+    mountpoint -q "$INSTALL_DISK"* && { error "Disk is mounted"; ((errors++)); }
 
-*** Questions to resolve
-- Is this for recovery scenarios, or would you actually reinstall from it?
-- Would you want this integrated into the installer (auto-create recovery partition)?
-- Or just document how to set it up manually?
+    # Check ZFS tools
+    command -v zpool >/dev/null || { error "zpool not found"; ((errors++)); }
 
-** TODO [#C] Research mkosi as alternative to mkarchiso
-Investigate whether mkosi (systemd project) offers advantages over mkarchiso.
+    [[ $errors -gt 0 ]] && exit 1
+}
+#+END_SRC
 
-*** Comparison
-| Aspect | mkarchiso | mkosi |
-|--------|-----------|-------|
-| Purpose | Live ISO images | Disk images, containers, ISOs |
-| Config | Shell scripts + file structure | Declarative TOML files |
-| Output | ISO9660 (USB/CD) | GPT disk images, tarballs, ISOs |
-| Boot | GRUB/syslinux/systemd-boot | UKI (Unified Kernel Images) |
-| Distros | Arch only | Arch, Fedora, Debian, Ubuntu |
-| Build env | Host or chroot | Container-native, reproducible |
+** TODO [#B] Extract install-archzfs into testable functions
+Current install-archzfs is a monolithic script that's hard to test in isolation.
+Refactoring into focused functions enables unit testing and better maintainability.
 
-*** Where mkosi shines
-- Reproducible builds - designed for CI/CD, hermetic builds
-- Unified Kernel Images - modern secure boot (kernel+initrd+cmdline in one signed EFI)
-- VM images - can output raw disk images directly (great for QEMU testing)
-- Declarative - TOML config instead of shell scripts
+*** Current pain points
+- Can't test partition creation without running full install
+- Can't test ZFS pool creation logic separately
+- Failures mid-install are hard to diagnose
+- No way to verify individual steps worked
 
-*** Where mkarchiso is better for us
-- Arch ecosystem - all docs, examples, community use it
-- ZFS live environment - archiso has the hooks we need
-- Proven - we know it works for our use case
+*** Proposed refactoring
+Extract into library of functions that can be sourced and tested:
+- lib/partition.sh - Disk partitioning functions
+- lib/zfs.sh - ZFS pool and dataset creation
+- lib/bootloader.sh - GRUB installation and configuration
+- lib/network.sh - Network configuration (mDNS, etc.)
+- lib/packages.sh - Package installation via pacstrap
 
-*** Verdict
-Keep mkarchiso for now. mkosi could be valuable for:
-- VM test images instead of booting ISOs
-- Future UKI boot (more secure boot chain)
-- Reproducibility when CI/CD becomes important
+*** Testing approach
+- Unit tests for pure functions (config parsing, validation)
+- Integration tests using small loop devices
+- Mock destructive operations for safety
+- Test each function's error handling
 
-*** References
-- https://wiki.archlinux.org/title/Mkosi
-- https://github.com/systemd/mkosi
+*** Benefits
+- Easier to debug failures (which function failed?)
+- Can test edge cases without full VM boot
+- Reusable functions for other projects
+- Clearer code organization
 
 ** Ideas from arch-linux-live-cd-iso-with-zfs project
 Reference: /home/cjennings/code/arch-linux-live-cd-iso-with-zfs
@@ -424,6 +355,70 @@ PACKAGES_TO_REMOVE=b43-fwcutter
 Support --dry-run flag that shows what would be done without executing.
 Useful for testing configuration changes and debugging.
 
+** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
+Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
+
+*** Benefits
+- Always have a rescue environment available
+- Can reinstall or rollback without external media
+- Useful for remote/headless servers
+
+*** Challenges
+1. Storage location - ISO is 5GB. Can't live on ZFS (GRUB can't read it). Options:
+   - EFI partition (currently 1GB - would need to be larger)
+   - Dedicated recovery partition (ext4 or FAT32)
+   - Second EFI partition just for the ISO
+
+2. GRUB loopback boot - Arch ISOs support this with the right kernel params:
+   #+BEGIN_SRC
+   menuentry "Archzfs Recovery" {
+       loopback loop /path/to/archzfs.iso
+       linux (loop)/arch/boot/x86_64/vmlinuz-linux archisolabel=ARCHZFS
+       initrd (loop)/arch/boot/x86_64/initramfs-linux.img
+   }
+   #+END_SRC
+
+3. Keeping it updated - Would need a mechanism to update the ISO when rebuilding
+
+*** Questions to resolve
+- Is this for recovery scenarios, or would you actually reinstall from it?
+- Would you want this integrated into the installer (auto-create recovery partition)?
+- Or just document how to set it up manually?
+
+** TODO [#C] Research mkosi as alternative to mkarchiso
+Investigate whether mkosi (systemd project) offers advantages over mkarchiso.
+
+*** Comparison
+| Aspect | mkarchiso | mkosi |
+|--------|-----------|-------|
+| Purpose | Live ISO images | Disk images, containers, ISOs |
+| Config | Shell scripts + file structure | Declarative TOML files |
+| Output | ISO9660 (USB/CD) | GPT disk images, tarballs, ISOs |
+| Boot | GRUB/syslinux/systemd-boot | UKI (Unified Kernel Images) |
+| Distros | Arch only | Arch, Fedora, Debian, Ubuntu |
+| Build env | Host or chroot | Container-native, reproducible |
+
+*** Where mkosi shines
+- Reproducible builds - designed for CI/CD, hermetic builds
+- Unified Kernel Images - modern secure boot (kernel+initrd+cmdline in one signed EFI)
+- VM images - can output raw disk images directly (great for QEMU testing)
+- Declarative - TOML config instead of shell scripts
+
+*** Where mkarchiso is better for us
+- Arch ecosystem - all docs, examples, community use it
+- ZFS live environment - archiso has the hooks we need
+- Proven - we know it works for our use case
+
+*** Verdict
+Keep mkarchiso for now. mkosi could be valuable for:
+- VM test images instead of booting ISOs
+- Future UKI boot (more secure boot chain)
+- Reproducibility when CI/CD becomes important
+
+*** References
+- https://wiki.archlinux.org/title/Mkosi
+- https://github.com/systemd/mkosi
+
 ** TODO [#C] Add 1-minute countdown timer before automatic reboot after installation
 Display a countdown timer (1 minute) with red text after installation completes, before automatically rebooting the system.
 Gives user time to review the installation summary and cancel if needed.
@@ -441,7 +436,137 @@ echo
 reboot
 #+END_SRC
 
+** TODO [#C] Add negative/failure test cases
+Current tests only verify happy path (successful installation).
+Add tests for error conditions to ensure graceful failure handling.
+
+*** Test cases to add
+- Installation with insufficient disk space
+- Installation with disk that disappears mid-install
+- Installation with network failure during pacstrap
+- Installation with invalid config file
+- Installation on already-mounted disk
+- Verify error messages are helpful and actionable
+
+*** Benefits
+- Ensures failures don't leave system in corrupted state
+- Validates error messages help users diagnose issues
+- Catches regressions in error handling code
+- Aligns with quality engineering "error cases" principle
+
+** TODO [#C] Add install-archzfs --dry-run mode
+Show what would be done without making any changes.
+Useful for validating configuration before committing to installation.
+
+*** What dry-run should show
+- Disk partitioning plan (sizes, types)
+- ZFS pool and dataset structure
+- Packages that would be installed
+- Services that would be enabled
+- Bootloader configuration
+
+*** Implementation approach
+- Add DRY_RUN=1 flag checked before destructive operations
+- Replace actual commands with echo statements showing what would run
+- Validate all inputs and configuration
+- Exit with success if everything validates
+
+*** Benefits
+- Users can verify configuration before destroying data
+- Easier debugging of configuration issues
+- Supports "measure twice, cut once" workflow
+- Can be used in CI to validate config without full install
+
 * Resolved
+** DONE [#B] Add zfsrollback and zfssnapshot scripts to ISO
+CLOSED: [2026-01-19 Sun]
+Include dedicated ZFS snapshot management scripts in the archzfs ISO rather than archsetup.
+These tools belong here since they're useful for rescue scenarios and post-install management.
+
+*** Scripts to create
+
+**** zfssnapshot
+Create manual or automated snapshots with consistent naming:
+#+BEGIN_SRC bash
+#!/bin/bash
+# zfssnapshot - Create ZFS snapshots with optional retention
+# Usage: zfssnapshot <dataset> [label]
+# Example: zfssnapshot zroot/ROOT/arch pre-upgrade
+
+DATASET="$1"
+LABEL="${2:-manual}"
+TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+SNAPNAME="${DATASET}@${LABEL}_${TIMESTAMP}"
+
+zfs snapshot "$SNAPNAME"
+echo "Created snapshot: $SNAPNAME"
+#+END_SRC
+
+Features to consider:
+- Recursive snapshots (-r flag)
+- Pre-defined labels (pre-upgrade, daily, hourly)
+- Integration with pacman hooks for automatic pre-upgrade snapshots
+- Quiet mode for cron/systemd usage
+
+**** zfsrollback
+Interactive rollback with safety checks:
+#+BEGIN_SRC bash
+#!/bin/bash
+# zfsrollback - Safely rollback to a previous ZFS snapshot
+# Usage: zfsrollback [dataset]
+# Without args, shows all snapshots and prompts for selection
+
+# List snapshots with fzf for selection
+SNAP=$(zfs list -t snapshot -o name,creation -s creation | \
+       fzf --header "Select snapshot to rollback to")
+
+# Confirm before destructive operation
+echo "WARNING: This will destroy all data created after the snapshot"
+read -p "Rollback to $SNAP? [y/N] " confirm
+[[ "$confirm" == "y" ]] && zfs rollback -r "$SNAP"
+#+END_SRC
+
+Features to consider:
+- Show snapshot diff (what will be lost)
+- Create safety snapshot before rollback
+- Boot environment awareness (warn if rolling back root)
+- Clone instead of rollback option (preserve current state)
+
+*** Implementation
+1. Create scripts in custom/zfssnapshot and custom/zfsrollback
+2. Add to build.sh to copy to /usr/local/bin/
+3. Add file_permissions entries in profiledef.sh
+4. Document in RESCUE-GUIDE.txt
+5. Consider systemd timers for automated snapshots
+
+*** Why in archzfs instead of archsetup
+- Rescue scenarios: rollback from live USB when system won't boot
+- Standalone utility: works on any ZFS system, not just archsetup installs
+- ISO always available: no need to install archsetup first
+- Simpler: self-contained scripts vs. dependency on archsetup
+
+** DONE [#C] Consider Avahi for USB boot disk discoverability
+CLOSED: [2026-01-19 Sun]
+Make the live ISO discoverable on the network by name (e.g., archzfs.local) when booted.
+This would make SSH access easier without needing to find the IP address.
+
+Implemented in commit 0bd172a:
+- Added avahi and nss-mdns packages to ISO
+- Enabled avahi-daemon.service
+- Set hostname to "archzfs"
+- Live ISO now accessible as root@archzfs.local
+
+** DONE [#B] Add Avahi mDNS to installed systems
+CLOSED: [2026-01-19 Sun]
+Matches archsetup's implementation: install avahi + nss-mdns, enable avahi-daemon.
+
+Added to install-archzfs:
+- Packages: avahi, nss-mdns (in pacstrap)
+- Service: avahi-daemon enabled
+
+After installation, system will be accessible as <hostname>.local on the local network.
+Example: ratio.local, framework.local, etc.
+
 ** DONE [#B] Add config file information to README
 Config file format documented in README.org with full reference and examples.
 
@@ -453,6 +578,7 @@ Using fzf instead.
 
 ** DONE [#C] Consider fzf interface for choices
 Implemented fzf for timezone, locale, keymap, disk, RAID, and WiFi selection.
+
 ** DONE [#A] Create comprehensive project documentation (README.org)
 CLOSED: [2026-01-18 Sun 02:01]
 - State "DONE"       from "TODO"       [2026-01-18 Sun 02:01]
@@ -485,171 +611,3 @@ Also includes header with start time inside the log file.
 CLOSED: [2026-01-18 Sat]
 Make the ISO double as a general-purpose recovery disk.
 See custom/RESCUE-GUIDE.txt for comprehensive documentation of all tools.
-
-*** Research Sources
-- [[https://www.system-rescue.org/Detailed-packages-list/][SystemRescue Package List]] - Arch-based rescue distro with 1000+ packages
-- [[https://alternativeto.net/software/hiren39s-bootcd/][Hiren's BootCD Alternatives]] - Popular rescue disk comparisons
-- [[https://www.chntpw.com/][chntpw]] - Windows password reset tool
-- [[https://rtech.support/disks/encryption/dislocker/][Dislocker]] - BitLocker decryption on Linux
-
-*** Currently on archzfs ISO
-- ZFS tools (zpool, zfs, zfs-utils)
-- Base Arch system (coreutils, util-linux, systemd)
-- Network (networkmanager, openssh, curl, wget)
-- Editors (vim)
-- Partitioning (parted, gdisk)
-- Filesystem (dosfstools, e2fsprogs)
-
-*** Proposed Additions by Category
-
-**** Data Recovery & Forensics
-| Package | Description | Size |
-|---------+-------------+------|
-| testdisk | Partition/file recovery, fixes partition tables | ~2MB |
-| ddrescue | Copy data from failing drives with retries | ~1MB |
-| foremost | File carving based on headers/footers | ~1MB |
-| sleuthkit | Forensic analysis toolkit (icat, fls, etc.) | ~5MB |
-| safecopy | Low-level data recovery from damaged media | ~1MB |
-
-**** Disk Cloning & Imaging
-| Package | Description | Size |
-|---------+-------------+------|
-| partclone | Efficient partition cloning (used by Clonezilla) | ~2MB |
-| fsarchiver | Filesystem archiver with compression | ~1MB |
-| partimage | Partition imaging (legacy, but useful) | ~1MB |
-
-**** Windows Recovery
-| Package | Description | Size |
-|---------+-------------+------|
-| chntpw | Reset Windows passwords, edit registry | ~500KB |
-| dislocker | Read/write BitLocker encrypted volumes | ~1MB |
-| ntfs-3g | Full NTFS read/write support | (likely included) |
-| hivex | Windows registry hive extraction | ~500KB |
-| ms-sys | Write Windows MBR/boot records | ~100KB |
-
-**** Filesystem Tools
-| Package | Description | Size |
-|---------+-------------+------|
-| ntfs-3g | NTFS read/write | ~2MB |
-| exfatprogs | exFAT support | ~500KB |
-| btrfs-progs | Btrfs tools | ~5MB |
-| xfsprogs | XFS tools | ~3MB |
-| f2fs-tools | Flash-Friendly FS tools | ~1MB |
-| hfsprogs | HFS/HFS+ (Mac) support | ~1MB |
-
-**** Hardware Diagnostics
-| Package | Description | Size |
-|---------+-------------+------|
-| smartmontools | SMART disk health monitoring | ~1MB |
-| hdparm | HDD/SSD parameter tuning | ~500KB |
-| nvme-cli | NVMe drive management | ~1MB |
-| lshw | Detailed hardware lister | ~1MB |
-| dmidecode | DMI/SMBIOS decoder | ~500KB |
-| memtester | Userspace memory testing | ~100KB |
-| stress-ng | CPU/memory/IO stress testing | ~2MB |
-| i2c-tools | I2C/SMBus tools | ~500KB |
-| lm_sensors | Hardware monitoring (temps, fans, voltages) | ~500KB |
-
-**** Network Diagnostics
-| Package | Description | Size |
-|---------+-------------+------|
-| nmap | Network scanner and security auditing | ~25MB |
-| tcpdump | Command-line packet analyzer | ~1MB |
-| wireshark-cli | TShark packet analysis | ~50MB |
-| iperf3 | Network bandwidth testing | ~500KB |
-| mtr | Combined ping/traceroute | ~500KB |
-| iftop | Network bandwidth monitor | ~500KB |
-| nethogs | Per-process bandwidth monitor | ~500KB |
-| ethtool | NIC configuration/diagnostics | ~500KB |
-| bind | dig/nslookup DNS tools | ~5MB |
-
-**** Security & Malware Scanning
-| Package | Description | Size |
-|---------+-------------+------|
-| clamav | Open source antivirus engine | ~150MB |
-| rkhunter | Rootkit detection | ~1MB |
-| chkrootkit | Rootkit checker | ~500KB |
-| lynis | Security auditing tool | ~1MB |
-
-**** Boot Repair
-| Package | Description | Size |
-|---------+-------------+------|
-| efibootmgr | UEFI boot manager (likely included) | ~100KB |
-| grub | GRUB bootloader tools (included) | - |
-| os-prober | Detect other OSes for GRUB | ~100KB |
-| syslinux | Legacy bootloader tools | ~2MB |
-
-**** File Management & Compression
-| Package | Description | Size |
-|---------+-------------+------|
-| mc | Midnight Commander file manager | ~2MB |
-| ncdu | NCurses disk usage analyzer | ~500KB |
-| tree | Directory listing | ~100KB |
-| p7zip | 7-Zip compression | ~3MB |
-| unrar | RAR extraction | ~500KB |
-| cabextract | Windows CAB extraction | ~100KB |
-| cpio | Archive tool (initramfs) | ~500KB |
-
-**** Remote Access
-| Package | Description | Size |
-|---------+-------------+------|
-| remmina | RDP/VNC client (GUI) | ~10MB |
-| tigervnc | VNC server/client | ~5MB |
-| screen | Terminal multiplexer | ~1MB |
-| tmux | Terminal multiplexer | ~1MB |
-
-**** Monitoring & System Info
-| Package | Description | Size |
-|---------+-------------+------|
-| htop | Interactive process viewer | ~500KB |
-| iotop | I/O monitoring | ~100KB |
-| atop | Advanced system monitor | ~500KB |
-| inxi | System information script | ~500KB |
-| neofetch | System info display | ~500KB |
-
-**** GUI Tools (if keeping Xfce or adding minimal X)
-| Package | Description | Size |
-|---------+-------------+------|
-| gparted | Graphical partition editor | ~5MB |
-| baobab | Disk usage analyzer | ~3MB |
-| gnome-disk-utility | GNOME Disks | ~5MB |
-
-*** Summary Table (Quick Reference)
-| Category | Key Tools | Est. Size |
-|----------+-----------+-----------|
-| Data Recovery | testdisk, ddrescue, foremost, sleuthkit | ~10MB |
-| Disk Cloning | partclone, fsarchiver | ~4MB |
-| Windows Recovery | chntpw, dislocker, hivex, ms-sys | ~3MB |
-| Filesystem | ntfs-3g, exfatprogs, btrfs-progs, xfsprogs, hfsprogs | ~12MB |
-| Hardware Diag | smartmontools, hdparm, nvme-cli, lshw, memtester, stress-ng, lm_sensors | ~8MB |
-| Network | nmap, tcpdump, iperf3, mtr, iftop, bind | ~35MB |
-| Security | clamav, rkhunter, chkrootkit | ~150MB |
-| Boot Repair | os-prober, syslinux | ~2MB |
-| File Mgmt | mc, ncdu, p7zip, unrar | ~6MB |
-| Remote | screen, tmux, tigervnc | ~7MB |
-| Monitoring | htop, iotop, inxi | ~2MB |
-
-*** Size Estimate
-- Core recovery tools (no ClamAV/Wireshark): ~90MB
-- With ClamAV: +150MB
-- With Wireshark CLI: +50MB
-- GUI tools (optional): ~20MB
-- Total estimate: ~150-300MB additional
-- Current ISO size: 5.1GB
-- Projected size with all tools: ~5.4GB
-
-*** Discussion Notes
-- SystemRescue is also Arch-based, making it a good reference for package names
-- Hiren's BootCD PE is now Windows-based, but older Linux version had good tool selection
-- Most recovery scenarios need: testdisk, ddrescue, chntpw, smartmontools, ntfs-3g
-- For Windows malware scanning, ClamAV is the standard open-source option
-- Consider: could offer two ISO variants (minimal vs full rescue)
-
-*** Questions to Resolve
-- Include ClamAV? Adds ~150MB but very useful for Windows malware scanning
-- Include Wireshark CLI (tshark)? Adds ~50MB for network forensics
-- Keep ISO under specific size target (e.g., 6GB for single-layer DVD)?
-- Add GUI tools or keep it minimal/CLI-focused?
-- Create separate "rescue" build profile or add to main ISO?
-- Priority order for implementation?
-
