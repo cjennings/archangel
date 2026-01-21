@@ -454,6 +454,13 @@ chmod +x "$PROFILE_DIR/airootfs/usr/local/bin/"*
 info "Building ISO (this will take a while)..."
 mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR"
 
+# Restore ownership to the user who invoked sudo
+# mkarchiso runs as root and creates root-owned files
+if [[ -n "$SUDO_USER" ]]; then
+    info "Restoring ownership to $SUDO_USER..."
+    chown -R "$SUDO_USER:$SUDO_USER" "$OUT_DIR" "$WORK_DIR" "$PROFILE_DIR" 2>/dev/null || true
+fi
+
 # Report results
 ISO_FILE=$(ls -t "$OUT_DIR"/*.iso 2>/dev/null | head -1)
 if [[ -f "$ISO_FILE" ]]; then

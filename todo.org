@@ -424,6 +424,23 @@ PACKAGES_TO_REMOVE=b43-fwcutter
 Support --dry-run flag that shows what would be done without executing.
 Useful for testing configuration changes and debugging.
 
+** TODO [#C] Add 1-minute countdown timer before automatic reboot after installation
+Display a countdown timer (1 minute) with red text after installation completes, before automatically rebooting the system.
+Gives user time to review the installation summary and cancel if needed.
+
+*** Implementation
+In install-archzfs, after displaying the completion message:
+#+BEGIN_SRC bash
+# Red text countdown before reboot
+echo -e "\n\033[0;31mSystem will reboot in 60 seconds. Press Ctrl+C to cancel.\033[0m"
+for i in {60..1}; do
+    printf "\r\033[0;31mRebooting in %2d seconds...\033[0m" "$i"
+    sleep 1
+done
+echo
+reboot
+#+END_SRC
+
 * Resolved
 ** DONE [#B] Add config file information to README
 Config file format documented in README.org with full reference and examples.
