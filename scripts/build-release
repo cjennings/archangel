@@ -8,7 +8,7 @@
 #   ./scripts/build-release --skip-test  # Skip all testing
 #
 # Distribution targets:
-#   - ~/Downloads/isos (always)
+#   - ~/downloads/isos (always)
 #   - truenas.local:/mnt/vault/isos (if reachable)
 #   - USB drive with ARCHZFS label (if present, writes via dd)
 #   - Ventoy USB drive (if detected, copies ISO file)
@@ -28,7 +28,7 @@ else
 fi
 
 # Distribution targets
-LOCAL_ISO_DIR="$REAL_HOME/Downloads/isos"
+LOCAL_ISO_DIR="$REAL_HOME/downloads/isos"
 TRUENAS_HOST="truenas.local"
 TRUENAS_PATH="/mnt/vault/isos"
 
