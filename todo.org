@@ -1,4 +1,5 @@
 * Open Work
+
 ** TODO [#A] Build AUR packages and include in ISO as local repository
 Build AUR packages during ISO creation and include them in a local pacman repository.
 This allows AUR software to work both in the live environment AND be installable to target systems.
@@ -143,7 +144,29 @@ fi
 - arch-wiki-lite: ~200MB (text only, smaller)
 - Could include both for ~600MB total
 
+** TODO [#A] Integrate ZFSBootMenu as alternative boot manager
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+ZFSBootMenu is a powerful boot manager specifically designed for ZFS root systems.
+It provides boot environment selection, snapshot rollback from boot menu, and recovery options.
+
+*** Benefits
+- Boot directly into any ZFS snapshot
+- Rollback to previous boot environment without booting first
+- Better ZFS-native boot experience than GRUB
+- Single EFI file (~15MB) that can be updated independently
+
+*** Implementation
+- Download portable EFI from https://get.zfsbootmenu.org/efi
+- Include in ISO's /root/software/zfsbootmenu/
+- Add update script for post-installation updates
+- Consider as GRUB alternative or supplement
+
+*** Reference
+https://zfsbootmenu.org/
+
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
+
 *** Options to evaluate
 - Self-hosted on TrueNAS (primary target)
   - Gitea + Gitea Actions or Drone CI
@@ -255,105 +278,63 @@ Extract into library of functions that can be sourced and tested:
 - Reusable functions for other projects
 - Clearer code organization
 
-** Ideas from arch-linux-live-cd-iso-with-zfs project
-Reference: /home/cjennings/code/arch-linux-live-cd-iso-with-zfs
-GitHub: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+** TODO [#B] Add Docker/Podman container support for builds
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
 
-*** TODO [#A] Integrate ZFSBootMenu as alternative boot manager
-ZFSBootMenu is a powerful boot manager specifically designed for ZFS root systems.
-It provides boot environment selection, snapshot rollback from boot menu, and recovery options.
-
-Benefits:
-- Boot directly into any ZFS snapshot
-- Rollback to previous boot environment without booting first
-- Better ZFS-native boot experience than GRUB
-- Single EFI file (~15MB) that can be updated independently
-
-Implementation:
-- Download portable EFI from https://get.zfsbootmenu.org/efi
-- Include in ISO's /root/software/zfsbootmenu/
-- Add update script for post-installation updates
-- Consider as GRUB alternative or supplement
-
-Reference: https://zfsbootmenu.org/
-
-*** TODO [#B] Add Docker/Podman container support for builds
-The reference project uses containers with minimal capabilities instead of full root/privileged mode.
+Use containers with minimal capabilities instead of full root/privileged mode.
 This improves security and reproducibility.
 
-Capabilities needed for mkarchiso:
+*** Capabilities needed for mkarchiso
 - DAC_OVERRIDE
 - SYS_ADMIN
 - SYS_CHROOT
 - SYS_MODULE
 - Device: /dev/loop-control
 
-Benefits:
+*** Benefits
 - Reproducible builds across different host systems
 - No need to install archiso on host
 - Cleaner build environment
 - Easier CI/CD integration
 
-*** TODO [#B] Support building against Arch Linux Archive snapshots
-When archzfs lags behind the main Arch repos, builds can fail due to kernel version mismatch.
-The reference project supports pinning to historical repo snapshots.
+** TODO [#B] Support building against Arch Linux Archive snapshots
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
 
-Implementation:
+When archzfs lags behind the main Arch repos, builds can fail due to kernel version mismatch.
+Pinning to historical repo snapshots solves this problem.
+
+*** Implementation
 - Add -r/--repo-date flag to build.sh
 - Use archive.archlinux.org for historical packages
 - Example: ./build.sh -r 2026/01/15 or ./build.sh -r week
 
 This solves the common problem of ZFS packages not being available for the latest kernel.
 
-*** TODO [#C] Add build logging with tee
+** TODO [#B] Add build logging with tee
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
 Capture all build output to a log file for debugging and CI artifact collection.
 
-Implementation:
+*** Implementation
+See ~/code/archsetup for a reference implementation. The approach there provides a better
+user experience by hiding confusing (sometimes scary-looking) messages on the console while
+preserving complete build output in the log file. Users see clean progress indicators while
+full diagnostic information is available for troubleshooting.
+
 #+BEGIN_SRC bash
+# Basic approach
 exec &> >(tee "build-$(date +%Y%m%d-%H%M%S).log")
+
+# Better UX: show progress on console, full output to log
+exec 3>&1 4>&2
+exec 1> >(tee -a "$LOG_FILE") 2>&1
+# Then use fd 3 for user-facing output: echo "Installing..." >&3
 #+END_SRC
 
-Also useful: Check log for known error patterns (e.g., DKMS failures) and fail fast.
-
-Note: Simple to implement but low urgency.
-
-*** TODO [#C] Support multi-variant ISO builds
-The reference project builds 8 variants automatically:
-- linux vs linux-lts kernel
-- DKMS vs native ZFS packages
-- Default vs experimental archzfs repos
-
-Could be useful for offering users choice between stability and bleeding-edge.
-Lower priority since we currently focus on linux-lts + DKMS for maximum compatibility.
-
-*** TODO [#C] Pre-clone useful tools and documentation into ISO
-The reference project bundles Git repos (without .git dirs) into /root:
-- archinstall (official installer)
-- downgrade (package rollback)
-- ZFS howtos and documentation
-- Recovery scripts
-
-Already partially implemented (have rescue tools), but could expand with:
-- Pre-cloned arch-linux-configuration scripts
-- ZFS administration cheatsheets
-- Offline troubleshooting guides
-
-*** TODO [#C] Add environment file configuration (.env pattern)
-Allow build customization via .env file instead of command-line flags.
-Useful for CI/CD and reproducible builds.
-
-Example .env:
-#+BEGIN_SRC
-KERNEL=linux-lts
-USE_DKMS=1
-BE_VERBOSE=0
-PACKAGES_TO_ADD=git,vim
-PACKAGES_TO_REMOVE=b43-fwcutter
-#+END_SRC
-
-*** TODO [#C] Add dry-run mode to build.sh
-Support --dry-run flag that shows what would be done without executing.
-Useful for testing configuration changes and debugging.
+*** Additional features
+- Check log for known error patterns (e.g., DKMS failures) and fail fast
+- Rotate old logs to prevent disk space issues
+- Include system info header (date, kernel version, etc.)
 
 ** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
@@ -477,78 +458,63 @@ Useful for validating configuration before committing to installation.
 - Supports "measure twice, cut once" workflow
 - Can be used in CI to validate config without full install
 
+** TODO [#C] Pre-clone useful tools and documentation into ISO
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+Bundle Git repos (without .git dirs) into /root for offline access:
+- archinstall (official installer)
+- downgrade (package rollback)
+- ZFS howtos and documentation
+- Recovery scripts
+
+Already partially implemented (have rescue tools), but could expand with:
+- Pre-cloned arch-linux-configuration scripts
+- ZFS administration cheatsheets
+- Offline troubleshooting guides
+
+** TODO [#C] Add environment file configuration (.env pattern)
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+Allow build customization via .env file instead of command-line flags.
+Useful for CI/CD and reproducible builds.
+
+*** Example .env
+#+BEGIN_SRC
+KERNEL=linux-lts
+USE_DKMS=1
+BE_VERBOSE=0
+PACKAGES_TO_ADD=git,vim
+PACKAGES_TO_REMOVE=b43-fwcutter
+#+END_SRC
+
+** TODO [#C] Add dry-run mode to build.sh
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+Support --dry-run flag that shows what would be done without executing.
+Useful for testing configuration changes and debugging.
+
+** TODO [#D] Support multi-variant ISO builds
+Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+
+The reference project builds 8 variants automatically:
+- linux vs linux-lts kernel
+- DKMS vs native ZFS packages
+- Default vs experimental archzfs repos
+
+Very low priority. We're focused on robustness and compatibility first, bleeding edge last.
+The linux-lts + DKMS combination provides maximum stability and hardware compatibility.
+Only consider this if there's clear user demand for bleeding-edge kernel support.
+
 * Resolved
+
 ** DONE [#B] Add zfsrollback and zfssnapshot scripts to ISO
 CLOSED: [2026-01-19 Sun]
 Include dedicated ZFS snapshot management scripts in the archzfs ISO rather than archsetup.
 These tools belong here since they're useful for rescue scenarios and post-install management.
 
-*** Scripts to create
-
-**** zfssnapshot
-Create manual or automated snapshots with consistent naming:
-#+BEGIN_SRC bash
-#!/bin/bash
-# zfssnapshot - Create ZFS snapshots with optional retention
-# Usage: zfssnapshot <dataset> [label]
-# Example: zfssnapshot zroot/ROOT/arch pre-upgrade
-
-DATASET="$1"
-LABEL="${2:-manual}"
-TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
-SNAPNAME="${DATASET}@${LABEL}_${TIMESTAMP}"
-
-zfs snapshot "$SNAPNAME"
-echo "Created snapshot: $SNAPNAME"
-#+END_SRC
-
-Features to consider:
-- Recursive snapshots (-r flag)
-- Pre-defined labels (pre-upgrade, daily, hourly)
-- Integration with pacman hooks for automatic pre-upgrade snapshots
-- Quiet mode for cron/systemd usage
-
-**** zfsrollback
-Interactive rollback with safety checks:
-#+BEGIN_SRC bash
-#!/bin/bash
-# zfsrollback - Safely rollback to a previous ZFS snapshot
-# Usage: zfsrollback [dataset]
-# Without args, shows all snapshots and prompts for selection
-
-# List snapshots with fzf for selection
-SNAP=$(zfs list -t snapshot -o name,creation -s creation | \
-       fzf --header "Select snapshot to rollback to")
-
-# Confirm before destructive operation
-echo "WARNING: This will destroy all data created after the snapshot"
-read -p "Rollback to $SNAP? [y/N] " confirm
-[[ "$confirm" == "y" ]] && zfs rollback -r "$SNAP"
-#+END_SRC
-
-Features to consider:
-- Show snapshot diff (what will be lost)
-- Create safety snapshot before rollback
-- Boot environment awareness (warn if rolling back root)
-- Clone instead of rollback option (preserve current state)
-
-*** Implementation
-1. Create scripts in custom/zfssnapshot and custom/zfsrollback
-2. Add to build.sh to copy to /usr/local/bin/
-3. Add file_permissions entries in profiledef.sh
-4. Document in RESCUE-GUIDE.txt
-5. Consider systemd timers for automated snapshots
-
-*** Why in archzfs instead of archsetup
-- Rescue scenarios: rollback from live USB when system won't boot
-- Standalone utility: works on any ZFS system, not just archsetup installs
-- ISO always available: no need to install archsetup first
-- Simpler: self-contained scripts vs. dependency on archsetup
-
 ** DONE [#C] Consider Avahi for USB boot disk discoverability
 CLOSED: [2026-01-19 Sun]
 Make the live ISO discoverable on the network by name (e.g., archzfs.local) when booted.
-This would make SSH access easier without needing to find the IP address.
 
 Implemented in commit 0bd172a:
 - Added avahi and nss-mdns packages to ISO
@@ -565,7 +531,6 @@ Added to install-archzfs:
 - Service: avahi-daemon enabled
 
 After installation, system will be accessible as <hostname>.local on the local network.
-Example: ratio.local, framework.local, etc.
 
 ** DONE [#B] Add config file information to README
 Config file format documented in README.org with full reference and examples.
@@ -581,27 +546,6 @@ Implemented fzf for timezone, locale, keymap, disk, RAID, and WiFi selection.
 
 ** DONE [#A] Create comprehensive project documentation (README.org)
 CLOSED: [2026-01-18 Sun 02:01]
-- State "DONE"       from "TODO"       [2026-01-18 Sun 02:01]
-*** Proposed sections in order
-1. Overview - What this project is
-2. Features - Key capabilities
-3. Quick Start - Minimal steps to build/boot/install
-4. Prerequisites - Arch Linux host, sudo, dependencies
-5. Building the ISO - build.sh usage and output
-6. Project Structure - File/script locations and descriptions
-7. Testing with VMs - test-vm.sh options, SSH access, multi-disk
-8. Development Workflow - Rollback to genesis, re-run VM, iterative testing
-9. Installation Walkthrough - fzf interface, RAID options, each step explained
-10. Bare Metal Installation - Laptop/server installs, WiFi, SSH access after reboot
-11. Post-Installation - Genesis snapshot, rollback script, archsetup
-12. Keeping Up-to-Date - Rebuilding for new kernel/ZFS versions
-13. Troubleshooting - Common pitfalls, known issues, tips
-14. Links - archzfs.com, ZFS documentation, Arch Wiki
-15. License - GPL
-
-*** Also needed
-- Add GPL header to all scripts (build.sh, install-archzfs, test-vm.sh)
-- Create LICENSE file in project root
 
 ** DONE [#C] Add date/timestamp to install-archzfs log
 Log filename now includes timestamp: /tmp/install-archzfs-YYYY-MM-DD-HH-MM-SS.log
