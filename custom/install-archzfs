@@ -810,6 +810,13 @@ create_zfs_pool() {
     fi
 
     info "ZFS pool created successfully."
+
+    # Set cachefile property - required for initramfs ZFS hook to import pool at boot
+    # Without this, mkinitcpio won't include zpool.cache and boot will fail with
+    # "cannot import '(null)': no such pool available"
+    info "Setting pool cachefile for boot..."
+    zpool set cachefile=/etc/zfs/zpool.cache "$POOL_NAME"
+
     zpool status "$POOL_NAME"
 }
 
