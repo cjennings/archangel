@@ -457,12 +457,64 @@ CONF"
     fi
     $VERBOSE && info "Pool cachefile property set correctly"
 
+    # Check zpool.cache is in initramfs (required for boot)
+    local initramfs_cache=$(ssh_cmd "lsinitcpio /boot/initramfs-linux-lts.img 2>/dev/null | grep zpool.cache" 2>/dev/null)
+    if [[ -z "$initramfs_cache" ]]; then
+        fail "$test_name: zpool.cache missing from initramfs"
+        cleanup
+        return 1
+    fi
+    $VERBOSE && info "zpool.cache present in initramfs"
+
     # Check kernel
     local kernel=$(ssh_cmd "uname -r" 2>/dev/null)
     if [[ "$kernel" != *"lts"* ]]; then
         warn "Kernel is not LTS: $kernel"
     fi
     $VERBOSE && info "Kernel: $kernel"
+
+    # Reboot test - verify system comes back up cleanly
+    info "Testing reboot..."
+    ssh_cmd "reboot" 2>/dev/null || true
+
+    # Wait for SSH to go down (system is rebooting)
+    local down_timeout=30
+    local down_start=$(date +%s)
+    while ssh_cmd "echo up" &>/dev/null; do
+        sleep 1
+        local elapsed=$(($(date +%s) - down_start))
+        if [[ $elapsed -gt $down_timeout ]]; then
+            warn "System didn't go down for reboot within ${down_timeout}s"
+            break
+        fi
+    done
+    $VERBOSE && info "System went down for reboot"
+
+    # Wait for SSH to come back up
+    local reboot_timeout=120
+    local reboot_start=$(date +%s)
+    while ! ssh_cmd "echo up" &>/dev/null; do
+        sleep 2
+        local elapsed=$(($(date +%s) - reboot_start))
+        if [[ $elapsed -gt $reboot_timeout ]]; then
+            fail "$test_name: System failed to come back after reboot (timeout ${reboot_timeout}s)"
+            cleanup
+            return 1
+        fi
+        $VERBOSE && printf "."
+    done
+    $VERBOSE && echo ""
+    local reboot_elapsed=$(($(date +%s) - reboot_start))
+    info "System rebooted successfully (${reboot_elapsed}s)"
+
+    # Verify ZFS pool is healthy after reboot
+    local post_reboot_status=$(ssh_cmd "zpool status -x zroot" 2>/dev/null)
+    if [[ "$post_reboot_status" != *"healthy"* && "$post_reboot_status" != *"all pools are healthy"* ]]; then
+        fail "$test_name: ZFS pool not healthy after reboot: $post_reboot_status"
+        cleanup
+        return 1
+    fi
+    $VERBOSE && info "ZFS pool healthy after reboot"
 
     # Shutdown
     ssh_cmd "poweroff" 2>/dev/null || true
