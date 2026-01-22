@@ -23,8 +23,10 @@ This is wrong for ZFS because:
 
 Correct HOOKS for ZFS:
 #+begin_example
-HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)
+HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)
 #+end_example
+
+Note: =autodetect= is deliberately omitted. During installation from a live ISO, autodetect would detect the live ISO's hardware, not the target machine's hardware. This could result in missing NVMe, AHCI, or other storage drivers on the installed system.
 
 ** Issue 2: Leftover archiso.conf drop-in
 
@@ -77,9 +79,9 @@ fallback_options="-S autodetect"
 
 The script needs to, after arch-chroot setup:
 
-1. *Set correct mkinitcpio.conf HOOKS*:
+1. *Set correct mkinitcpio.conf HOOKS* (no autodetect - see note above):
    #+begin_src bash
-   sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
+   sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
    #+end_src
 
 2. *Remove archiso drop-in*:
@@ -118,8 +120,8 @@ zpool import -f zroot
 zfs mount zroot/ROOT/default
 mount /dev/nvme0n1p1 /boot  # adjust device as needed
 
-# Fix mkinitcpio.conf
-sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /etc/mkinitcpio.conf
+# Fix mkinitcpio.conf (no autodetect - detects live ISO hardware, not target)
+sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /etc/mkinitcpio.conf
 
 # Remove archiso drop-in
 rm -f /etc/mkinitcpio.conf.d/archiso.conf
