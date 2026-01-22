@@ -1023,6 +1023,30 @@ configure_initramfs() {
 
     cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
 
+    # CRITICAL: Remove archiso drop-in that overrides mkinitcpio.conf HOOKS
+    # The archiso.conf contains live ISO-specific hooks that are incompatible with ZFS
+    # If not removed, it overrides our HOOKS setting and breaks boot after kernel updates
+    if [[ -f /mnt/etc/mkinitcpio.conf.d/archiso.conf ]]; then
+        info "Removing archiso drop-in config..."
+        rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+    fi
+
+    # CRITICAL: Fix linux-lts preset file
+    # The preset from archiso uses archiso-specific config that breaks mkinitcpio -P
+    info "Creating proper linux-lts preset..."
+    cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'PRESET_EOF'
+# mkinitcpio preset file for linux-lts
+
+PRESETS=(default fallback)
+
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+default_image="/boot/initramfs-linux-lts.img"
+
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+PRESET_EOF
+
     # Check for AMD ISP (Image Signal Processor) firmware needs
     # ISP is used for camera processing on AMD APUs (Strix, Strix Halo, etc.)
     # The firmware must be in initramfs since amdgpu loads before root is mounted
@@ -1043,9 +1067,11 @@ EOF
     fi
 
     # Configure hooks for ZFS
+    # - Use udev (not systemd): ZFS hook is busybox-based and incompatible with systemd init
     # - Remove autodetect: it filters modules based on live ISO hardware, not target
     #   This ensures NVMe, AHCI, and other storage drivers are always included
     # - Remove fsck: ZFS doesn't use it, avoids confusing error messages
+    # - Add zfs: required for ZFS root boot
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
 
     # Get the installed kernel version (not the running kernel)

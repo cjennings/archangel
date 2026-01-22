@@ -1,0 +1,159 @@
+#+TITLE: install-archzfs leaves broken mkinitcpio configuration
+#+DATE: 2026-01-22
+
+* Problem Summary
+
+After installing Arch Linux with ZFS via install-archzfs, the system has incorrect mkinitcpio configuration that can cause boot failures. The configuration issues are latent - the system may boot initially but will fail after any mkinitcpio regeneration (kernel updates, manual rebuilds, etc.).
+
+* Root Cause
+
+The install-archzfs script does not properly configure mkinitcpio for a ZFS boot environment. Three issues were identified:
+
+** Issue 1: Wrong HOOKS in mkinitcpio.conf
+
+The installed system had:
+#+begin_example
+HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems fsck)
+#+end_example
+
+This is wrong for ZFS because:
+- Uses =systemd= init hook, but ZFS hook is busybox-based and incompatible with systemd init
+- Missing =zfs= hook entirely
+- Has =fsck= hook which is unnecessary/wrong for ZFS
+
+Correct HOOKS for ZFS:
+#+begin_example
+HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)
+#+end_example
+
+** Issue 2: Leftover archiso.conf drop-in
+
+The file =/etc/mkinitcpio.conf.d/archiso.conf= was left over from the live ISO:
+#+begin_example
+HOOKS=(base udev microcode modconf kms memdisk archiso archiso_loop_mnt archiso_pxe_common archiso_pxe_nbd archiso_pxe_http archiso_pxe_nfs block filesystems keyboard)
+COMPRESSION="xz"
+COMPRESSION_OPTIONS=(-9e)
+#+end_example
+
+This drop-in OVERRIDES the HOOKS setting in mkinitcpio.conf, so even if mkinitcpio.conf were correct, this file would break it.
+
+** Issue 3: Wrong preset file
+
+The file =/etc/mkinitcpio.d/linux-lts.preset= contained archiso-specific configuration:
+#+begin_example
+# mkinitcpio preset file for the 'linux-lts' package on archiso
+
+PRESETS=('archiso')
+
+ALL_kver='/boot/vmlinuz-linux-lts'
+archiso_config='/etc/mkinitcpio.conf.d/archiso.conf'
+
+archiso_image="/boot/initramfs-linux-lts.img"
+#+end_example
+
+Should be:
+#+begin_example
+# mkinitcpio preset file for linux-lts
+
+PRESETS=(default fallback)
+
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+default_image="/boot/initramfs-linux-lts.img"
+
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+#+end_example
+
+* How This Manifests
+
+1. Fresh install appears to work (initramfs built during install has ZFS support somehow)
+2. System boots fine initially
+3. Kernel update or manual =mkinitcpio -P= rebuilds initramfs
+4. New initramfs lacks ZFS support due to wrong config
+5. Next reboot fails with "cannot import pool" or "failed to mount /sysroot"
+
+* Fix Required in install-archzfs
+
+The script needs to, after arch-chroot setup:
+
+1. *Set correct mkinitcpio.conf HOOKS*:
+   #+begin_src bash
+   sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
+   #+end_src
+
+2. *Remove archiso drop-in*:
+   #+begin_src bash
+   rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+   #+end_src
+
+3. *Create proper preset file*:
+   #+begin_src bash
+   cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+   # mkinitcpio preset file for linux-lts
+
+   PRESETS=(default fallback)
+
+   ALL_kver="/boot/vmlinuz-linux-lts"
+
+   default_image="/boot/initramfs-linux-lts.img"
+
+   fallback_image="/boot/initramfs-linux-lts-fallback.img"
+   fallback_options="-S autodetect"
+   EOF
+   #+end_src
+
+4. *Rebuild initramfs after fixing config*:
+   #+begin_src bash
+   arch-chroot /mnt mkinitcpio -P
+   #+end_src
+
+* Recovery Procedure (for affected systems)
+
+Boot from archzfs live ISO, then:
+
+#+begin_src bash
+# Import and mount ZFS
+zpool import -f zroot
+zfs mount zroot/ROOT/default
+mount /dev/nvme0n1p1 /boot  # adjust device as needed
+
+# Fix mkinitcpio.conf
+sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /etc/mkinitcpio.conf
+
+# Remove archiso drop-in
+rm -f /etc/mkinitcpio.conf.d/archiso.conf
+
+# Fix preset (adjust for your kernel: linux, linux-lts, linux-zen, etc.)
+cat > /etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+PRESETS=(default fallback)
+ALL_kver="/boot/vmlinuz-linux-lts"
+default_image="/boot/initramfs-linux-lts.img"
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+EOF
+
+# Mount system directories for chroot
+mount --rbind /dev /dev
+mount --rbind /sys /sys
+mount --rbind /proc /proc
+mount --rbind /run /run
+
+# Rebuild initramfs
+chroot / mkinitcpio -P
+
+# Reboot
+reboot
+#+end_src
+
+* Machine Details (ratio)
+
+- Two NVMe drives in ZFS mirror (nvme0n1, nvme1n1)
+- Pool: zroot
+- Root dataset: zroot/ROOT/default
+- Kernel: linux-lts 6.12.66-1
+- Boot partition: /dev/nvme0n1p1 (FAT32, mounted at /boot)
+
+* Related Information
+
+The immediate trigger for discovering this was a system freeze during mkinitcpio regeneration. That freeze was caused by the AMD GPU VPE power gating bug (separate issue - see archsetup NOTES.org for details). However, the system's inability to boot afterward exposed these latent mkinitcpio configuration problems.
