@@ -173,3 +173,69 @@ The TEST kernel (linux 6.15.2) is installed and available in GRUB Advanced menu.
 - Testing newer kernel features
 
 Current recommendation: Use linux-lts for stability, TEST kernel for experimentation.
+
+* Post-Fix Configuration (Phase 6)
+
+After boot was working, made kernel 6.15.2 the default with a clean GRUB menu.
+
+** Made 6.15.2 Default
+
+1. Created custom GRUB script /etc/grub.d/09_custom_kernels
+2. Added clean menu entries:
+   - "Linux 6.15.2 (default)"
+   - "Linux LTS 6.12.66 (fallback)"
+3. Set GRUB_DEFAULT="linux-6.15.2"
+
+** Pinned Kernel
+
+Added to /etc/pacman.conf:
+#+BEGIN_SRC
+IgnorePkg = linux
+#+END_SRC
+
+This prevents pacman from upgrading linux package until manually unpinned.
+
+** GRUB UUID Issue
+
+Initial custom script used wrong boot partition UUID:
+- nvme0n1p1: 6A4B-47A4 (wrong - got this from lsblk on first NVMe)
+- nvme1n1p1: 6A4A-93B1 (correct - actually mounted at /boot)
+
+Fix: Updated /etc/grub.d/09_custom_kernels to use 6A4A-93B1
+
+** Final GRUB Menu
+
+#+BEGIN_SRC
+1. Linux 6.15.2 (default)      <- Boots automatically
+2. Linux LTS 6.12.66 (fallback)
+3. Arch Linux (ZFS) Linux      <- Auto-generated (ignored)
+4. Advanced options...
+5. UEFI Firmware Settings
+6. ZFS Snapshots
+#+END_SRC
+
+** SSH Keys
+
+Configured SSH key authentication for cjennings@ratio.local to simplify remote access.
+Password auth (sshpass) was unreliable from Claude's session.
+
+* Final System State
+
+#+BEGIN_SRC
+Hostname: ratio.local
+Kernel: 6.15.2-arch1-1 (default)
+Fallback: 6.12.66-1-lts
+Firmware: linux-firmware 20260110-1
+ZFS: All pools healthy, 11 datasets mounted
+Boot: Custom GRUB menu with clean entries
+Kernel pinned: Yes (IgnorePkg = linux)
+#+END_SRC
+
+* When to Unpin Kernel
+
+Unpin linux package when linux-lts version >= 6.15:
+#+BEGIN_SRC bash
+sudo sed -i 's/^IgnorePkg = linux/#IgnorePkg = linux/' /etc/pacman.conf
+#+END_SRC
+
+Then optionally switch back to LTS as default for stability.
