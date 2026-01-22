@@ -420,8 +420,7 @@ mv documents/2025-10-15-invoice.pdf documents/2025-10-15-vendor-invoice.pdf
 
 1. **Read this file (protocols.org)** - You're doing this now
 2. **Read NOTES.org** - For project-specific context, reminders, and history
-3. **Read PRINCIPLES.org** - For behavioral lessons from retrospectives
-4. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
+3. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
 
 **Do NOT ask** if Craig wants to run the session-start workflow. Just do it automatically and report the results.
 
