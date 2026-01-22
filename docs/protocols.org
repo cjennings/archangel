@@ -45,31 +45,62 @@ This applies to:
 
 Do NOT estimate, guess, or rely on memory. Just run the command. It takes one second and prevents errors.
 
-** CRITICAL: Session Context File (docs/session-context.org)
+** !!!!! SESSION CONTEXT FILE - READ THIS EVERY TIME !!!!!
 
-***THIS IS NON-NEGOTIABLE. FAILURE TO MAINTAIN THIS FILE CAUSES LOST WORK.***
+#+begin_example
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  STOP. THIS IS THE MOST IMPORTANT PROTOCOL IN THIS ENTIRE FILE.              ║
+║                                                                              ║
+║  UPDATE docs/session-context.org EVERY OTHER EXCHANGE.                       ║
+║                                                                              ║
+║  NOT "when convenient." NOT "when there's a lot to write." EVERY OTHER ONE.  ║
+║  Count: 1, 2, UPDATE. 1, 2, UPDATE. 1, 2, UPDATE.                            ║
+║                                                                              ║
+║  FAILURE TO DO THIS HAS ALREADY CAUSED LOST WORK. DON'T LET IT HAPPEN AGAIN. ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+#+end_example
 
-The session context file is your lifeline for crash recovery. Without it, interrupted sessions lose all context.
+*** Why This Is Here In Giant Letters
+
+On 2026-01-22, a session crashed and 20+ minutes of detailed workflow planning was lost because the session context file wasn't updated. The information was gone forever. This protocol exists to prevent that from EVER happening again.
 
 *** Location
-=docs/session-context.org= (always this exact path)
+=docs/session-context.org= (always this exact path, every project)
 
-*** When to Update - EVERY OTHER EXCHANGE
-After every other interaction with Craig, update the session context file. This is not optional. Set a mental counter: respond, respond, UPDATE FILE, respond, respond, UPDATE FILE.
+*** UPDATE FREQUENCY: EVERY. OTHER. EXCHANGE.
 
-*** What to Include
+This means:
+- Craig says something, you respond (1)
+- Craig says something, you respond (2) → **UPDATE THE FILE NOW**
+- Craig says something, you respond (1)
+- Craig says something, you respond (2) → **UPDATE THE FILE NOW**
+
+"Exchange" = one user message + one Claude response. After TWO of these, update the file. No exceptions.
+
+*** What Counts as "Updating"
+
+Actually write to the file using the Edit or Write tool. Not "I should update it." Not "I'll update it soon." ACTUALLY WRITE TO THE FILE.
+
+Include:
 - Current task/goal being worked on
 - Key decisions made this session
-- Data collected (vitals, measurements, etc.)
-- Files modified
+- Workflows being designed (capture the FULL details)
+- Data collected (vitals, measurements, paths, commands, etc.)
+- Files modified or created
 - Next steps planned
-- Any context needed to resume if session crashes
+- ANY context needed to resume if session crashes RIGHT NOW
 
-*** Why This Matters
-If the power goes out, the network drops, or Claude crashes, the ONLY way to recover context is this file. Session history in NOTES.org is written at wrap-up - if we never reach wrap-up, that context is LOST unless it's in session-context.org.
+*** Why This Is Non-Negotiable
+
+If the machine freezes, the network drops, or Claude crashes:
+- Session history in NOTES.org? NOT WRITTEN YET (only at wrap-up)
+- Your memory of the conversation? GONE
+- The ONLY way to recover context? THIS FILE
+
+If you don't update it, the work is LOST. Period. There is no recovery.
 
 *** At Session Start - CHECK FOR THIS FILE
-If =docs/session-context.org= exists when starting a new session, it means the previous session was interrupted. Read it immediately to recover context.
+If =docs/session-context.org= exists when starting a new session, it means the previous session was interrupted. Read it IMMEDIATELY to recover context.
 
 ** Before Compacting
 If you know you're about to compact, update the session context file FIRST, with enough detail that you can pick up the discussion without having lost any essential information.
@@ -389,7 +420,8 @@ mv documents/2025-10-15-invoice.pdf documents/2025-10-15-vendor-invoice.pdf
 
 1. **Read this file (protocols.org)** - You're doing this now
 2. **Read NOTES.org** - For project-specific context, reminders, and history
-3. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
+3. **Read PRINCIPLES.org** - For behavioral lessons from retrospectives
+4. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
 
 **Do NOT ask** if Craig wants to run the session-start workflow. Just do it automatically and report the results.
 
