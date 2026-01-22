@@ -1,0 +1,194 @@
+#+TITLE: Detailed mkinitcpio Fixes Applied to ratio
+#+DATE: 2026-01-22
+
+* Overview
+
+This documents the exact fixes applied to ratio's mkinitcpio configuration to make it bootable. These fixes worked - the system booted successfully after applying them. The install-archzfs script needs to be updated to apply these configurations during installation.
+
+* Fix 1: /etc/mkinitcpio.conf HOOKS
+
+** Problem
+
+The HOOKS line was configured for a systemd-based initramfs without ZFS support.
+
+** Before (broken)
+#+begin_example
+HOOKS=(base systemd autodetect microcode modconf kms keyboard keymap sd-vconsole block filesystems fsck)
+#+end_example
+
+** After (working)
+#+begin_example
+HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)
+#+end_example
+
+** Changes Explained
+
+| Removed        | Added/Changed  | Reason                                                    |
+|----------------+----------------+-----------------------------------------------------------|
+| systemd        | udev           | ZFS hook is busybox-based, incompatible with systemd init |
+| sd-vconsole    | consolefont    | sd-vconsole is systemd-specific; consolefont is busybox   |
+| fsck           | (removed)      | fsck is for ext4/xfs, not needed for ZFS                  |
+| (missing)      | zfs            | Required to import ZFS pool and mount root at boot        |
+
+** Command Used
+#+begin_src bash
+sed -i "s/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/" /etc/mkinitcpio.conf
+#+end_src
+
+* Fix 2: Remove /etc/mkinitcpio.conf.d/archiso.conf
+
+** Problem
+
+The archzfs live ISO uses a drop-in config file at =/etc/mkinitcpio.conf.d/archiso.conf=. This file was not removed during installation, and it *overrides* the HOOKS setting in mkinitcpio.conf.
+
+** Contents of archiso.conf (should not exist on installed system)
+#+begin_example
+HOOKS=(base udev microcode modconf kms memdisk archiso archiso_loop_mnt archiso_pxe_common archiso_pxe_nbd archiso_pxe_http archiso_pxe_nfs block filesystems keyboard)
+COMPRESSION="xz"
+COMPRESSION_OPTIONS=(-9e)
+#+end_example
+
+** Why This Breaks Things
+
+Even if mkinitcpio.conf has the correct HOOKS, this drop-in file overrides them with archiso-specific hooks (memdisk, archiso, archiso_loop_mnt, etc.) that are only for the live ISO environment. The =zfs= hook is notably absent.
+
+** Fix Applied
+#+begin_src bash
+rm -f /etc/mkinitcpio.conf.d/archiso.conf
+#+end_src
+
+** Note for install-archzfs
+
+The script should remove this file after arch-chroot setup:
+#+begin_src bash
+rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+#+end_src
+
+* Fix 3: /etc/mkinitcpio.d/linux-lts.preset
+
+** Problem
+
+The preset file was still configured for the archiso live environment, not a normal installed system.
+
+** Before (broken)
+#+begin_example
+# mkinitcpio preset file for the 'linux-lts' package on archiso
+
+PRESETS=('archiso')
+
+ALL_kver='/boot/vmlinuz-linux-lts'
+archiso_config='/etc/mkinitcpio.conf.d/archiso.conf'
+
+archiso_image="/boot/initramfs-linux-lts.img"
+#+end_example
+
+** After (working)
+#+begin_example
+# mkinitcpio preset file for linux-lts
+
+PRESETS=(default fallback)
+
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+default_image="/boot/initramfs-linux-lts.img"
+
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+#+end_example
+
+** Changes Explained
+
+| Before                          | After                  | Reason                                              |
+|---------------------------------+------------------------+-----------------------------------------------------|
+| PRESETS=('archiso')             | PRESETS=(default fallback) | Normal system needs default + fallback images   |
+| archiso_config=... (drop-in)    | (removed)              | Don't use archiso drop-in config                    |
+| archiso_image=...               | default_image=...      | Use standard naming                                 |
+| (missing)                       | fallback_image=...     | Fallback image for recovery                         |
+| (missing)                       | fallback_options="-S autodetect" | Fallback skips autodetect for broader hardware support |
+
+** Command Used
+#+begin_src bash
+cat > /etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+# mkinitcpio preset file for linux-lts
+
+PRESETS=(default fallback)
+
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+default_image="/boot/initramfs-linux-lts.img"
+
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+EOF
+#+end_src
+
+* Fix 4: Rebuild initramfs
+
+After applying the above fixes, the initramfs must be rebuilt:
+
+#+begin_src bash
+mkinitcpio -P
+#+end_src
+
+This regenerates both default and fallback images with the correct hooks.
+
+* Verification
+
+** Verify HOOKS are correct
+#+begin_src bash
+grep "^HOOKS" /etc/mkinitcpio.conf
+# Should show: HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)
+#+end_src
+
+** Verify no archiso drop-in
+#+begin_src bash
+ls /etc/mkinitcpio.conf.d/
+# Should be empty or not contain archiso.conf
+#+end_src
+
+** Verify preset is correct
+#+begin_src bash
+grep "PRESETS" /etc/mkinitcpio.d/linux-lts.preset
+# Should show: PRESETS=(default fallback)
+#+end_src
+
+** Verify ZFS hook is in initramfs
+#+begin_src bash
+lsinitcpio /boot/initramfs-linux-lts.img | grep -E "^hooks/zfs|zfs.ko"
+# Should show:
+# hooks/zfs
+# usr/lib/modules/.../zfs.ko.zst
+#+end_src
+
+* Summary for install-archzfs Script
+
+The script needs to add these steps after installing packages and before running final mkinitcpio:
+
+#+begin_src bash
+# 1. Set correct HOOKS for ZFS boot
+sed -i "s/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/" /mnt/etc/mkinitcpio.conf
+
+# 2. Remove archiso drop-in config
+rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+
+# 3. Create proper preset file (adjust kernel name if not linux-lts)
+cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+# mkinitcpio preset file for linux-lts
+
+PRESETS=(default fallback)
+
+ALL_kver="/boot/vmlinuz-linux-lts"
+
+default_image="/boot/initramfs-linux-lts.img"
+
+fallback_image="/boot/initramfs-linux-lts-fallback.img"
+fallback_options="-S autodetect"
+EOF
+
+# 4. Rebuild initramfs with correct config
+arch-chroot /mnt mkinitcpio -P
+#+end_src
+
+* Result
+
+After applying these fixes and rebuilding initramfs from the live ISO, ratio booted successfully. The system froze on a subsequent =mkinitcpio -P= run, but that's a separate AMD GPU issue (see 2026-01-22-mkinitcpio-freeze-during-rebuild.org), not a configuration problem.

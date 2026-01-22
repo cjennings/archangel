@@ -1,5 +1,39 @@
 * Open Work
 
+** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
+After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
+leaves incorrect mkinitcpio configuration from the live ISO environment.
+
+See [[file:docs/2026-01-22-mkinitcpio-config-boot-failure.org][bug report]] for full details.
+
+*** Three issues to fix
+
+1. *Wrong HOOKS in mkinitcpio.conf* - uses systemd init (incompatible with ZFS hook), missing zfs hook
+   #+BEGIN_SRC bash
+   sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
+   #+END_SRC
+
+2. *Leftover archiso.conf drop-in* - overrides HOOKS setting
+   #+BEGIN_SRC bash
+   rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+   #+END_SRC
+
+3. *Wrong preset file* - has archiso configuration instead of standard
+   #+BEGIN_SRC bash
+   cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+   PRESETS=(default fallback)
+   ALL_kver="/boot/vmlinuz-linux-lts"
+   default_image="/boot/initramfs-linux-lts.img"
+   fallback_image="/boot/initramfs-linux-lts-fallback.img"
+   fallback_options="-S autodetect"
+   EOF
+   #+END_SRC
+
+4. *Rebuild initramfs after fixing*
+   #+BEGIN_SRC bash
+   arch-chroot /mnt mkinitcpio -P
+   #+END_SRC
+
 ** TODO [#A] Build AUR packages and include in ISO as local repository
 Build AUR packages during ISO creation and include them in a local pacman repository.
 This allows AUR software to work both in the live environment AND be installable to target systems.
@@ -143,6 +177,59 @@ fi
 - arch-wiki-docs: ~500MB compressed
 - arch-wiki-lite: ~200MB (text only, smaller)
 - Could include both for ~600MB total
+
+** TODO [#A] Fix ZFS rollback breaking boot (/boot not on ZFS)
+ZFS rollbacks can leave the system unbootable because /boot is on a separate EFI partition
+that doesn't get rolled back with the ZFS root filesystem.
+
+*** The Problem
+When rolling back ZFS:
+- /usr/lib/modules/ (kernel modules) gets rolled back
+- /var/lib/pacman/ (package database) gets rolled back
+- Everything else on ZFS root gets rolled back
+
+But /boot (EFI partition) does NOT roll back:
+- Kernel images (vmlinuz-*) remain at newer version
+- Initramfs images remain (may reference missing modules)
+- GRUB config still lists kernels that may not have matching modules
+
+Result: After rollback, GRUB shows kernels that can't boot because their modules
+no longer exist on root. User gets kernel panic or missing module errors.
+
+*** Why This Matters
+- Kernel updates happen frequently and often go unnoticed
+- User does ZFS rollback for unrelated reason
+- System fails to boot with confusing errors
+- Defeats the purpose of ZFS snapshots for easy recovery
+
+*** Solutions
+
+**** Option 1: ZFSBootMenu (Recommended)
+Replace GRUB with ZFSBootMenu which is designed for ZFS boot environments.
+- Boots directly from ZFS snapshots
+- Kernel and initramfs stored on ZFS (rolled back together)
+- Can select boot environment from boot menu
+- See existing task below for implementation details
+
+**** Option 2: Put /boot on ZFS
+- GRUB can read ZFS (with limitations)
+- Requires careful GRUB configuration
+- May have issues with ZFS features GRUB doesn't support
+
+**** Option 3: Sync /boot snapshots with ZFS
+- Script to backup /boot before ZFS snapshot
+- Restore /boot when rolling back ZFS
+- More complex, error-prone
+
+**** Option 4: Always rebuild initramfs after rollback
+- Document this as required step
+- Add helper script to automate
+- Doesn't help if kernel package itself was rolled back
+
+*** References
+- https://zfsbootmenu.org/
+- https://wiki.archlinux.org/title/Install_Arch_Linux_on_ZFS
+- https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/index.html
 
 ** TODO [#A] Integrate ZFSBootMenu as alternative boot manager
 Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs

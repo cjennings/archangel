@@ -1,0 +1,175 @@
+#+TITLE: Ratio Boot Fix Session - 2026-01-22
+#+DATE: 2026-01-22
+#+AUTHOR: Craig Jennings + Claude
+
+* Summary
+
+Successfully diagnosed and fixed boot failures on ratio (Framework Desktop with AMD Ryzen AI Max 300 / Strix Halo GPU). The primary issue was outdated/missing linux-firmware causing the amdgpu driver to hang during boot.
+
+* Hardware
+
+- Machine: Framework Desktop
+- CPU/GPU: AMD Ryzen AI Max 300 (Strix Halo APU, codenamed GFX 1151)
+- Storage: 2x NVMe in ZFS mirror (zroot)
+- Installed via: install-archzfs script from this project
+
+* Initial Symptoms
+
+1. System froze at "triggering udev events..." during boot
+2. Only visible message before freeze: "RDSEED32 is broken" (red herring - just a warning)
+3. Freeze occurred with both linux-lts (6.12.66) and linux (6.15.2) kernels
+4. Blacklisting amdgpu allowed boot to proceed but caused kernel panic (no display = init killed)
+
+* Root Cause
+
+The linux-firmware package was either missing or outdated. Specifically:
+- linux-firmware 20251125 is known to break AMD Strix Halo (GFX 1151)
+- linux-firmware 20260110 contains fixes for Strix Halo stability
+
+Source: Donato Capitella video "ROCm+Linux Support on Strix Halo: It's finally stable in 2026!"
+- Firmware 20251125 completely broke ROCm/GPU on Strix Halo
+- Firmware 20260110+ restores functionality
+
+* Troubleshooting Timeline
+
+** Phase 1: Initial Diagnosis
+
+- SSH'd to ratio via archzfs live ISO
+- Found mkinitcpio configuration issues (separate bug)
+- Fixed mkinitcpio.conf HOOKS and removed archiso.conf drop-in
+- System still froze after fixes
+
+** Phase 2: Kernel Investigation
+
+- Researched AMD Strix Halo issues on Framework community forums
+- Found reports of VPE (Video Processing Engine) idle timeout bug
+- Attempted kernel parameter workarounds:
+  - amdgpu.pg_mask=0 (disable power gating) - didn't help
+  - amdgpu.cwsr_enable=0 (disable compute wavefront save/restore) - not tested
+- Installed kernel 6.15.2 from Arch Linux Archive (has VPE fix)
+- Installed matching zfs-linux package for 6.15.2
+- System still froze
+
+** Phase 3: ZFS Rollback Complications
+
+- Rolled back to pre-kernel-switch ZFS snapshot
+- Discovered /boot is NOT on ZFS (EFI partition)
+- Rollback caused mismatch: root filesystem rolled back, but /boot kept newer kernels
+- Kernel 6.15.2 panicked because its modules didn't exist on rolled-back root
+- Documented this as a fundamental ZFS-on-root issue (see todo.org)
+
+** Phase 4: Firmware Discovery
+
+- Found video transcript explaining Strix Halo firmware requirements
+- Discovered linux-firmware package was not installed (orphaned files from rollback)
+- Repo had linux-firmware 20260110-1 (the fixed version)
+- Installed linux-firmware 20260110-1
+
+** Phase 5: Boot Success with Secondary Issues
+
+After firmware install, encountered additional issues:
+
+1. *Hostid mismatch*: Pool showed "previously in use from another system"
+   - Fix: Clean export from live ISO (zpool export zroot)
+
+2. *ZFS mountpoint=legacy*: Root dataset had legacy mountpoint from chroot work
+   - Fix: zfs set mountpoint=/ zroot/ROOT/default
+
+3. *ZFS mountpoints with /mnt prefix*: All child datasets had /mnt prefix
+   - Cause: zpool import -R /mnt persisted mountpoint changes
+   - Fix: Reset all mountpoints (zfs set mountpoint=/home zroot/home, etc.)
+
+* Final Working Configuration
+
+#+BEGIN_SRC
+Kernel: linux-lts 6.12.66-1-lts
+Firmware: linux-firmware 20260110-1
+ZFS: zfs-linux-lts (DKMS built for 6.12.66)
+Boot: GRUB with spl.spl_hostid=0x564478f3
+#+END_SRC
+
+* Key Learnings
+
+** 1. Firmware Matters for AMD APUs
+
+The linux-firmware package is critical for AMD integrated GPUs. Strix Halo specifically requires firmware 20260110 or newer. The kernel version (6.12 vs 6.15) was less important than having correct firmware.
+
+** 2. ZFS Rollback + Separate /boot = Danger
+
+When /boot is on a separate EFI partition (not ZFS):
+- ZFS rollback doesn't affect /boot
+- Kernel images remain at newer version
+- Modules on root get rolled back
+- Result: Boot failure or kernel panic
+
+Solutions:
+- Use ZFSBootMenu (stores kernel/initramfs on ZFS)
+- Put /boot on ZFS (GRUB can read it)
+- Always rebuild initramfs after rollback
+- Sync /boot backups with ZFS snapshots
+
+** 3. zpool import -R Persists Mountpoints
+
+Using =zpool import -R /mnt= for chroot work can permanently change dataset mountpoints. The -R flag sets altroot, but if you then modify datasets, those changes persist with the /mnt prefix.
+
+Fix after chroot work:
+#+BEGIN_SRC bash
+zfs set mountpoint=/ zroot/ROOT/default
+zfs set mountpoint=/home zroot/home
+# ... etc for all datasets
+#+END_SRC
+
+** 4. Hostid Consistency Required
+
+ZFS pools track which system last accessed them. If hostid changes (e.g., between live ISO and installed system), import fails with "pool was previously in use from another system."
+
+Solutions:
+- Clean export before switching systems (zpool export)
+- Force import (zpool import -f)
+- Ensure consistent hostid via /etc/hostid and spl.spl_hostid kernel parameter
+
+* Files Modified on Ratio
+
+- /etc/mkinitcpio.conf - Fixed HOOKS
+- /etc/mkinitcpio.conf.d/archiso.conf - Removed (was overriding HOOKS)
+- /etc/default/grub - GRUB_TIMEOUT=5 (was 0)
+- /boot/grub/grub.cfg - Regenerated, added TEST label to mainline kernel
+- /etc/hostid - Regenerated to match GRUB hostid parameter
+- ZFS dataset mountpoints - Reset from /mnt/* to /*
+
+* Packages Installed
+
+- linux-firmware 20260110-1 (critical fix)
+- linux 6.15.2 + zfs-linux (available as TEST kernel, not needed for boot)
+- Various system packages updated during troubleshooting
+
+* Resources Referenced
+
+** Framework Community Posts
+- https://community.frame.work/t/attn-critical-bugs-in-amdgpu-driver-included-with-kernel-6-18-x-6-19-x/79221
+- https://community.frame.work/t/fyi-linux-firmware-amdgpu-20251125-breaks-rocm-on-ai-max-395-8060s/78554
+- https://github.com/FrameworkComputer/SoftwareFirmwareIssueTracker/issues/162
+
+** Donato Capitella Video
+- Title: "ROCm+Linux Support on Strix Halo: It's finally stable in 2026!"
+- Key info: Firmware 20260110+ required, kernel 6.18.4+ for ROCm stability
+- Transcript saved: assets/Donato Capitella-ROCm+Linux Support on Strix Halo...txt
+
+** Other
+- Arch Linux Archive (for kernel 6.15.2 package)
+- Jeff Geerling blog (VRAM allocation on AMD APUs)
+
+* TODO Items Created
+
+Added to todo.org:
+- [#A] Fix ZFS rollback breaking boot (/boot not on ZFS)
+- Links to existing [#A] Integrate ZFSBootMenu task
+
+* Test Kernel Available
+
+The TEST kernel (linux 6.15.2) is installed and available in GRUB Advanced menu. It has matching zfs-linux modules and should work if needed. The mainline kernel may be useful for:
+- ROCm/AI workloads (combined with ROCm 7.2+ when released)
+- Future GPU stability improvements
+- Testing newer kernel features
+
+Current recommendation: Use linux-lts for stability, TEST kernel for experimentation.
