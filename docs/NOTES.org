@@ -329,6 +329,37 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-22 Thu @ 15:44 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Diagnosed system freeze on ratio - same VPE power gating bug from earlier
+- Researched VPE_IDLE_TIMEOUT patch status - NOT merged, AMD maintainer skeptical
+- Discovered kernel 6.18.x has critical CWSR bugs for Strix Halo - do NOT upgrade
+- Identified two workarounds: amdgpu.pg_mask=0 and amdgpu.cwsr_enable=0
+- Verified neither workaround is currently applied on ratio
+- Created detailed fix instructions in inbox/instructions.txt for live ISO application
+
+*Key Decisions:*
+- Stay on kernel 6.15.2 (pinned) - 6.18.x has worse bugs for Strix Halo
+- Apply both pg_mask=0 and cwsr_enable=0 workarounds
+- Will apply fixes from velox via live ISO (mkinitcpio triggers freeze on live system)
+
+*Key Technical Findings:*
+- VPE_IDLE_TIMEOUT patch (1s→2s) submitted Aug 2025 but not merged
+- Framework Community recommends 6.15.x-6.17.x for Strix Halo, avoid 6.18+
+- Current ratio state: pg_mask=4294967295 (bad), cwsr_enable=1 (bad)
+
+*Files Created:*
+- [[file:../inbox/instructions.txt][inbox/instructions.txt]] - Detailed fix instructions for live ISO
+
+*Next Steps:*
+- Boot ratio from archzfs live ISO (from velox)
+- Apply both workarounds per inbox/instructions.txt
+- Rebuild initramfs from live ISO
+- Verify fixes active after reboot
+
 *** 2026-01-22 Thu @ 15:02 -0600
 
 *Status:* COMPLETE

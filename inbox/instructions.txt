@@ -1,0 +1,224 @@
+AMD Strix Halo VPE/CWSR Freeze Fix Instructions
+===============================================
+Created: 2026-01-22
+Machine: ratio (Framework Desktop, AMD Ryzen AI Max 300)
+
+PROBLEM SUMMARY
+---------------
+Two AMD GPU bugs cause random freezes on Strix Halo:
+
+1. VPE Power Gating Bug
+   - VPE (Video Processing Engine) tries to power gate after 1 second idle
+   - SMU hangs, system freezes
+   - Fix: amdgpu.pg_mask=0 (disables power gating)
+
+2. CWSR Bug (Compute Wavefront Save/Restore)
+   - MES firmware hang under compute loads
+   - Causes GPU reset loops and crashes
+   - Fix: amdgpu.cwsr_enable=0
+
+Current state on ratio:
+- pg_mask = 4294967295 (power gating ENABLED - bad)
+- cwsr_enable = 1 (CWSR ENABLED - bad)
+- Neither workaround is applied
+
+
+PART 1: GRUB CMDLINE FIX (Quick, can do now)
+============================================
+This adds the parameters to the kernel command line via GRUB.
+Can be done on the running system, takes effect on next boot.
+
+Step 1: Edit GRUB defaults
+--------------------------
+sudo nano /etc/default/grub
+
+Find the line:
+GRUB_CMDLINE_LINUX_DEFAULT="..."
+
+Add these parameters (keep existing ones):
+GRUB_CMDLINE_LINUX_DEFAULT="... amdgpu.pg_mask=0 amdgpu.cwsr_enable=0"
+
+Example - if current line is:
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=2 rd.systemd.show_status=auto rd.udev.log_level=2 nvme.noacpi=1 mem_sleep_default=deep nowatchdog random.trust_cpu=off quiet splash"
+
+Change to:
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=2 rd.systemd.show_status=auto rd.udev.log_level=2 nvme.noacpi=1 mem_sleep_default=deep nowatchdog random.trust_cpu=off quiet splash amdgpu.pg_mask=0 amdgpu.cwsr_enable=0"
+
+Step 2: Regenerate GRUB config
+------------------------------
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+Step 3: Reboot and verify
+-------------------------
+sudo reboot
+
+After reboot, verify:
+cat /sys/module/amdgpu/parameters/pg_mask
+# Should show: 0
+
+cat /sys/module/amdgpu/parameters/cwsr_enable
+# Should show: 0
+
+cat /proc/cmdline | grep -oE "(pg_mask|cwsr_enable)=[^ ]+"
+# Should show:
+# pg_mask=0
+# cwsr_enable=0
+
+
+PART 2: MODPROBE.D FIX (Permanent, requires live ISO)
+=====================================================
+This embeds the parameters in the initramfs so they're always applied.
+MUST be done from live ISO because mkinitcpio triggers the freeze.
+
+Step 1: Boot archzfs live ISO
+-----------------------------
+- Boot from USB with archzfs ISO
+- Get to root shell
+
+Step 2: Import and mount ZFS
+----------------------------
+zpool import -f zroot
+zfs mount zroot/ROOT/default
+mount /dev/nvme1n1p1 /mnt/boot    # Note: nvme1n1p1, not nvme0n1p1!
+
+Verify:
+ls /mnt/boot/vmlinuz*
+# Should show kernel images
+
+Step 3: Create modprobe config
+------------------------------
+cat > /mnt/etc/modprobe.d/amdgpu.conf << 'EOF'
+# Workarounds for AMD Strix Halo GPU bugs
+# Created: 2026-01-22
+# Remove when kernel has proper fixes (check linux-lts >= 6.18 with fixes)
+
+# Disable power gating to prevent VPE freeze
+# VPE tries to power gate after 1s idle, causing SMU hang
+options amdgpu pg_mask=0
+
+# Disable Compute Wavefront Save/Restore to prevent MES hang
+# CWSR causes MES firmware 0x80 hang under compute loads
+options amdgpu cwsr_enable=0
+EOF
+
+Step 4: Chroot and rebuild initramfs
+------------------------------------
+# Mount system directories
+mount --rbind /dev /mnt/dev
+mount --rbind /sys /mnt/sys
+mount --rbind /proc /mnt/proc
+mount --rbind /run /mnt/run
+
+# Chroot
+arch-chroot /mnt
+
+# Rebuild initramfs (this is safe from live ISO)
+mkinitcpio -P
+
+# Verify amdgpu.conf is in initramfs
+lsinitcpio /boot/initramfs-linux.img | grep amdgpu
+# Should show: etc/modprobe.d/amdgpu.conf
+
+# Exit chroot
+exit
+
+Step 5: Clean up and reboot
+---------------------------
+# Unmount everything
+umount -R /mnt/dev /mnt/sys /mnt/proc /mnt/run
+zfs unmount -a
+zpool export zroot
+
+# Reboot
+reboot
+
+Step 6: Verify after reboot
+---------------------------
+cat /sys/module/amdgpu/parameters/pg_mask
+# Should show: 0
+
+cat /sys/module/amdgpu/parameters/cwsr_enable
+# Should show: 0
+
+lsinitcpio /boot/initramfs-linux.img | grep amdgpu.conf
+# Should show: etc/modprobe.d/amdgpu.conf
+
+
+VERIFICATION CHECKLIST
+======================
+After applying fixes, verify:
+
+[ ] pg_mask shows 0 (not 4294967295)
+[ ] cwsr_enable shows 0 (not 1)
+[ ] Parameters visible in /proc/cmdline (if using GRUB method)
+[ ] amdgpu.conf in initramfs (if using modprobe.d method)
+[ ] System stable - no freezes during idle
+[ ] mkinitcpio -P completes without freeze (test after fix applied)
+
+
+IMPORTANT NOTES
+===============
+
+1. Boot partition UUID
+   ratio has mirrored NVMe drives. The boot partition is on nvme1n1p1:
+   - nvme0n1p1: 6A4B-47A4 (NOT the boot partition)
+   - nvme1n1p1: 6A4A-93B1 (THIS is /boot)
+
+2. Kernel is pinned
+   /etc/pacman.conf has: IgnorePkg = linux
+   This prevents upgrading from 6.15.2 until manually unpinned.
+   DO NOT upgrade to 6.18.x - it has worse bugs for Strix Halo.
+
+3. When to remove workarounds
+   Monitor Framework Community and AMD-gfx mailing list for proper fixes.
+   When linux-lts has confirmed VPE and CWSR fixes, can try removing.
+   Test by commenting out lines in amdgpu.conf, rebuild initramfs, test.
+
+4. If system freezes during mkinitcpio
+   This means the fix isn't active yet. Must do from live ISO.
+   The modconf hook reads /etc/modprobe.d/ at build time, but the
+   running kernel still has the old parameters until reboot.
+
+
+TROUBLESHOOTING
+===============
+
+System still freezes after GRUB fix:
+- Check /proc/cmdline - are parameters there?
+- Check /sys/module/amdgpu/parameters/* - are values correct?
+- If cmdline has them but sysfs doesn't, driver may have loaded before
+  parsing. Need modprobe.d method instead.
+
+Can't import zpool from live ISO:
+- Try: zpool import -f zroot
+- If "pool was previously in use": zpool import -f zroot
+- Check hostid: cat /etc/hostid on installed system
+
+mkinitcpio says "Preset not found":
+- Check /etc/mkinitcpio.d/*.preset files exist
+- For linux kernel: linux.preset
+- For linux-lts: linux-lts.preset
+
+After chroot, wrong mountpoints:
+- Reset mountpoints after any chroot work:
+  zfs set mountpoint=/ zroot/ROOT/default
+  zfs set mountpoint=/home zroot/home
+  (etc. for all datasets)
+
+
+REFERENCES
+==========
+
+VPE timeout patch (not merged):
+https://www.mail-archive.com/amd-gfx@lists.freedesktop.org/msg127724.html
+
+Framework Community - critical 6.18 bugs:
+https://community.frame.work/t/attn-critical-bugs-in-amdgpu-driver-included-with-kernel-6-18-x-6-19-x/79221
+
+CWSR workaround:
+https://github.com/ROCm/ROCm/issues/5590
+
+Session documentation:
+- docs/2026-01-22-ratio-boot-fix-session.org
+- docs/2026-01-22-mkinitcpio-config-boot-failure.org
+- assets/2026-01-22-mkinitcpio-freeze-during-rebuild.org
