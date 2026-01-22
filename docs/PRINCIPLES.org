@@ -1,0 +1,49 @@
+#+TITLE: Working Principles
+#+DESCRIPTION: Behavioral lessons learned from retrospectives. Read at session start.
+
+* How We Work Together
+
+** Sync Before Action
+- Confirm before destructive or irreversible actions
+- State what I'm about to do and wait for go-ahead
+- "Wait, wait, wait" is valid and important feedback
+- Don't assume the next step - ask or confirm
+
+** Clean Up After Yourself
+- After chroot work: reset mountpoints, verify settings before export
+- After testing: remove debug flags, temp files, test labels
+- Before reboot: verify the system is in expected state
+
+** Verify Assumptions
+- When something "should work" but doesn't, question the assumption
+- Test one variable at a time to isolate causes
+- Don't stack fixes - apply one, test, then apply next
+
+** Research Before Guessing
+- Check community forums, release notes, known issues
+- External sources (videos, blog posts) often have answers
+- The obvious fix isn't always the right fix
+
+** Patience Over Speed
+- Taking time to sync improves effectiveness
+- Rushing creates mistakes that cost more time
+- Working together > working fast
+
+* Checklists
+
+** After Chroot Work
+- [ ] Reset ZFS mountpoints (remove /mnt prefix)
+- [ ] Verify /etc files weren't overwritten with .pacnew
+- [ ] Check hostid consistency
+- [ ] Clean export of ZFS pool
+
+** Before Reboot
+- [ ] Confirm which kernel/entry will boot
+- [ ] Verify GRUB timeout allows menu selection
+- [ ] Know the fallback plan if boot fails
+
+* Revision History
+
+| Date       | Change                                      |
+|------------+---------------------------------------------|
+| 2026-01-22 | Initial version from ratio boot fix session |
