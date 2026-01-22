@@ -329,6 +329,42 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-22 Thu @ 15:02 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Diagnosed and fixed ratio (Framework Desktop, AMD Strix Halo) boot failures
+- Root cause: missing linux-firmware 20260110 caused amdgpu to freeze at boot
+- Installed linux-firmware 20260110-1, fixed ZFS mountpoints, fixed hostid mismatch
+- Configured kernel 6.15.2 as default (pinned), created clean GRUB menu
+- Created retrospective workflow for continuous improvement
+- Added PRINCIPLES.org with behavioral lessons learned
+- Documented full troubleshooting session
+
+*Key Decisions:*
+- linux-firmware version is critical for AMD Strix Halo (20260110+ required)
+- ZFS rollback with separate /boot partition is dangerous - recommend ZFSBootMenu
+- Established retrospective workflow for major problem-solving sessions
+- Behavioral lessons go in PRINCIPLES.org, technical facts in session docs
+
+*Files Modified:*
+- [[file:../custom/install-archzfs][custom/install-archzfs]] - Fixed mkinitcpio configuration
+- [[file:../todo.org][todo.org]] - Added ZFS rollback + /boot issue, ZFSBootMenu task
+- [[file:PRINCIPLES.org][docs/PRINCIPLES.org]] - New file with behavioral lessons
+- [[file:protocols.org][docs/protocols.org]] - Added PRINCIPLES.org to session startup
+- [[file:retrospectives/2026-01-22-ratio-boot-fix.org][docs/retrospectives/]] - Retrospective for this session
+- [[file:2026-01-22-ratio-boot-fix-session.org][docs/2026-01-22-ratio-boot-fix-session.org]] - Full technical session doc
+
+*Commits Made:*
+- c46191c: Fix ratio boot issues: firmware, mkinitcpio, and document ZFS rollback dangers
+- 9100517: Update ratio session doc: kernel 6.15.2 now default with clean GRUB menu
+- e5aedfa: Add retrospective workflow and PRINCIPLES.org for continuous improvement
+
+*Next Steps:*
+- Implement ZFSBootMenu on ratio to solve /boot rollback issue
+- Consider adding ZFSBootMenu to install-archzfs as alternative to GRUB
+
 *** 2026-01-18 Sat @ 16:30 -0600
 
 *Status:* COMPLETE
