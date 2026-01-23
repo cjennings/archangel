@@ -329,6 +329,40 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-23 Fri @ 02:12 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Validated ZFSBootMenu installation on bare metal (ratio - Framework Desktop)
+- Monitored full install-archzfs run via SSH to archzfs.local
+- Installation completed successfully on 2-disk NVMe mirror (2x 7.3TB)
+- Verified ZFSBootMenu installed on both EFI partitions (redundancy working)
+- Confirmed both EFI boot entries created (disk1 and disk2)
+- Genesis snapshot created, system ready to reboot
+
+*Validation Results:*
+| Component | Status |
+|-----------+--------|
+| ZFS pool (mirror) | Exported correctly |
+| EFI partition nvme0n1p1 | ZFSBootMenu installed |
+| EFI partition nvme1n1p1 | ZFSBootMenu installed |
+| Boot0001 ZFSBootMenu-disk1 | Created, first priority |
+| Boot0006 ZFSBootMenu-disk2 | Created, fallback |
+| Initramfs with ZFS hooks | Built successfully |
+| Genesis snapshot | Created |
+
+*System Configuration:*
+- Hostname: ratio
+- Pool: zroot (2-disk mirror, unencrypted)
+- Kernel: linux-lts 6.12.66-1
+- ZFSBootMenu timeout: 3 seconds
+
+*Next Steps:*
+- Reboot ratio into ZFSBootMenu
+- Run archsetup for full workstation configuration
+- Merge zfsbootmenu branch to main after successful boot
+
 *** 2026-01-23 Fri @ 01:21 -0600
 
 *Status:* COMPLETE
