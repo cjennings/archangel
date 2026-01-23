@@ -1,5 +1,11 @@
 * Open Work
 
+** TODO [#B] Implement btrfs support (archangel expansion)
+See [[file:docs/PLAN-archangel-btrfs.org][PLAN-archangel-btrfs.org]] for full implementation plan.
+
+6 phases: Refactor → Btrfs → Multi-disk → Testing → CLI tools → Docs
+Start with Phase 1 (refactor) to enable everything else.
+
 ** TODO [#A] Review code review workflow document and provide feedback
 Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/code-review.org]] and refine based on feedback.
 Created: 2026-01-23
