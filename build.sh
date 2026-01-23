@@ -369,6 +369,7 @@ EOF
 # Copy our custom scripts
 info "Copying custom scripts..."
 cp "$CUSTOM_DIR/install-archzfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp -r "$CUSTOM_DIR/lib" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
@@ -402,6 +403,18 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/zfsrollback"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/lib/common.sh"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/lib/config.sh"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/lib/disk.sh"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/lib/zfs.sh"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/etc/shadow"]="0:0:400"
