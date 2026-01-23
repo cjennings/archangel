@@ -19,6 +19,16 @@
 set -e
 
 #############################
+# Source Library Functions
+#############################
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/config.sh"
+source "$SCRIPT_DIR/lib/disk.sh"
+source "$SCRIPT_DIR/lib/zfs.sh"
+
+#############################
 # Configuration
 #############################
 
@@ -56,93 +66,16 @@ echo "install-archzfs started @ $(date +'%Y-%m-%d %H:%M:%S')"
 echo "================================================================================"
 echo ""
 
-info()  { echo "[INFO] $1"; }
-warn()  { echo "[WARN] $1"; }
-error() { echo "[ERROR] $1"; exit 1; }
-step()  { echo ""; echo "==> $1"; }
-prompt() { echo "$1"; }
-
-#############################
-# Config File Support
-#############################
-
-CONFIG_FILE=""
-UNATTENDED=false
-
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --config-file)
-                if [[ -n "$2" && ! "$2" =~ ^- ]]; then
-                    CONFIG_FILE="$2"
-                    shift 2
-                else
-                    error "--config-file requires a path argument"
-                fi
-                ;;
-            --help|-h)
-                echo "Usage: install-archzfs [OPTIONS]"
-                echo ""
-                echo "Options:"
-                echo "  --config-file PATH  Use config file for unattended installation"
-                echo "  --help, -h          Show this help message"
-                echo ""
-                echo "Without --config-file, runs in interactive mode."
-                echo "See /root/install-archzfs.conf.example for a config template."
-                exit 0
-                ;;
-            *)
-                error "Unknown option: $1 (use --help for usage)"
-                ;;
-        esac
-    done
-}
-
-load_config() {
-    local config_path="$1"
-
-    if [[ ! -f "$config_path" ]]; then
-        error "Config file not found: $config_path"
-    fi
-
-    info "Loading config from: $config_path"
-
-    # Source the config file (it's just key=value pairs)
-    # shellcheck disable=SC1090
-    source "$config_path"
-
-    # Convert DISKS from comma-separated string to array
-    if [[ -n "$DISKS" ]]; then
-        IFS=',' read -ra SELECTED_DISKS <<< "$DISKS"
-    fi
-
-    UNATTENDED=true
-    info "Running in unattended mode"
-}
-
-check_config() {
-    # Only use config when explicitly specified with --config-file
-    # This prevents accidental disk destruction from an unnoticed config file
-    if [[ -n "$CONFIG_FILE" ]]; then
-        load_config "$CONFIG_FILE"
-    fi
-}
+# Output functions now in lib/common.sh
+# Config functions now in lib/config.sh
 
 #############################
 # Pre-flight Checks
 #############################
 
 preflight_checks() {
-    # Check root
-    [[ $EUID -ne 0 ]] && error "This script must be run as root"
-
-    # Check ZFS module
-    if ! lsmod | grep -q zfs; then
-        info "Loading ZFS module..."
-        modprobe zfs || error "Failed to load ZFS module. Is zfs-linux-lts installed?"
-    fi
-
-    info "ZFS module loaded successfully."
+    require_root
+    zfs_preflight
 }
 
 #############################

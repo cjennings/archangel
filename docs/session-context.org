@@ -42,7 +42,19 @@ Analyzed ~/code/archsetup/archsetup (1852 lines) for chroot-incompatible operati
 Added [#B] task to todo.org with full implementation details.
 
 ** Files Modified This Session
-- todo.org - Added archsetup --chroot task
+- todo.org - Added archsetup --chroot task, btrfs implementation TODO
+- docs/PLAN-archangel-btrfs.org - Created implementation plan
+- docs/research-btrfs-expansion.org - Expanded testing validation checks
+
+** Implementation Progress (Phase 1.1)
+
+Created lib/ directory structure:
+- [X] custom/lib/common.sh - output, validation, fzf prompts, disk utils
+- [X] custom/lib/config.sh - arg parsing, config loading, validation
+- [X] custom/lib/disk.sh - partitioning, EFI management, disk selection
+- [X] custom/lib/zfs.sh - pool, datasets, ZFSBootMenu, services, hooks
+
+Next: Integrate libs into install-archzfs, test, then add filesystem selection
 
 ** Pending Items (from earlier + this session)
 1. Review code-review.org document
