@@ -286,34 +286,77 @@ install-archsnap
 
 ** VM Test Matrix
 
-| Config | Disks | Filesystem | RAID | Test |
-|--------+-------+------------+------+------|
-| Single ZFS | 1 | ZFS | - | Install, boot, rollback |
-| Single Btrfs | 1 | Btrfs | - | Install, boot, rollback |
-| Mirror ZFS | 2 | ZFS | mirror | Install, fail disk, recover |
-| Mirror Btrfs | 2 | Btrfs | raid1 | Install, fail disk, recover |
-| RAIDZ1 ZFS | 3 | ZFS | raidz1 | Install, fail disk, recover |
+- Single ZFS (1 disk): Install, boot, reboot, rollback+reboot
+- Single Btrfs (1 disk): Install, boot, reboot, rollback+reboot
+- Mirror ZFS (2 disk): Install, fail disk, recover
+- Mirror Btrfs (2 disk, raid1): Install, fail disk, recover
+- RAIDZ1 ZFS (3 disk): Install, fail disk, recover
 
-** Test Scenarios
+** Validation Checks
 
-1. *Fresh Install*
-   - Single disk, multi-disk
-   - Interactive and config-file modes
+*** Fresh Install (all configs)
+- Partitions created correctly (EFI + root)
+- Filesystem created (pool/subvols)
+- All mount points accessible
+- Packages installed (pacman -Q zfs-dkms or btrfs-progs)
+- Services enabled (zfs.target or snapper-timeline.timer)
+- Bootloader installed (ZFSBootMenu or GRUB + grub-btrfs)
+- fstab correct (no subvolid for btrfs)
+- Can boot without ISO
 
-2. *Snapshot Operations*
-   - Manual snapshot creation
-   - Automatic pre-pacman snapshots
-   - Boot into snapshot
-   - Rollback to snapshot
+*** Reboot Survival
+Critical: Verify system survives reboot cleanly. Catches:
+- Misconfigured services slamming CPU/network
+- Services that fail to start properly
+- ZFS import issues
+- fstab mount failures
 
-3. *Failure Recovery*
-   - Single disk failure (mirror/raidz)
-   - Corrupt boot
-   - Kernel update breaks system
+Checks after reboot:
+- System reaches login prompt
+- All filesystems mounted (findmnt)
+- No failed services (systemctl --failed)
+- CPU/memory/network normal (no runaway processes)
+- Can SSH in (if network configured)
 
-4. *Encryption*
-   - ZFS native encryption
-   - LUKS + Btrfs encryption
+*** Snapshot Operations
+- Manual snapshot creates successfully
+- Snapshot appears in list (zfs list -t snap / snapper list)
+- Pre-pacman snapshot created automatically (install package, verify)
+- Snapshot visible in boot menu (ZFSBootMenu / GRUB)
+- Can boot into snapshot
+
+*** Rollback + Reboot
+Important: Rollback MUST include reboot to validate fully.
+Do NOT use ZFSBootMenu's built-in rollback (known bug, needs filing).
+Use zfsrollback script or snapper rollback instead.
+
+Checks:
+- Rollback command completes without error
+- Reboot completes successfully
+- System state matches snapshot after reboot
+- Previously installed test package is gone
+- No orphaned/broken state
+
+*** Failure Recovery (multi-disk only)
+- Pool/volume shows correct redundancy (zpool status / btrfs fi show)
+- Survives single disk removal (zpool offline / btrfs device delete)
+- Boots with degraded array
+- Warnings displayed about degraded state
+- Can resilver/rebuild after disk replaced (zpool replace / btrfs replace)
+- Pool returns to healthy state
+
+*** Encryption
+- Passphrase prompt appears at boot
+- Correct unlock with right passphrase
+- Fails gracefully with wrong passphrase (retry prompt, not panic)
+- Data unreadable when mounted elsewhere without key
+- Pool/volume not auto-imported without passphrase
+
+** Known Issues
+
+*** ZFSBootMenu Rollback Bug
+ZFSBootMenu's built-in rollback feature has issues (to be filed).
+Workaround: Use zfsrollback script from installed system or live ISO.
 
 ** Test Scripts
 
