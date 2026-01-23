@@ -272,6 +272,51 @@ README.org contains multiple outdated references to GRUB that are now incorrect:
 README.org line 723 references [[file:LICENSE][LICENSE]] but the file doesn't exist.
 Create LICENSE file with GPL-3.0 text as stated in README.
 
+** TODO [#B] Add --chroot mode to archsetup for in-chroot execution
+Enable running archsetup from within install-archangel chroot so users get a fully
+configured workstation on first boot instead of running archsetup manually post-reboot.
+
+*** Required changes to ~/code/archsetup/archsetup
+
+**** 1. Add --chroot flag to argument parsing
+#+BEGIN_SRC bash
+chroot_mode=false
+--chroot)
+    chroot_mode=true
+    shift
+    ;;
+#+END_SRC
+
+**** 2. Skip systemctl start calls (5 locations)
+Wrap in chroot check - services will start on reboot:
+- Line 712: systemctl start systemd-resolved
+- Line 807: systemctl start rngd
+- Line 877: systemctl start sshd
+- Line 905: systemctl start fail2ban
+- Line 1199: systemctl start grub-btrfsd
+
+**** 3. Skip ping network checks (3 locations)
+Network available via live ISO, skip validation:
+- Line 243: connectivity check
+- Lines 1105-1107: TrueNAS detection
+
+**** 4. Skip tmpfs mount (line 702)
+Not needed/problematic in chroot - use regular directory.
+
+*** Integration with install-archangel
+At end of install, prompt: "Run archsetup for full workstation setup? [y/N]"
+If yes:
+1. Copy archsetup into chroot (or bind mount)
+2. Run: arch-chroot /mnt /path/to/archsetup --chroot --config-file /path/to/config
+3. Continue with reboot
+
+*** What works in chroot (confirmed by scan)
+- All systemctl enable calls (20+)
+- User creation (useradd, chpasswd, usermod)
+- Package installation (pacman, yay/makepkg)
+- Git clone operations
+- All file/config operations
+
 ** TODO [#A] Delete or complete custom/archsetup-zfs
 The script has full function definitions but main() just prints "this is a skeleton".
 A skeleton script that pretends to work is worse than nothing.

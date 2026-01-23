@@ -1,95 +1,55 @@
-#+TITLE: Session Context - Interrupted Session
+#+TITLE: Session Context - Active Session
 #+DATE: 2026-01-23
 
-* Session: Friday 2026-01-23 @ 11:28-13:15 CST
+* Session: Friday 2026-01-23 @ 14:08 CST (ongoing)
 
-** Session Summary
-Major session covering code review workflow creation and btrfs expansion research.
+** Key Decisions This Session
 
-** Completed This Session
+*** Project Rename: archangel
+- Decided to rename project from "archzfs" to "archangel"
+- Script name will be just "archangel" (not install-archangel)
+- Checked for conflicts: pwnerfly/Archangel is dead (2020, 0 stars, no license)
+- Name is clear for use
 
-*** 1. ZFSBootMenu Merge
-- Merged zfsbootmenu branch to main (fast-forward)
-- ratio booted successfully with ZFSBootMenu
-- ZFSBootMenu is now the default bootloader
+** Work Completed
 
-*** 2. Code Review Workflow
-- Researched code review best practices (10+ web searches)
-- Studied Code Review Pyramid (Gunnar Morling)
-- Created docs/project-workflows/code-review.org
-  - Core Checklist: ~27 items across pyramid levels
-  - Deep Dives: Security, Performance, Concurrency, Error Handling, API Compatibility, Dependencies
-  - Guidance on feedback, anti-patterns, effort scaling
+*** 1. Recovered interrupted session context
+Previous session (11:28-13:15 today) covered:
+- ZFSBootMenu merge to main
+- Code review workflow creation
+- Btrfs expansion research
 
-*** 3. Project Code Review
-Conducted senior developer review of entire codebase. Found issues:
-- README.org has outdated GRUB references (now uses ZFSBootMenu)
-- Missing LICENSE file
-- custom/archsetup-zfs is non-functional skeleton
-- Stale SESSION-CONTEXT.md in root
-- Makefile lint target swallows errors
-- Various cleanup items
+*** 2. Reviewed btrfs implementation approach
+- 5-phase plan: Refactor, Btrfs support, Testing, CLI tools, Docs
+- Snapper chosen over Timeshift (better Arch integration with snap-pac + grub-btrfs)
+- Btrfs uses GRUB, ZFS uses ZFSBootMenu
 
-Added 14 new tasks to todo.org (Priority A/B/C).
+*** 3. Scanned archsetup for chroot compatibility
+Analyzed ~/code/archsetup/archsetup (1852 lines) for chroot-incompatible operations:
 
-*** 4. Makefile Target Planning
-Added to todo.org:
-- make deps - Install all dependencies
-- make lint - Run shellcheck
-- make build/test/test-quick
-- make deploy - Copy to truenas + Ventoy
+**** Incompatible (need --chroot flag):
+- 5x systemctl start calls (lines 712, 807, 877, 905, 1199)
+- 3x ping checks (lines 243, 1105, 1107)
+- 1x tmpfs mount (line 702)
 
-*** 5. Btrfs Expansion Research
-Comprehensive research for multi-filesystem support:
-- Created docs/research-btrfs-expansion.org
-- Cloned 8 reference repos to reference-repos/
+**** Compatible (work as-is):
+- 20+ systemctl enable calls
+- User creation (useradd, chpasswd)
+- Package installation (pacman, yay/makepkg)
+- All file configurations
 
-**** Key Findings
-- Project rename recommendation: *archsnap*
-- Btrfs RAID 5/6 is UNSTABLE - don't offer
-- No native btrfs encryption - use LUKS
-- Need GRUB (not systemd-boot) for bootable snapshots
-- Snapshot stack: snapper + snap-pac + grub-btrfs + btrfs-assistant
+*** 4. Added TODO for archsetup --chroot mode
+Added [#B] task to todo.org with full implementation details.
 
-**** Btrfs Subvolume Layout
-- @ → /
-- @home → /home
-- @snapshots → /.snapshots
-- @var_log → /var/log
-- @var_cache → /var/cache
+** Files Modified This Session
+- todo.org - Added archsetup --chroot task
 
-**** Reference Repos Cloned
-grub-btrfs, easy-arch, arch-btrfs-installation, btrfs-assistant,
-snap-pac, btrbk, buttermanager, alis
-
-** Commits This Session
-- c8c3502 Add code review workflow and project cleanup tasks
-- e05e94d Research: Btrfs expansion and multi-filesystem support
-
-** Files Created
-- docs/project-workflows/code-review.org
-- docs/research-btrfs-expansion.org
-
-** Files Modified
-- todo.org (14 new cleanup tasks + Makefile targets)
-
-** Pending User Review
-- docs/project-workflows/code-review.org (task in todo.org [#A])
-- docs/research-btrfs-expansion.org
-
-** Next Steps (When Resuming)
-1. Review code-review.org document and provide feedback
-2. Decide on project name (archsnap recommended)
-3. Decide on btrfs implementation approach
-4. Address Priority A cleanup tasks:
-   - Update README.org (remove GRUB references)
-   - Add LICENSE file (GPL-3.0)
-   - Delete or complete archsetup-zfs skeleton
-   - Add user password to install config
-5. Create implementation tasks for btrfs support
-6. Begin Phase 1: Refactor installer into modular structure
+** Pending Items (from earlier + this session)
+1. Review code-review.org document
+2. Address Priority A cleanup tasks (README, LICENSE, etc.)
+3. Create btrfs implementation tasks
+4. Begin Phase 1: Refactor installer
 
 ** Notes
-- Removed Syncthing conflict file (todo.sync-conflict-*.org)
-- Syncthing shutdown during session
-- All changes pushed to origin/main
+- Craig on remote console: 30 lines tall, ~145 columns wide
+- Keep responses compact
