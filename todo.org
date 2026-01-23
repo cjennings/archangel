@@ -1,5 +1,9 @@
 * Open Work
 
+** TODO [#A] Review code review workflow document and provide feedback
+Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/code-review.org]] and refine based on feedback.
+Created: 2026-01-23
+
 ** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
 After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
 leaves incorrect mkinitcpio configuration from the live ISO environment.
@@ -252,6 +256,98 @@ It provides boot environment selection, snapshot rollback from boot menu, and re
 *** Reference
 https://zfsbootmenu.org/
 
+** TODO [#A] Update README.org - remove all GRUB references (now uses ZFSBootMenu)
+README.org contains multiple outdated references to GRUB that are now incorrect:
+- Line 19: "EFI Boot Redundancy - GRUB installed on all disks" - now uses ZFSBootMenu
+- Lines 417-472: Entire section on "grub-zfs-snap" and GRUB snapshot boot entries - doesn't exist
+- Lines 98-100: Project structure lists grub-zfs-snap, zfs-snap-prune, 40_zfs_snapshots - files don't exist
+
+*** Actions
+- Remove/update "EFI Boot Redundancy" line to mention ZFSBootMenu
+- Delete or rewrite "ZFS Snapshot Boot Entries (grub-zfs-snap)" section
+- Update project structure to reflect actual files
+- Update "Post-Installation" section for ZFSBootMenu workflow
+
+** TODO [#A] Add LICENSE file (GPL-3.0)
+README.org line 723 references [[file:LICENSE][LICENSE]] but the file doesn't exist.
+Create LICENSE file with GPL-3.0 text as stated in README.
+
+** TODO [#A] Delete or complete custom/archsetup-zfs
+The script has full function definitions but main() just prints "this is a skeleton".
+A skeleton script that pretends to work is worse than nothing.
+
+*** Options
+1. Delete it entirely - users can run archsetup from ~/code/archsetup
+2. Complete the implementation
+3. Replace with a simple launcher that calls archsetup with ZFS-specific flags
+
+** TODO [#A] Add initial user password to install-archzfs config
+Currently hardcoded as "welcome" in archsetup-zfs. Should be configurable via:
+- Interactive prompt during install-archzfs
+- Config file option for unattended installs
+- Document that password must be changed on first login
+
+** TODO [#B] Delete stale SESSION-CONTEXT.md
+SESSION-CONTEXT.md in project root is from 2026-01-19 and references old GRUB workflow.
+Superseded by docs/session-context.org. Delete to avoid confusion.
+
+** TODO [#B] Move PLAN-zfsbootmenu-implementation.org to docs/
+Implementation plan files should be in docs/ or archived after completion.
+The plan is complete - ZFSBootMenu is now the bootloader.
+
+** TODO [#B] Clean up docs/ directory
+- Delete docs/someday-maybe.org (empty, 0 bytes)
+- Move date-specific docs from assets/ to docs/ for consistency
+- Document or delete docs/scripts/ directory (unclear purpose)
+
+** TODO [#B] Fix Makefile lint target to fail on errors
+Current lint target has `|| true` which swallows shellcheck errors:
+#+BEGIN_SRC makefile
+lint:
+    @shellcheck -x build.sh scripts/*.sh custom/install-archzfs ... || true
+#+END_SRC
+
+Change to actually fail on lint errors so CI can catch issues.
+
+** TODO [#B] Document or gitignore unclear directories
+These directories exist but aren't documented or gitignored:
+- zfs-packages/ - unclear purpose
+- reference-repos/ - unclear purpose
+- test-logs/ - should probably be gitignored
+
+** TODO [#B] Fill in README.org #+AUTHOR field
+Line 2 has empty #+AUTHOR: - looks unfinished. Add author info.
+
+** TODO [#C] Standardize shell script conventions
+*** Shebang inconsistency
+- build.sh: #!/bin/bash
+- zfssnapshot: #!/bin/env bash
+- archsetup-zfs: #!/bin/sh
+Pick one convention (recommend #!/usr/bin/env bash for portability)
+
+*** Email inconsistency
+- Some files: c@cjennings.net
+- archsetup-zfs: craigmartinjennings@gmail.com
+Standardize to one email address.
+
+** TODO [#C] Add .editorconfig for consistent formatting
+No project-wide formatting rules. Add .editorconfig to enforce:
+- Indent style (spaces vs tabs)
+- Indent size
+- End of line
+- Trim trailing whitespace
+- Final newline
+
+** TODO [#C] Consolidate test scripts documentation
+scripts/ has multiple test files with unclear relationships:
+- test-vm.sh - Manual VM testing
+- sanity-test.sh - Quick automated checks
+- test-install.sh - Installation testing
+- full-test.sh - Comprehensive testing
+- test-zfs-snap-prune.sh - Unit tests for prune script
+
+Document the testing strategy and when to use each script.
+
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 
 *** Options to evaluate
@@ -364,6 +460,33 @@ Extract into library of functions that can be sourced and tested:
 - Can test edge cases without full VM boot
 - Reusable functions for other projects
 - Clearer code organization
+
+** TODO [#B] Create Makefile with distinct build targets
+Replace or supplement build.sh with a Makefile for cleaner build orchestration.
+
+*** Proposed targets
+- make deps - Install all dependencies (pacman + AUR) needed to build and test
+- make lint - Run shellcheck on all bash scripts
+- make build - Full ISO build (current build.sh behavior)
+- make clean - Remove work/ and output/ directories
+- make test - Run VM tests (single disk, mirror, raidz) - depends on lint
+- make test-quick - Quick single-disk test only - depends on lint
+- make aur - Build AUR packages only
+- make iso - Build ISO only (skip AUR if already built)
+- make deploy - Copy ISO to truenas.local AND Ventoy drive (if inserted)
+- make all - Full build + tests
+
+*** Benefits
+- Familiar interface for developers
+- Dependency tracking (rebuild only what changed)
+- Parallel execution where possible
+- Self-documenting (make help)
+- Easy CI/CD integration
+
+*** Considerations
+- Keep build.sh as the underlying implementation
+- Makefile calls build.sh with appropriate flags
+- Or refactor build.sh logic into Makefile directly
 
 ** TODO [#B] Add Docker/Podman container support for builds
 Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
