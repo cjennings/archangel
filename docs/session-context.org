@@ -4,48 +4,70 @@
 * Current Session: Friday 2026-01-23 @ 11:28 CST
 
 ** Current Task
-Code review of archzfs project complete. Issues documented in todo.org.
+Btrfs expansion research complete. Architecture documented.
 
 ** Completed This Session
-- Merged zfsbootmenu branch to main (fast-forward, pushed to origin)
+- Merged zfsbootmenu branch to main
 - ratio booted successfully with ZFSBootMenu
-- Researched code review best practices (10+ web searches)
-- Created docs/project-workflows/code-review.org
-  - Core Checklist: ~27 items across pyramid levels
-  - Deep Dives: Security, Performance, Concurrency, Error Handling, API Compatibility, Dependencies
-- Conducted senior developer code review of entire archzfs codebase
-- Added 14 new tasks to todo.org based on code review findings
+- Created code review workflow (docs/project-workflows/code-review.org)
+- Conducted senior developer code review, added 14 cleanup tasks
+- Committed and pushed changes
 
-** Code Review Findings Summary
-*** Critical (Priority A)
-- README.org has outdated GRUB references (now uses ZFSBootMenu)
-- Missing LICENSE file (referenced but doesn't exist)
-- custom/archsetup-zfs is a non-functional skeleton
-- Initial password should be configurable, not hardcoded
+*** Btrfs Expansion Research
+- Researched btrfs best practices for Arch Linux
+- Researched snapshot management: snapper, btrbk, snap-pac
+- Researched GRUB integration: grub-btrfs, grub-btrfsd
+- Researched multi-disk configurations: raid1, raid10 (raid5/6 unstable)
+- Researched GUI tools: btrfs-assistant, snapper-gui, buttermanager
+- Cloned 8 reference repositories to reference-repos/
+- Created comprehensive research document: docs/research-btrfs-expansion.org
 
-*** Important (Priority B)
-- Stale SESSION-CONTEXT.md should be deleted
-- PLAN-zfsbootmenu-implementation.org should move to docs/
-- Makefile lint target swallows errors
-- Unclear directories need documentation or gitignore
-- Empty docs/someday-maybe.org
+** Key Research Findings
 
-*** Cleanup (Priority C)
-- Inconsistent shebangs across scripts
-- Inconsistent email addresses
-- No .editorconfig for formatting
-- Test scripts need documentation
+*** Project Rename Recommendation
+*archsnap* - Short, memorable, emphasizes snapshot capability
+
+*** Btrfs Feature Parity
+| ZFS Feature | Btrfs Equivalent |
+|-------------+------------------|
+| Native encryption | LUKS2 + dm-crypt |
+| Mirror | btrfs raid1 |
+| ZFSBootMenu | GRUB + grub-btrfs |
+| sanoid | snapper + snap-pac |
+| Datasets | Subvolumes |
+
+*** Btrfs Limitations
+- RAID 5/6 is UNSTABLE - do not offer
+- No native encryption - must use LUKS
+- Need GRUB for bootable snapshots (not systemd-boot)
+
+*** Recommended Subvolume Layout
+- @ → /
+- @home → /home
+- @snapshots → /.snapshots
+- @var_log → /var/log
+- @var_cache → /var/cache
+
+*** Snapshot Stack
+snapper + snap-pac + grub-btrfs + btrfs-assistant
+
+** Reference Repos Cloned
+- grub-btrfs (GRUB snapshot menu)
+- easy-arch (automated installer)
+- arch-btrfs-installation (manual guide)
+- btrfs-assistant (GUI)
+- snap-pac (pacman hooks)
+- btrbk (snapshot/backup)
+- buttermanager (GUI)
+- alis (multi-fs installer)
 
 ** Files Created This Session
-- docs/project-workflows/code-review.org - Code review workflow
-
-** Files Modified This Session
-- todo.org - Added Makefile targets, code review tasks (14 new items)
-
-** Pending User Review
-- docs/project-workflows/code-review.org (task in todo.org)
+- docs/project-workflows/code-review.org
+- docs/research-btrfs-expansion.org
 
 ** Next Steps
-- User to review code-review.org document
-- Address Priority A issues from code review
-- Delete SESSION-CONTEXT.md (root) after confirming this file is canonical
+1. Review research document with Craig
+2. Decide on project name
+3. Decide on implementation approach
+4. Create implementation tasks in todo.org
+5. Begin Phase 1: Refactor current installer
