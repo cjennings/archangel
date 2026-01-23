@@ -1,0 +1,275 @@
+#+TITLE: Code Review Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-01-23
+
+* Overview
+
+This workflow guides code review with a focus on what matters most. It's based on the Code Review Pyramid (Gunnar Morling) which prioritizes review effort by cost of change - spend the most time on things that are hardest to fix later.
+
+#+begin_example
+                    ┌─────────────────┐
+                    │   CODE STYLE    │  ← Automate
+                ┌───┴─────────────────┴───┐
+                │         TESTS           │  ← Automate
+            ┌───┴─────────────────────────┴───┐
+            │        DOCUMENTATION            │
+        ┌───┴─────────────────────────────────┴───┐
+        │      IMPLEMENTATION SEMANTICS           │  ← Focus
+    ┌───┴─────────────────────────────────────────┴───┐
+    │              API SEMANTICS                      │  ← Most Focus
+    └─────────────────────────────────────────────────┘
+
+    ↑ HARDER TO CHANGE LATER = MORE HUMAN REVIEW TIME
+#+end_example
+
+*Key Insight:* A formatting issue is a 2-minute fix. A breaking API change after release is a multi-sprint disaster. Prioritize accordingly.
+
+* When to Use This Workflow
+
+Use this workflow when:
+- Reviewing pull requests / merge requests
+- Doing self-review before submitting code
+- Pair reviewing with another developer
+
+* Effort Scaling
+
+Not all changes need the same scrutiny:
+
+| Change Type | Review Depth | Time |
+|-------------+--------------+------|
+| Typo/docs fix | Quick scan for correctness | 2-5 min |
+| Bug fix | Verify fix + no regressions | 10-15 min |
+| New feature | Full checklist, deep dive on logic | 30-60 min |
+| Architectural change | Bring in senior reviewers, verify design | 60+ min |
+
+* The Core Checklist
+
+Use this for every review. If you answer "no" or "maybe" to any item, dig deeper using the relevant Deep Dive section.
+
+** 1. API Semantics (Hardest to Change - Focus Most Here)
+
+These questions matter most because changes here break things for other people.
+
+- [ ] *Simple?* Is the API as small as possible but as large as needed?
+- [ ] *Predictable?* Does it follow existing patterns and the principle of least surprise?
+- [ ] *Clean boundaries?* Is there clear separation between public API and internal implementation?
+- [ ] *Generally useful?* Is the API helpful for common cases, not just one specific scenario?
+- [ ] *Backwards compatible?* Are there any breaking changes to things users already rely on?
+
+** 2. Implementation Semantics (Focus Here)
+
+Once the API looks good, check how the code actually works.
+
+- [ ] *Correct?* Does it actually do what the requirements/ticket says?
+- [ ] *Logically sound?* Are there edge cases, off-by-one errors, or logic bugs?
+- [ ] *Simple?* Could this be simpler? Is there unnecessary complexity or over-engineering?
+- [ ] *Robust?* Does it handle errors gracefully? Concurrency issues?
+- [ ] *Secure?* Is user input validated? No hardcoded secrets? (See Security Deep Dive)
+- [ ] *Performant?* Any expensive operations, N+1 queries, or scaling concerns? (See Performance Deep Dive)
+- [ ] *Observable?* Is there appropriate logging, metrics, or tracing?
+- [ ] *Dependencies OK?* Do new libraries pull their weight? License acceptable?
+
+** 3. Documentation
+
+Good code still needs good explanations.
+
+- [ ] *New features documented?* README, API docs, or user guides updated?
+- [ ] *Code comments explain "why"?* Complex logic or non-obvious decisions explained?
+- [ ] *Readable?* Documentation is clear, accurate, no major errors?
+
+** 4. Tests (Automate the "Pass/Fail" Check)
+
+Don't just check if tests pass - check if they're good tests.
+
+- [ ] *Tests exist?* Are new features and bug fixes covered by tests?
+- [ ] *Test the right things?* Do tests verify behavior, not implementation details?
+- [ ] *Edge cases covered?* Are boundary conditions and error paths tested?
+- [ ] *Right test type?* Unit tests where possible, integration tests where necessary?
+- [ ] *Would catch regressions?* If someone breaks this later, will a test fail?
+
+** 5. Code Style (Automate This)
+
+Let linters and formatters handle these. Only check manually if tooling isn't set up.
+
+- [ ] *Linter passes?* No style violations flagged by automated tools?
+- [ ] *Readable?* Methods reasonable length? Clear naming?
+- [ ] *DRY?* No unnecessary duplication?
+
+** 6. Process & Collaboration
+
+Code review is a conversation, not an inspection.
+
+- [ ] *PR has context?* Does the description explain WHY, not just what?
+- [ ] *Reasonable size?* Is this reviewable in one sitting? (<400 lines ideal)
+- [ ] *Self-reviewed?* Has the author clearly reviewed their own code first?
+- [ ] *No debug artifacts?* Console.logs, commented code, TODOs without tickets removed?
+
+* Deep Dives
+
+Use these when the Core Checklist flags a concern. Each section provides detailed checks for specific areas.
+
+** Security Deep Dive
+
+When "Is it secure?" raises concerns, check these:
+
+*** Input Validation
+- [ ] All user input validated and sanitized
+- [ ] SQL queries parameterized (no string concatenation)
+- [ ] Output encoded to prevent XSS
+- [ ] File uploads validated (type, size, content)
+- [ ] Path traversal prevented
+
+*** Authentication & Authorization
+- [ ] Auth checks at every access point
+- [ ] Session management secure
+- [ ] CSRF protections for state-changing operations
+- [ ] Rate limiting where appropriate
+
+*** Secrets & Data
+- [ ] No hardcoded credentials (use env vars/secrets manager)
+- [ ] Sensitive data encrypted at rest and in transit
+- [ ] Error messages don't leak system information
+- [ ] Logs exclude sensitive data
+
+*** Common Vulnerabilities (OWASP)
+- [ ] No SQL injection vectors
+- [ ] No command injection vectors
+- [ ] No unsafe deserialization
+- [ ] Proper HTTP security headers
+
+** Performance Deep Dive
+
+When "Is it performant?" raises concerns, check these:
+
+*** Database
+- [ ] No N+1 query problems
+- [ ] Appropriate indexes exist
+- [ ] No SELECT * - explicit columns only
+- [ ] Pagination for large result sets
+- [ ] Connection pooling used
+
+*** Code Efficiency
+- [ ] No unnecessary loops or iterations
+- [ ] Appropriate data structures (HashMap vs List lookups)
+- [ ] Expensive operations cached where beneficial
+- [ ] Large collections processed efficiently (streaming vs loading all)
+- [ ] Resources properly closed (connections, file handles)
+
+*** Scaling
+- [ ] Will this work with 10x/100x the data?
+- [ ] Async operations used where beneficial
+- [ ] No blocking operations in hot paths
+
+** Concurrency Deep Dive
+
+When reviewing multi-threaded or async code:
+
+- [ ] Shared mutable state properly synchronized
+- [ ] No race conditions
+- [ ] Lazy initialization is thread-safe
+- [ ] Getters don't return mutable internal objects
+- [ ] Thread-safe collections used where needed
+- [ ] Consistent lock ordering (no deadlocks)
+- [ ] Loop variables passed into closures/lambdas (not captured)
+- [ ] Proper timeouts on blocking operations
+- [ ] Tests run with race detector where available
+
+** Error Handling Deep Dive
+
+When reviewing error handling and logging:
+
+- [ ] Exceptions caught at appropriate levels
+- [ ] System "fails safe" (deny on error, not grant)
+- [ ] Transactions rolled back on failure
+- [ ] Error messages help debugging but don't leak info
+- [ ] Correlation IDs for tracing across services
+- [ ] Log levels appropriate (DEBUG/INFO/WARN/ERROR)
+- [ ] Critical failures trigger alerts
+
+** API Compatibility Deep Dive
+
+When reviewing API changes:
+
+*** Non-Breaking (Safe)
+- Adding optional fields
+- Adding new endpoints
+- Making required fields optional
+- Adding new enum values (if clients handle unknown)
+
+*** Breaking (Dangerous)
+- Removing fields or endpoints
+- Changing field types
+- Making optional fields required
+- Changing semantic meaning of fields
+- Changing response status codes
+
+*** If Breaking Changes Required
+- [ ] Version bumped appropriately
+- [ ] Migration path documented
+- [ ] Deprecation warnings added
+- [ ] Transition period planned
+
+** Dependencies Deep Dive
+
+When new dependencies are added:
+
+- [ ] Actually necessary (not just convenience)
+- [ ] From trusted, reputable source
+- [ ] Actively maintained (recent commits, responsive maintainers)
+- [ ] No known vulnerabilities (check Dependabot/Snyk)
+- [ ] License compatible with project
+- [ ] Doesn't bloat dependency tree excessively
+- [ ] Version pinned in lock file
+
+* How to Give Feedback
+
+** Frame as Questions
+Bad: "This is wrong."
+Good: "I noticed we used X here - would Y be more efficient for this case?"
+
+** Distinguish Severity
+- *Blocker:* Must fix before merge (security issue, breaking bug)
+- *Should fix:* Important but could be follow-up PR
+- *Suggestion:* Nice to have, author's discretion
+- *Nit:* Minor style preference, totally optional
+
+** Call Out Good Stuff
+Reviews are for learning too. If you see a clever solution or clean pattern, say so.
+
+** Be Timely
+Don't let PRs sit. If you're stuck, ask someone to pair-review with you.
+
+* Anti-Patterns to Avoid
+
+** The Empty LGTM
+Never rubber-stamp with "Looks Good To Me" without actually reviewing. Even noting one thing you liked shows you read it.
+
+** Nitpicking
+Don't comment on spaces, tabs, or semicolons. Let automated tools handle formatting. Focus on logic and design.
+
+** The Stall
+Don't let PRs languish for days. Review within 24 hours or communicate delays.
+
+** Bikeshedding
+Don't spend 30 minutes debating variable names while ignoring architectural concerns.
+
+** Review by Line Count
+400 lines of careful refactoring may need less scrutiny than 40 lines of new auth logic. Adjust effort to risk, not size.
+
+* Validation Checklist
+
+Before approving, verify:
+
+- [ ] Core checklist complete (all 5 pyramid levels)
+- [ ] Any "maybe" answers investigated with Deep Dives
+- [ ] Feedback framed constructively
+- [ ] Blockers clearly marked vs suggestions
+- [ ] You could explain this code to someone else
+
+* Sources
+
+- [[https://www.morling.dev/blog/the-code-review-pyramid/][The Code Review Pyramid]] - Gunnar Morling
+- [[https://google.github.io/eng-practices/review/][Google Engineering Practices]] - Code Review Guidelines
+- [[https://owasp.org/www-project-code-review-guide/][OWASP Code Review Guide]] - Security Checklist
+- [[https://github.com/code-review-checklists/java-concurrency][Java Concurrency Checklist]] - Thread Safety
+- [[https://go.dev/wiki/CodeReviewConcurrency][Go Concurrency Wiki]] - Race Conditions
