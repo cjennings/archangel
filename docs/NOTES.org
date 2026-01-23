@@ -329,6 +329,65 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-23 Fri @ 01:21 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Replaced GRUB with ZFSBootMenu bootloader in install-archzfs
+- Researched 5 open-source ZFS installation projects for best practices
+- Created implementation plan (PLAN-zfsbootmenu-implementation.org)
+- Deleted GRUB snapshot tooling: grub-zfs-snap, 40_zfs_snapshots, zz-grub-zfs-snap.hook, zfs-snap-prune
+- Updated build.sh to remove GRUB file copying
+- Updated zfssnapshot and zfsrollback to remove grub-zfs-snap calls
+- Built and tested ISO successfully:
+  - Single disk installation: PASSED
+  - 2-disk mirror (mirror-0): PASSED
+  - 3-disk RAIDZ1 (raidz1-0): PASSED
+- Committed to zfsbootmenu branch, pushed to origin
+- Copied ISO to Ventoy flash drive (/dev/sda1)
+
+*Key Technical Changes:*
+- EFI partition reduced from 1GB to 512MB (only holds ZFSBootMenu)
+- EFI mounts at /efi instead of /boot
+- Kernel/initramfs live on ZFS root (enables snapshot boot with matching kernel)
+- Downloads pre-built ZFSBootMenu EFI from get.zfsbootmenu.org
+- Creates boot entries for all disks in multi-disk configs
+- Syncs ZFSBootMenu to all EFI partitions for redundancy
+- Sets org.zfsbootmenu:commandline on zroot/ROOT for kernel cmdline inheritance
+- AMD GPU workarounds (pg_mask, cwsr_enable) auto-added when AMD detected
+
+*Key Decisions:*
+- /boot must NOT be a separate ZFS dataset (per research from all 5 projects)
+- Download pre-built ZFSBootMenu rather than building from AUR
+- Use --unicode parameter for ZFSBootMenu cmdline in efibootmgr
+
+*Files Modified:*
+- [[file:../build.sh][build.sh]] - Removed grub-zfs-snap copying
+- [[file:../custom/install-archzfs][custom/install-archzfs]] - Major ZFSBootMenu rewrite
+- [[file:../custom/zfssnapshot][custom/zfssnapshot]] - Removed grub-zfs-snap call
+- [[file:../custom/zfsrollback][custom/zfsrollback]] - Removed grub-zfs-snap call
+
+*Files Deleted:*
+- custom/grub-zfs-snap
+- custom/40_zfs_snapshots
+- custom/zz-grub-zfs-snap.hook
+- custom/zfs-snap-prune
+
+*Files Created:*
+- [[file:../PLAN-zfsbootmenu-implementation.org][PLAN-zfsbootmenu-implementation.org]] - Implementation plan
+- [[file:2026-01-22-ratio-amd-gpu-freeze-fix-instructions.org][docs/2026-01-22-ratio-amd-gpu-freeze-fix-instructions.org]] - Filed from inbox
+- [[file:research-sandreas-zarch.org][docs/research-sandreas-zarch.org]] - Research notes
+- [[file:session-context.org][docs/session-context.org]] - Session tracking
+
+*Commits Made:*
+- 2ad560b: Replace GRUB with ZFSBootMenu bootloader
+
+*Next Steps:*
+- Test ZFSBootMenu on physical hardware (ratio or new install)
+- Merge zfsbootmenu branch to main after hardware validation
+- Consider encrypted pool test (requires interactive passphrase)
+
 *** 2026-01-22 Thu @ 15:44 -0600
 
 *Status:* COMPLETE
@@ -479,29 +538,3 @@ Each entry should use this format:
 - Test booting the installed system
 - Git commit all changes
 
-*** 2026-01-17 Sat @ 13:16 -0600
-
-*Status:* COMPLETE (continued above)
-
-*What We Completed:*
-- Initialized git repository
-- Created .gitignore (excludes work/, out/, profile/, zfs-packages/)
-- Initial commit with all build scripts
-- Added docs/ to git (decided to track publicly)
-- Built fresh ISO (archzfs-claude-2026.01.17-x86_64.iso, 4.9G)
-- Tested ISO in QEMU VM
-- Documented project goals and design decisions in NOTES.org
-
-*Key Decisions Made:*
-- Use linux-lts + zfs-dkms from archzfs.com (DKMS ensures kernel compatibility)
-- Less aggressive snapshot policy (TrueNAS handles long-term backups)
-- All install questions upfront, then unattended installation
-- Root account only (archsetup creates user post-reboot)
-- 32px GRUB font for HiDPI displays
-- WiFi config tested before install starts
-
-*Files Modified:*
-- [[file:../.gitignore][.gitignore]] - created
-- [[file:../build.sh][build.sh]] - major rewrite
-- [[file:../custom/install-archzfs][custom/install-archzfs]] - complete rewrite
-- [[file:../scripts/test-vm.sh][scripts/test-vm.sh]] - added serial console
