@@ -101,10 +101,5 @@ done
 
 echo ""
 echo "Snapshot complete. Verify with: zfs list -t snapshot | grep $snapshot_name"
-
-# Update GRUB boot menu if grub-zfs-snap is available
-if command -v grub-zfs-snap &> /dev/null; then
-    echo ""
-    echo "Updating GRUB boot menu..."
-    grub-zfs-snap
-fi
+echo ""
+echo "To boot from this snapshot: reboot and press Ctrl+D at ZFSBootMenu"

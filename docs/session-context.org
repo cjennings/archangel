@@ -1,0 +1,52 @@
+#+TITLE: Session Context
+#+DATE: 2026-01-22
+
+* Session: Thursday 2026-01-22 21:37 CST - ongoing
+
+** Current Task
+Creating implementation plan to replace GRUB with ZFSBootMenu in install-archzfs.
+
+** Status
+Plan written and updated with research findings.
+
+** Work Completed This Session
+
+1. Read protocols.org and NOTES.org
+2. Ran session startup workflow
+3. Found inbox item: instructions.txt (AMD GPU fix guide from earlier session)
+4. Created detailed ZFSBootMenu implementation plan
+5. Researched 5 comparable open-source projects:
+   - eoli3n/archiso-zfs + arch-config
+   - PandaScience/arch-on-zfs
+   - sandreas/zarch
+   - danboid/ALEZ
+   - danfossi/Arch-ZFS-Root-Installation-Script
+6. Updated plan with best practices from research
+
+** Key Corrections from Research
+
+CRITICAL: The original plan incorrectly proposed creating a /boot dataset.
+All researched projects agree: /boot must be a DIRECTORY inside ROOT/default,
+NOT a separate ZFS dataset. This ensures snapshots include the kernel.
+
+Other improvements adopted:
+- Set org.zfsbootmenu:commandline on ROOT parent (not ROOT/default) for inheritance
+- Add ZFSBootMenu EFI parameters: zbm.timeout, zbm.prefer, zbm.import_policy
+- Copy hostid to installed system
+- Set bootfs pool property
+
+** Files Created/Modified
+
+- PLAN-zfsbootmenu-implementation.org - Main implementation plan (project root)
+- docs/session-context.org - This file
+
+** Inbox Status
+
+1 item pending: instructions.txt (AMD GPU fix guide)
+- Recommendation: file to docs/2026-01-22-ratio-amd-gpu-freeze-fix-instructions.org
+
+** Next Steps
+
+1. File inbox item (instructions.txt)
+2. Decide whether to implement the ZFSBootMenu plan now or later
+3. If implementing: create git branch, follow plan steps, test

@@ -693,7 +693,7 @@ show_summary() {
     else
         echo "  ZFS Pool:     $POOL_NAME (encrypted)"
     fi
-    echo "  Boot:         EFI on all disks (redundant)"
+    echo "  Boot:         ZFSBootMenu on all disks (redundant)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
@@ -717,8 +717,9 @@ partition_disks() {
         wipefs -af "$disk"
         sgdisk --zap-all "$disk"
 
-        # Create partitions: 1G EFI + rest for ZFS
-        sgdisk -n 1:0:+1G -t 1:ef00 -c 1:"EFI" "$disk"
+        # Create partitions: 512M EFI + rest for ZFS
+        # EFI only needs to hold ZFSBootMenu binary (~64MB) - 512MB is plenty
+        sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$disk"
         sgdisk -n 2:0:0 -t 2:bf00 -c 2:"ZFS" "$disk"
 
         # Determine partition names (handle nvme/mmcblk naming)
@@ -860,10 +861,11 @@ create_datasets() {
 
 mount_efi() {
     step "Mounting EFI Partition"
-    mkdir -p /mnt/boot
-    # Mount primary (first) EFI partition
-    mount "${EFI_PARTS[0]}" /mnt/boot
-    info "Primary EFI partition ${EFI_PARTS[0]} mounted at /mnt/boot"
+    # EFI partition mounts at /efi - only holds ZFSBootMenu binary
+    # /boot is a directory on ZFS root (kernels live on ZFS for snapshot safety)
+    mkdir -p /mnt/efi
+    mount "${EFI_PARTS[0]}" /mnt/efi
+    info "EFI partition ${EFI_PARTS[0]} mounted at /mnt/efi"
 }
 
 install_base() {
@@ -898,8 +900,6 @@ EOF
         linux-firmware \
         zfs-dkms \
         zfs-utils \
-        grub \
-        freetype2 \
         efibootmgr \
         networkmanager \
         avahi \
@@ -922,10 +922,10 @@ EOF
 configure_system() {
     step "Configuring System"
 
-    # fstab (only for EFI)
+    # fstab (only for EFI - /boot is on ZFS root)
     info "Generating fstab..."
-    echo "# /boot - EFI System Partition" > /mnt/etc/fstab
-    echo "UUID=$(blkid -s UUID -o value "${EFI_PARTS[0]}")  /boot  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
+    echo "# /efi - EFI System Partition (ZFSBootMenu binary)" > /mnt/etc/fstab
+    echo "UUID=$(blkid -s UUID -o value "${EFI_PARTS[0]}")  /efi  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
 
     # Timezone
     info "Setting timezone to $TIMEZONE..."
@@ -1097,8 +1097,8 @@ EOF
     arch-chroot /mnt mkinitcpio -P
 }
 
-configure_bootloader() {
-    step "Configuring GRUB Bootloader"
+configure_zfsbootmenu() {
+    step "Configuring ZFSBootMenu"
 
     # Ensure hostid exists BEFORE reading it
     # This is critical: hostid command returns a value even without /etc/hostid,
@@ -1111,76 +1111,80 @@ configure_bootloader() {
     local host_id
     host_id=$(hostid)
 
-    # Configure GRUB defaults
-    cat > /mnt/etc/default/grub << EOF
-GRUB_DEFAULT=0
-GRUB_TIMEOUT=5
-GRUB_DISTRIBUTOR="Arch Linux (ZFS)"
-GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3"
-GRUB_CMDLINE_LINUX="spl.spl_hostid=0x$host_id"
-GRUB_PRELOAD_MODULES="part_gpt part_msdos zfs"
-GRUB_TERMINAL_OUTPUT="console"
-GRUB_DISABLE_OS_PROBER=true
-GRUB_GFXMODE=auto
-GRUB_GFXPAYLOAD_LINUX=keep
-GRUB_FONT=/boot/grub/fonts/DejaVuSansMono32.pf2
-EOF
+    # Copy hostid to installed system (ZFS uses this for pool ownership)
+    cp /etc/hostid /mnt/etc/hostid
 
-    # Install GRUB to each EFI partition for boot redundancy
-    info "Installing GRUB to ${#EFI_PARTS[@]} EFI partition(s)..."
+    # Create ZFSBootMenu directory on EFI
+    mkdir -p /mnt/efi/EFI/ZBM
 
-    for i in "${!EFI_PARTS[@]}"; do
-        local efi_part="${EFI_PARTS[$i]}"
-        local bootloader_id="GRUB"
-        if [[ ${#EFI_PARTS[@]} -gt 1 ]]; then
-            bootloader_id="GRUB-disk$((i+1))"
+    # Download ZFSBootMenu release EFI binary
+    # Using the bundled release which includes everything needed
+    info "Downloading ZFSBootMenu..."
+    local zbm_url="https://get.zfsbootmenu.org/efi"
+    if ! curl -fsSL -o /mnt/efi/EFI/ZBM/zfsbootmenu.efi "$zbm_url"; then
+        error "Failed to download ZFSBootMenu"
+    fi
+    info "ZFSBootMenu binary installed."
+
+    # Set kernel command line on the ROOT PARENT dataset
+    # This allows inheritance to all boot environments (future-proofing)
+    # ZFSBootMenu reads org.zfsbootmenu:commandline property
+    local cmdline="rw loglevel=3"
+
+    # Add any AMD GPU workarounds if needed (detect Strix Halo etc)
+    if lspci | grep -qi "amd.*display\|amd.*vga"; then
+        info "AMD GPU detected - adding workaround parameters"
+        cmdline="$cmdline amdgpu.pg_mask=0 amdgpu.cwsr_enable=0"
+    fi
+
+    # Set on ROOT parent so all boot environments inherit it
+    zfs set org.zfsbootmenu:commandline="$cmdline" "$POOL_NAME/ROOT"
+    info "Kernel command line set on $POOL_NAME/ROOT (inherited by children)"
+
+    # Set bootfs property - tells ZFSBootMenu which dataset to boot by default
+    zpool set bootfs="$POOL_NAME/ROOT/default" "$POOL_NAME"
+    info "Default boot filesystem set to $POOL_NAME/ROOT/default"
+
+    # Create EFI boot entries for each disk
+    # ZFSBootMenu EFI parameters (passed via --unicode):
+    #   spl_hostid=0x...     - Required for pool import
+    #   zbm.timeout=3        - Seconds before auto-boot (-1 = always show menu)
+    #   zbm.prefer=POOLNAME  - Preferred pool to boot from
+    #   zbm.import_policy=hostid - How to handle pool imports
+    local zbm_cmdline="spl_hostid=0x${host_id} zbm.timeout=3 zbm.prefer=${POOL_NAME} zbm.import_policy=hostid"
+
+    for i in "${!SELECTED_DISKS[@]}"; do
+        local disk="${SELECTED_DISKS[$i]}"
+        local label="ZFSBootMenu"
+        if [[ ${#SELECTED_DISKS[@]} -gt 1 ]]; then
+            label="ZFSBootMenu-disk$((i+1))"
         fi
 
-        # Unmount current boot if mounted, mount this EFI partition
-        umount /mnt/boot 2>/dev/null || true
-        mount "$efi_part" /mnt/boot
+        # Determine partition number (always 1 - first partition is EFI)
+        local part_num=1
 
-        # Create directories and font
-        mkdir -p /mnt/boot/grub/fonts
-        arch-chroot /mnt grub-mkfont -s 32 -o /boot/grub/fonts/DejaVuSansMono32.pf2 \
-            /usr/share/fonts/TTF/DejaVuSansMono.ttf 2>/dev/null || true
-
-        # Install GRUB
-        info "Installing GRUB to $efi_part (bootloader-id: $bootloader_id)..."
-        arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot \
-            --bootloader-id="$bootloader_id" --recheck
-
-        # Generate configuration
-        arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+        info "Creating EFI boot entry: $label on $disk"
+        efibootmgr --create \
+            --disk "$disk" \
+            --part "$part_num" \
+            --label "$label" \
+            --loader '\EFI\ZBM\zfsbootmenu.efi' \
+            --unicode "$zbm_cmdline" \
+            --quiet
     done
 
-    # Remount primary EFI for rest of installation
-    umount /mnt/boot 2>/dev/null || true
-    mount "${EFI_PARTS[0]}" /mnt/boot
-
-    if [[ ${#EFI_PARTS[@]} -gt 1 ]]; then
-        info "GRUB installed to all ${#EFI_PARTS[@]} disks for boot redundancy."
+    # Get the boot entry number and set as first in boot order
+    local bootnum
+    bootnum=$(efibootmgr | grep "ZFSBootMenu" | head -1 | grep -oP 'Boot\K[0-9A-F]+')
+    if [[ -n "$bootnum" ]]; then
+        # Get current boot order, prepend our entry
+        local current_order
+        current_order=$(efibootmgr | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+        efibootmgr --bootorder "$bootnum,$current_order" --quiet
+        info "ZFSBootMenu set as primary boot option"
     fi
-}
 
-configure_grub_zfs_snap() {
-    step "Configuring ZFS Snapshot Boot Entries"
-
-    # Install grub-zfs-snap script
-    info "Installing grub-zfs-snap..."
-    cp /usr/local/bin/grub-zfs-snap /mnt/usr/local/bin/grub-zfs-snap
-    chmod +x /mnt/usr/local/bin/grub-zfs-snap
-
-    # Install GRUB generator
-    cp /usr/local/share/grub-zfs-snap/40_zfs_snapshots /mnt/etc/grub.d/40_zfs_snapshots
-    chmod +x /mnt/etc/grub.d/40_zfs_snapshots
-
-    # Install pacman hook for auto-regeneration
-    mkdir -p /mnt/etc/pacman.d/hooks
-    cp /usr/local/share/grub-zfs-snap/zz-grub-zfs-snap.hook /mnt/etc/pacman.d/hooks/
-
-    info "ZFS snapshots will appear in GRUB boot menu."
-    info "Run 'grub-zfs-snap' to manually regenerate after creating snapshots."
+    info "ZFSBootMenu configuration complete."
 }
 
 configure_zfs_services() {
@@ -1198,18 +1202,13 @@ configure_zfs_services() {
     arch-chroot /mnt systemctl enable zfs-mount.service
     arch-chroot /mnt systemctl enable zfs-import.target
 
-    # Copy hostid to installed system (ZFS uses this for pool ownership)
-    # Note: hostid is generated in configure_bootloader, so it always exists here
-    cp /etc/hostid /mnt/etc/hostid
+    # Note: hostid and bootfs are already set by configure_zfsbootmenu()
 
     # Disable cachefile - we use zfs-import-scan which doesn't need it
     # Also remove any existing cachefile since zfs-import-scan has a condition
     # that prevents it from running if /etc/zfs/zpool.cache exists
     zpool set cachefile=none "$POOL_NAME"
     rm -f /mnt/etc/zfs/zpool.cache
-
-    # Set bootfs
-    zpool set bootfs="$POOL_NAME/ROOT/default" "$POOL_NAME"
 
     # Enable other services
     arch-chroot /mnt systemctl enable NetworkManager
@@ -1251,10 +1250,6 @@ else
     echo "Warning: Failed to create snapshot" >&2
 fi
 
-# Prune old snapshots (runs quietly, non-blocking)
-if [[ -x /usr/local/bin/zfs-snap-prune ]]; then
-    /usr/local/bin/zfs-snap-prune --quiet &
-fi
 EOF
 
     chmod +x /mnt/usr/local/bin/zfs-pre-snapshot
@@ -1262,49 +1257,17 @@ EOF
     info "Pacman hook configured."
 }
 
-configure_snapshot_retention() {
-    step "Configuring Snapshot Retention"
+configure_zfs_tools() {
+    step "Installing ZFS Management Tools"
 
     # Copy ZFS management scripts
-    cp /usr/local/bin/zfs-snap-prune /mnt/usr/local/bin/zfs-snap-prune
     cp /usr/local/bin/zfssnapshot /mnt/usr/local/bin/zfssnapshot
     cp /usr/local/bin/zfsrollback /mnt/usr/local/bin/zfsrollback
-    chmod +x /mnt/usr/local/bin/zfs-snap-prune
     chmod +x /mnt/usr/local/bin/zfssnapshot
     chmod +x /mnt/usr/local/bin/zfsrollback
 
-    # Create systemd service for pruning
-    cat > /mnt/etc/systemd/system/zfs-snap-prune.service << 'EOF'
-[Unit]
-Description=Prune old ZFS snapshots
-After=zfs.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/zfs-snap-prune --quiet
-EOF
-
-    # Create systemd timer for daily pruning
-    cat > /mnt/etc/systemd/system/zfs-snap-prune.timer << 'EOF'
-[Unit]
-Description=Daily ZFS snapshot pruning
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-RandomizedDelaySec=1h
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    # Enable the timer
-    arch-chroot /mnt systemctl enable zfs-snap-prune.timer
-
-    info "ZFS management scripts installed: zfssnapshot, zfsrollback, zfs-snap-prune"
-    info "Snapshot retention configured (daily pruning enabled)."
-    info "Policy: Keep 20 recent, delete if older than 180 days"
-    info "Genesis snapshot is always preserved."
+    info "ZFS management scripts installed: zfssnapshot, zfsrollback"
+    info "Note: Install sanoid via archsetup for automated snapshot retention."
 }
 
 copy_archsetup() {
@@ -1326,7 +1289,6 @@ sync_efi_partitions() {
 
     step "Syncing EFI Partitions for Redundancy"
 
-    local primary_efi="${EFI_PARTS[0]}"
     local temp_mount="/mnt/efi_sync"
 
     for i in "${!EFI_PARTS[@]}"; do
@@ -1335,13 +1297,14 @@ sync_efi_partitions() {
         fi
 
         local efi_part="${EFI_PARTS[$i]}"
-        info "Syncing to EFI partition $((i+1)): $efi_part"
+        info "Syncing ZFSBootMenu to EFI partition $((i+1)): $efi_part"
 
         mkdir -p "$temp_mount"
         mount "$efi_part" "$temp_mount"
 
-        # Sync all content from primary EFI (mounted at /mnt/boot) to secondary
-        rsync -a --delete /mnt/boot/ "$temp_mount/"
+        # Copy ZFSBootMenu binary to secondary EFI partitions
+        mkdir -p "$temp_mount/EFI/ZBM"
+        cp /mnt/efi/EFI/ZBM/zfsbootmenu.efi "$temp_mount/EFI/ZBM/"
 
         umount "$temp_mount"
     done
@@ -1420,7 +1383,7 @@ cleanup() {
     ZFS_PASSPHRASE=""
 
     info "Unmounting filesystems..."
-    umount /mnt/boot 2>/dev/null || true
+    umount /mnt/efi 2>/dev/null || true
 
     info "Exporting ZFS pool..."
     zpool export "$POOL_NAME"
@@ -1443,10 +1406,17 @@ print_summary() {
         echo "  ZFS Pool:     $POOL_NAME (encrypted)"
     fi
     echo ""
-    echo "ZFS Features:"
+    echo "ZFSBootMenu Features:"
+    echo "  - Boot from any snapshot (Ctrl+D at boot menu)"
     echo "  - Genesis snapshot: pristine post-install state"
     echo "  - Pre-pacman snapshots for safe upgrades"
     echo "  - Sanoid/syncoid configured by archsetup"
+    echo ""
+    echo "Boot Menu Keys (at ZFSBootMenu):"
+    echo "  Enter    - Boot selected environment"
+    echo "  e        - Edit kernel command line"
+    echo "  Ctrl+D   - Show snapshot selector"
+    echo "  Ctrl+R   - Recovery shell"
     echo ""
     echo "Useful Commands:"
     echo "  List snapshots:    zfs list -t snapshot"
@@ -1485,11 +1455,10 @@ main() {
     configure_wifi
     configure_ssh
     configure_initramfs
-    configure_bootloader
-    configure_grub_zfs_snap
+    configure_zfsbootmenu
     configure_zfs_services
     configure_pacman_hook
-    configure_snapshot_retention
+    configure_zfs_tools
     copy_archsetup
     sync_efi_partitions
     create_genesis_snapshot

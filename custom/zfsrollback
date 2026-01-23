@@ -171,14 +171,8 @@ done
 echo ""
 if [ $failed -eq 0 ]; then
     echo "Rollback complete."
-
-    # Update GRUB boot menu if grub-zfs-snap is available
-    # (destroyed snapshots need to be removed from menu)
-    if command -v grub-zfs-snap &> /dev/null; then
-        echo ""
-        echo "Updating GRUB boot menu..."
-        grub-zfs-snap
-    fi
+    echo ""
+    echo "Note: ZFSBootMenu auto-detects snapshots - no menu regeneration needed."
 else
     echo "Rollback completed with $failed failure(s)"
     exit 1
