@@ -1,18 +1,27 @@
-# install-archzfs.conf - Unattended Installation Configuration
+# archangel.conf - Unattended Installation Configuration
 #
-# Copy this file to /root/install-archzfs.conf and edit values.
-# Or use: install-archzfs --config-file /path/to/your-config.conf
+# Copy this file and edit values.
+# Usage: archangel --config-file /path/to/your-config.conf
 #
 # Required fields: HOSTNAME, TIMEZONE, DISKS, ROOT_PASSWORD
-# Plus either ZFS_PASSPHRASE or NO_ENCRYPT=yes
+# For ZFS: also need ZFS_PASSPHRASE or NO_ENCRYPT=yes
 # All other fields have sensible defaults.
+
+#############################
+# Filesystem Selection
+#############################
+
+# Filesystem type (optional, default: zfs)
+# Options: zfs, btrfs
+# Note: btrfs support coming soon
+FILESYSTEM=zfs
 
 #############################
 # System Configuration
 #############################
 
 # Hostname for the installed system (required)
-HOSTNAME=archzfs
+HOSTNAME=archangel
 
 # Timezone (required) - Use format: Region/City
 # Examples: America/Los_Angeles, Europe/London, Asia/Tokyo

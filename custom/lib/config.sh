@@ -10,6 +10,7 @@ CONFIG_FILE=""
 UNATTENDED=false
 
 # These get populated by config file or interactive prompts
+FILESYSTEM=""           # "zfs" or "btrfs"
 HOSTNAME=""
 TIMEZONE=""
 LOCALE=""

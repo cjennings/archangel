@@ -32,6 +32,9 @@ source "$SCRIPT_DIR/lib/zfs.sh"
 # Configuration
 #############################
 
+# Filesystem selection (zfs or btrfs)
+FILESYSTEM="zfs"       # Default to ZFS, can be changed interactively or via config
+
 # These will be set interactively
 HOSTNAME=""
 TIMEZONE=""
@@ -87,14 +90,26 @@ gather_input() {
         # Validate required config values
         if [[ -z "$HOSTNAME" ]]; then error "Config missing required: HOSTNAME"; fi
         if [[ -z "$TIMEZONE" ]]; then error "Config missing required: TIMEZONE"; fi
-        if [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]]; then error "Config missing required: ZFS_PASSPHRASE"; fi
         if [[ -z "$ROOT_PASSWORD" ]]; then error "Config missing required: ROOT_PASSWORD"; fi
         if [[ ${#SELECTED_DISKS[@]} -eq 0 ]]; then error "Config missing required: DISKS"; fi
 
         # Set defaults for optional values
+        [[ -z "$FILESYSTEM" ]] && FILESYSTEM="zfs" || true
         [[ -z "$LOCALE" ]] && LOCALE="en_US.UTF-8" || true
         [[ -z "$KEYMAP" ]] && KEYMAP="us" || true
         [[ -z "$ENABLE_SSH" ]] && ENABLE_SSH="yes" || true
+
+        # ZFS-specific validation
+        if [[ "$FILESYSTEM" == "zfs" ]]; then
+            if [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]]; then
+                error "Config missing required: ZFS_PASSPHRASE (or set NO_ENCRYPT=yes)"
+            fi
+        fi
+
+        # Btrfs not yet implemented
+        if [[ "$FILESYSTEM" == "btrfs" ]]; then
+            error "Btrfs support not yet implemented. Use FILESYSTEM=zfs"
+        fi
 
         # Determine RAID level if not specified
         if [[ -z "$RAID_LEVEL" && ${#SELECTED_DISKS[@]} -gt 1 ]]; then
@@ -103,6 +118,7 @@ gather_input() {
         fi
 
         info "Configuration loaded:"
+        info "  Filesystem: $FILESYSTEM"
         info "  Hostname: $HOSTNAME"
         info "  Timezone: $TIMEZONE"
         info "  Locale: $LOCALE"
@@ -117,12 +133,19 @@ gather_input() {
 
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════╗"
-    echo "║                     Arch Linux ZFS Root                       ║"
-    echo "║                Configuration and Installation                 ║"
+    echo "║                        Archangel                              ║"
+    echo "║            Arch Linux with Snapshot-Based Recovery            ║"
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo ""
     info "Answer all questions now. Installation will run unattended afterward."
     echo ""
+
+    select_filesystem
+
+    # Check for btrfs (not yet implemented)
+    if [[ "$FILESYSTEM" == "btrfs" ]]; then
+        error "Btrfs support not yet implemented. Please select ZFS."
+    fi
 
     get_hostname
     get_timezone
@@ -609,6 +632,7 @@ show_summary() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Configuration Summary:"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Filesystem:   $FILESYSTEM"
     echo "  Hostname:     $HOSTNAME"
     echo "  Timezone:     $TIMEZONE"
     echo "  Locale:       $LOCALE"
@@ -621,12 +645,16 @@ show_summary() {
     echo "  RAID Level:   ${RAID_LEVEL:-single (no RAID)}"
     echo "  WiFi:         ${WIFI_SSID:-Not configured}"
     echo "  SSH:          ${ENABLE_SSH:-yes} (root login)"
-    if [[ "$NO_ENCRYPT" == "yes" ]]; then
-        echo "  ZFS Pool:     $POOL_NAME (NOT encrypted)"
+    if [[ "$FILESYSTEM" == "zfs" ]]; then
+        if [[ "$NO_ENCRYPT" == "yes" ]]; then
+            echo "  ZFS Pool:     $POOL_NAME (NOT encrypted)"
+        else
+            echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+        fi
+        echo "  Boot:         ZFSBootMenu on all disks (redundant)"
     else
-        echo "  ZFS Pool:     $POOL_NAME (encrypted)"
+        echo "  Boot:         GRUB + grub-btrfs (snapshot boot)"
     fi
-    echo "  Boot:         ZFSBootMenu on all disks (redundant)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
