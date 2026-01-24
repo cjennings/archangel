@@ -1,67 +1,41 @@
 #+TITLE: Session Context - Active Session
 #+DATE: 2026-01-24
 
-* Session: Friday 2026-01-23 @ 14:08 CST (continued 2026-01-24)
+* Session: Saturday 2026-01-24 @ 10:07 CST
 
-** Key Decisions This Session
+** Key Accomplishments
 
-*** Project Rename: archangel
-- Decided to rename project from "archzfs" to "archangel"
+*** Phase 2.8 LUKS Btrfs: COMPLETE
+- Fixed GRUB_ENABLE_CRYPTODISK bug (heredoc was overwriting settings)
+- Consolidated LUKS GRUB config into configure_grub() function
+- VM test PASSED for btrfs-luks configuration
 
-*** Btrfs Implementation Approach
-- Phase 2: Single-disk btrfs, no encryption (test first)
-- Phase 2.7: Test basic btrfs before adding encryption
-- Phase 2.8: LUKS encryption after basic btrfs works
-- Phase 3: Multi-disk (stripe, mirror, raidX) + encrypted/unencrypted
+*** ISO Build Size Fix
+- Diagnosed 15G bloated ISO (vm-images from archsetup being copied)
+- Fixed build.sh to use rsync with exclusions
+- ISO now 2.0G (proper size)
 
-** Work Completed
+** Files Modified This Session
 
-*** Phase 1: Refactor (COMPLETE)
-- [X] lib/common.sh, config.sh, disk.sh, zfs.sh created
-- [X] Filesystem selection prompt
-- [X] Renamed to archangel
-- [X] VM test passed
+- build.sh - rsync with exclusions for archsetup copy
+- custom/lib/btrfs.sh - LUKS GRUB config fix in configure_grub()
 
-*** Phase 2.1-2.6: Btrfs Support (COMPLETE)
-- [X] Created lib/btrfs.sh with full implementation
-- [X] 10 subvolumes matching ZFS dataset layout
-- [X] Mount functions with proper options
-- [X] fstab generation (subvol= NOT subvolid!)
-- [X] GRUB + grub-btrfs configuration with serial console
-- [X] Snapper firstboot service (configures on first boot)
+** Commits Pending
+- build.sh change (archsetup rsync exclusions)
+- custom/lib/btrfs.sh change (LUKS GRUB fix)
 
-*** Phase 2.7: Basic Btrfs Testing (COMPLETE @ 05:23 CST)
-- [X] VM boots from installed btrfs disk
-- [X] GRUB menu shows and auto-boots
-- [X] All 10 subvolumes mount correctly
-- [X] Snapper works when configured
-- [X] Genesis snapshot can be created
-- [X] grub-btrfs detects snapshots
-
-*** Phase 2.8: LUKS Encryption (IMPLEMENTED @ 05:36 CST)
-- [X] LUKS functions in btrfs.sh (create, open, close containers)
-- [X] crypttab configuration
-- [X] encrypt hook for mkinitcpio
-- [X] GRUB cryptdevice parameter
-- [X] Encryption prompts in archangel
-- [X] LUKS_PASSPHRASE config variable
-- [X] btrfs-luks.conf test config
-- [ ] VM test pending
-
-** Commits This Session
-- a49f4b1: Phase 2.1: Implement btrfs support
-- 35a661c: Fix btrfs bugs from VM testing
-- bd0616c: Fix btrfs GRUB boot and snapper firstboot
-- 4a7b6c3: Update session context: Phase 2.7 complete
-- (pending): Phase 2.8: Add LUKS encryption for btrfs
+** Overall Progress
+| Phase | Description          | Status   |
+|-------|----------------------|----------|
+| 1     | Refactor/Modularize  | COMPLETE |
+| 2     | Btrfs Single-disk    | COMPLETE |
+| 2.8   | LUKS Encryption      | COMPLETE |
+| 3     | Multi-disk Btrfs     | Not started |
+| 4     | Testing Infrastructure | Partial |
+| 5     | CLI Tools            | Not started |
+| 6     | Documentation        | Not started |
 
 ** Next Steps
-1. VM test LUKS btrfs installation
-2. Rebuild ISO with all fixes
-3. Full end-to-end automated test
-4. Phase 3: Multi-disk support
-
-** Notes
-- Craig on remote console: 30 lines tall, ~145 columns wide
-- Testing approach: syntax first, then full VM test
-- Snapper requires D-Bus - can't configure in chroot, needs firstboot
+1. Commit changes (build.sh, lib/btrfs.sh)
+2. Phase 3: Multi-disk btrfs support
+3. Or other priorities as Craig directs

@@ -424,12 +424,17 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     }' "$PROFILE_DIR/profiledef.sh"
 fi
 
-# Copy archsetup into airootfs
+# Copy archsetup into airootfs (exclude large/unnecessary directories)
 if [[ -d /home/cjennings/code/archsetup ]]; then
     info "Copying archsetup into ISO..."
-    cp -r /home/cjennings/code/archsetup "$PROFILE_DIR/airootfs/code/"
-    rm -rf "$PROFILE_DIR/airootfs/code/archsetup/.git"
-    rm -rf "$PROFILE_DIR/airootfs/code/archsetup/.claude"
+    mkdir -p "$PROFILE_DIR/airootfs/code"
+    rsync -a --exclude='.git' \
+             --exclude='.claude' \
+             --exclude='vm-images' \
+             --exclude='test-results' \
+             --exclude='*.qcow2' \
+             --exclude='*.iso' \
+             /home/cjennings/code/archsetup "$PROFILE_DIR/airootfs/code/"
 fi
 
 # Pre-populate tealdeer (tldr) cache for offline use
