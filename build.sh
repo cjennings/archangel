@@ -417,6 +417,9 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
         /)/ i\  ["/usr/local/bin/lib/zfs.sh"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
+        /)/ i\  ["/usr/local/bin/lib/btrfs.sh"]="0:0:755"
+    }' "$PROFILE_DIR/profiledef.sh"
+    sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/etc/shadow"]="0:0:400"
     }' "$PROFILE_DIR/profiledef.sh"
 fi

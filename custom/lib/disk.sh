@@ -8,9 +8,16 @@
 
 # Partition a single disk for ZFS/Btrfs installation
 # Creates: EFI partition (512M) + root partition (rest)
+# Uses global FILESYSTEM variable to determine partition type
 partition_disk() {
     local disk="$1"
     local efi_size="${2:-512M}"
+
+    # Determine root partition type based on filesystem
+    local root_type="BF00"  # ZFS (Solaris root)
+    if [[ "$FILESYSTEM" == "btrfs" ]]; then
+        root_type="8300"    # Linux filesystem
+    fi
 
     info "Partitioning $disk..."
 
@@ -20,8 +27,8 @@ partition_disk() {
     # Create EFI partition (512M, type EF00)
     sgdisk -n 1:0:+${efi_size} -t 1:EF00 -c 1:"EFI" "$disk" || error "Failed to create EFI partition on $disk"
 
-    # Create root partition (rest of disk, type BF00 for ZFS or 8300 for Linux)
-    sgdisk -n 2:0:0 -t 2:BF00 -c 2:"ROOT" "$disk" || error "Failed to create root partition on $disk"
+    # Create root partition (rest of disk)
+    sgdisk -n 2:0:0 -t 2:$root_type -c 2:"ROOT" "$disk" || error "Failed to create root partition on $disk"
 
     # Notify kernel of partition changes
     partprobe "$disk" 2>/dev/null || true

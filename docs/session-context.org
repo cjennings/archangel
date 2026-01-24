@@ -11,67 +11,52 @@
 - Checked for conflicts: pwnerfly/Archangel is dead (2020, 0 stars, no license)
 - Name is clear for use
 
+*** Btrfs Implementation Approach
+- Phase 2: Single-disk btrfs, no encryption (test first)
+- Phase 2.7: Test basic btrfs before adding encryption
+- Phase 2.8: LUKS encryption after basic btrfs works
+- Phase 3: Multi-disk (stripe, mirror, raidX) + encrypted/unencrypted
+
+*** Partition Type Handling
+- disk.sh checks global FILESYSTEM variable
+- ZFS: BF00 (Solaris root)
+- Btrfs: 8300 (Linux filesystem)
+
 ** Work Completed
 
-*** 1. Btrfs Implementation Planning
-- Created docs/PLAN-archangel-btrfs.org with 6-phase implementation
-- Expanded testing validation checks in research doc
-- Decided: snapper for snapshots, GRUB for btrfs boot
+*** 1. Phase 1: Refactor (COMPLETE)
+- [X] lib/common.sh, config.sh, disk.sh, zfs.sh created
+- [X] Filesystem selection prompt
+- [X] Renamed to archangel
+- [X] VM test passed
 
-*** 2. Phase 1: Refactor (COMPLETE)
-**** Phase 1.1: lib/ Structure
-Created modular library structure:
-- [X] custom/lib/common.sh - output, validation, fzf prompts, filesystem selection
-- [X] custom/lib/config.sh - argument parsing, config loading
-- [X] custom/lib/disk.sh - partitioning, disk selection
-- [X] custom/lib/zfs.sh - ZFS pool, datasets, services
+*** 2. Phase 2: Btrfs Support (IN PROGRESS)
+**** Phase 2.1: lib/btrfs.sh (COMPLETE)
+- [X] Created lib/btrfs.sh with full implementation
+- [X] BTRFS_OPTS: noatime,compress=zstd,space_cache=v2,discard=async
+- [X] 10 subvolumes matching ZFS dataset layout
+- [X] Mount functions with proper options
+- [X] fstab generation (subvol= NOT subvolid!)
+- [X] Snapper configuration (timeline policy)
+- [X] GRUB + grub-btrfs configuration
+- [X] Genesis snapshot via snapper
 
-**** Phase 1.4: Filesystem Selection
-- [X] Added FILESYSTEM variable (zfs/btrfs)
-- [X] Added select_filesystem() with fzf prompt
-- [X] Btrfs selection shows "not yet implemented"
-- [X] Config file supports FILESYSTEM option
+**** Updated Files
+- [X] disk.sh - filesystem-aware partition type
+- [X] archangel - sources btrfs.sh, install_btrfs() path
+- [X] build.sh - includes lib/btrfs.sh permissions
+- [X] PLAN-archangel-btrfs.org - added Phase 2.7/2.8
 
-**** Phase 1.5: Rename to archangel
-- [X] Renamed install-archzfs → archangel
-- [X] Updated build.sh references
-- [X] Updated config example to archangel.conf.example
-- [X] Updated script headers
+**** Syntax Checks
+- [X] All lib/*.sh pass bash -n
+- [X] archangel passes bash -n
+- [X] All btrfs functions defined correctly
 
-*** 3. Bug Fix: set -e compatibility
-Found and fixed critical bug during VM testing:
-- [[ condition ]] && error pattern fails with set -e
-- Fixed by converting to if/then/fi pattern
-
-*** 4. VM Test PASSED
-Full end-to-end test:
-- ISO built with lib/ structure
-- Unattended install completed
-- ZFSBootMenu boots correctly
-- Genesis snapshots created
-- System fully functional
-
-** Commits This Session (11 total)
-- 94c2f15: Add archsetup --chroot task
-- 49a8b2e: Add btrfs implementation plan
-- d8eb81a: Expand testing validation checks
-- 15ac415: Phase 1.1 - Create lib/ directory structure
-- 498ab4d: Fix build.sh to include lib/ in ISO
-- c74b1d7: Fix set -e compatibility in lib functions
-- 0f56f1f: Update session context
-- 7cfdc69: Phase 1.1 complete: VM test passed
-- b8973f3: Phase 1.4 - Add filesystem selection prompt
-- 18c07ee: Phase 1.5 - Rename to archangel
-
-** Phase 1 Status: COMPLETE
-
-** Next Steps (Phase 2: Btrfs Support)
-1. Create lib/btrfs.sh with btrfs functions
-2. Implement subvolume creation
-3. Implement snapper configuration
-4. Implement GRUB + grub-btrfs
-5. Test btrfs installation
+** Next Steps
+1. Commit Phase 2.1 implementation
+2. Build ISO
+3. VM test btrfs installation path
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
-- Craig stepped away ~17:23, working autonomously
+- Testing approach: syntax first, then full VM test

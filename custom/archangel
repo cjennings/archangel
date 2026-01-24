@@ -29,6 +29,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/disk.sh"
 source "$SCRIPT_DIR/lib/zfs.sh"
+source "$SCRIPT_DIR/lib/btrfs.sh"
 
 #############################
 # Configuration
@@ -80,7 +81,15 @@ echo ""
 
 preflight_checks() {
     require_root
-    zfs_preflight
+}
+
+# Filesystem-specific preflight (called after filesystem is selected)
+filesystem_preflight() {
+    if [[ "$FILESYSTEM" == "zfs" ]]; then
+        zfs_preflight
+    elif [[ "$FILESYSTEM" == "btrfs" ]]; then
+        btrfs_preflight
+    fi
 }
 
 #############################
@@ -108,9 +117,9 @@ gather_input() {
             fi
         fi
 
-        # Btrfs not yet implemented
-        if [[ "$FILESYSTEM" == "btrfs" ]]; then
-            error "Btrfs support not yet implemented. Use FILESYSTEM=zfs"
+        # Validate filesystem choice
+        if [[ "$FILESYSTEM" != "zfs" && "$FILESYSTEM" != "btrfs" ]]; then
+            error "Invalid FILESYSTEM: $FILESYSTEM (must be 'zfs' or 'btrfs')"
         fi
 
         # Determine RAID level if not specified
@@ -143,12 +152,6 @@ gather_input() {
     echo ""
 
     select_filesystem
-
-    # Check for btrfs (not yet implemented)
-    if [[ "$FILESYSTEM" == "btrfs" ]]; then
-        error "Btrfs support not yet implemented. Please select ZFS."
-    fi
-
     get_hostname
     get_timezone
     get_locale
@@ -156,8 +159,17 @@ gather_input() {
     get_disks
     get_raid_level
     get_wifi
-    get_encryption_choice
-    [[ "$NO_ENCRYPT" != "yes" ]] && get_zfs_passphrase
+
+    # Encryption handling (filesystem-specific)
+    if [[ "$FILESYSTEM" == "zfs" ]]; then
+        get_encryption_choice
+        [[ "$NO_ENCRYPT" != "yes" ]] && get_zfs_passphrase
+    elif [[ "$FILESYSTEM" == "btrfs" ]]; then
+        # Btrfs encryption (LUKS) not yet implemented - Phase 2.8
+        info "Note: Btrfs encryption (LUKS) will be available in a future update."
+        NO_ENCRYPT="yes"
+    fi
+
     get_root_password
     get_ssh_config
     show_summary
@@ -882,6 +894,44 @@ EOF
     info "Base system installed."
 }
 
+install_base_btrfs() {
+    step "Installing Base System (Btrfs)"
+
+    info "Updating pacman keys..."
+    pacman-key --init
+    pacman-key --populate archlinux
+
+    info "Installing base packages (this takes a while)..."
+    yes "" | pacstrap -K /mnt \
+        base \
+        base-devel \
+        linux-lts \
+        linux-lts-headers \
+        linux-firmware \
+        btrfs-progs \
+        grub \
+        grub-btrfs \
+        efibootmgr \
+        snapper \
+        snap-pac \
+        networkmanager \
+        avahi \
+        nss-mdns \
+        openssh \
+        git \
+        vim \
+        sudo \
+        zsh \
+        nodejs \
+        npm \
+        ttf-dejavu \
+        fzf \
+        wget \
+        wireless-regdb
+
+    info "Base system installed."
+}
+
 configure_system() {
     step "Configuring System"
 
@@ -1392,6 +1442,37 @@ print_summary() {
     echo ""
 }
 
+print_btrfs_summary() {
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║                    Installation Complete!                     ║"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "System Configuration:"
+    echo "  Hostname:     $HOSTNAME"
+    echo "  Timezone:     $TIMEZONE"
+    echo "  Filesystem:   Btrfs"
+    echo ""
+    echo "Btrfs Snapshot Features:"
+    echo "  - Boot from any snapshot via GRUB menu"
+    echo "  - Genesis snapshot: pristine post-install state"
+    echo "  - Pre/post pacman snapshots via snap-pac"
+    echo "  - Timeline snapshots: 6 hourly, 7 daily, 2 weekly, 1 monthly"
+    echo ""
+    echo "GRUB Boot Menu:"
+    echo "  - Select 'Arch Linux snapshots' submenu to boot from snapshots"
+    echo "  - Snapshots auto-added when created by snapper"
+    echo ""
+    echo "Useful Commands:"
+    echo "  List snapshots:    snapper -c root list"
+    echo "  Manual snapshot:   snapper -c root create -d 'description'"
+    echo "  Rollback:          snapper -c root rollback <number>"
+    echo "  Compare:           snapper -c root diff <num1>..<num2>"
+    echo ""
+    info "Installation log: $LOGFILE"
+    echo ""
+}
+
 #############################
 # Main
 #############################
@@ -1401,14 +1482,27 @@ main() {
     preflight_checks
     check_config
     gather_input
+    filesystem_preflight
 
     # Unattended installation begins
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Beginning unattended installation..."
+    echo "Beginning unattended installation ($FILESYSTEM)..."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
+    if [[ "$FILESYSTEM" == "zfs" ]]; then
+        install_zfs
+    elif [[ "$FILESYSTEM" == "btrfs" ]]; then
+        install_btrfs
+    fi
+}
+
+#############################
+# ZFS Installation Path
+#############################
+
+install_zfs() {
     partition_disks
     create_zfs_pool
     create_datasets
@@ -1427,6 +1521,51 @@ main() {
     create_genesis_snapshot
     cleanup
     print_summary
+}
+
+#############################
+# Btrfs Installation Path
+#############################
+
+install_btrfs() {
+    # Get partition references
+    local root_part=$(get_root_partition "${SELECTED_DISKS[0]}")
+    local efi_part=$(get_efi_partition "${SELECTED_DISKS[0]}")
+
+    # Partition and format
+    partition_disk "${SELECTED_DISKS[0]}"
+    format_efi "$efi_part"
+    create_btrfs_volume "$root_part"
+
+    # Create and mount subvolumes
+    create_btrfs_subvolumes "$root_part"
+    mount_btrfs_subvolumes "$root_part"
+
+    # Mount EFI
+    mkdir -p /mnt/efi
+    mount "$efi_part" /mnt/efi
+
+    # Install base system
+    install_base_btrfs
+
+    # Configure system
+    configure_system
+    configure_wifi
+    configure_ssh
+    generate_btrfs_fstab "$root_part" "$efi_part"
+    configure_btrfs_initramfs
+    configure_grub "$efi_part"
+    configure_snapper
+    configure_btrfs_services
+    configure_btrfs_pacman_hook
+    copy_archsetup
+
+    # Genesis snapshot
+    create_btrfs_genesis_snapshot
+
+    # Cleanup
+    btrfs_cleanup
+    print_btrfs_summary
 }
 
 trap 'error "Installation interrupted!"' INT TERM
