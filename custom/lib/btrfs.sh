@@ -3,8 +3,11 @@
 # Source this file after common.sh, config.sh, disk.sh
 
 #############################
-# Btrfs Constants
+# Btrfs/LUKS Constants
 #############################
+
+# LUKS settings
+LUKS_MAPPER_NAME="cryptroot"
 
 # Mount options for btrfs subvolumes
 BTRFS_OPTS="noatime,compress=zstd,space_cache=v2,discard=async"
@@ -23,6 +26,91 @@ BTRFS_SUBVOLS=(
     "@vms:/vms::nodatacow,compress=no"
     "@var_lib_docker:/var/lib/docker::"
 )
+
+#############################
+# LUKS Functions
+#############################
+
+create_luks_container() {
+    local partition="$1"
+    local passphrase="$2"
+
+    step "Creating LUKS Encrypted Container"
+
+    info "Setting up LUKS encryption on $partition..."
+
+    # Create LUKS container
+    echo -n "$passphrase" | cryptsetup luksFormat --type luks2 \
+        --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
+        --iter-time 2000 --pbkdf argon2id \
+        "$partition" - \
+        || error "Failed to create LUKS container"
+
+    info "LUKS container created."
+}
+
+open_luks_container() {
+    local partition="$1"
+    local passphrase="$2"
+    local name="${3:-$LUKS_MAPPER_NAME}"
+
+    info "Opening LUKS container..."
+
+    echo -n "$passphrase" | cryptsetup open "$partition" "$name" - \
+        || error "Failed to open LUKS container"
+
+    info "LUKS container opened as /dev/mapper/$name"
+}
+
+close_luks_container() {
+    local name="${1:-$LUKS_MAPPER_NAME}"
+
+    cryptsetup close "$name" 2>/dev/null || true
+}
+
+configure_crypttab() {
+    local partition="$1"
+
+    step "Configuring crypttab"
+
+    local uuid
+    uuid=$(blkid -s UUID -o value "$partition")
+
+    # Create crypttab entry
+    echo "# LUKS encrypted root" > /mnt/etc/crypttab
+    echo "$LUKS_MAPPER_NAME  UUID=$uuid  none  luks,discard" >> /mnt/etc/crypttab
+
+    info "crypttab configured for $LUKS_MAPPER_NAME"
+}
+
+configure_luks_initramfs() {
+    step "Configuring Initramfs for LUKS"
+
+    # Backup original
+    cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
+
+    # Add encrypt hook before filesystems
+    # Hooks: base udev ... keyboard keymap ... encrypt filesystems ...
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
+        /mnt/etc/mkinitcpio.conf
+
+    info "Added encrypt hook to initramfs."
+}
+
+configure_luks_grub() {
+    local partition="$1"
+
+    step "Configuring GRUB for LUKS"
+
+    local uuid
+    uuid=$(blkid -s UUID -o value "$partition")
+
+    # Add cryptdevice to GRUB cmdline
+    sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards |" \
+        /mnt/etc/default/grub
+
+    info "GRUB configured with cryptdevice parameter."
+}
 
 #############################
 # Btrfs Pre-flight
