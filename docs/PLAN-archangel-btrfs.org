@@ -98,7 +98,14 @@ BTRFS_OPTS="noatime,compress=zstd,space_cache=v2,discard=async"
 - [ ] Verify appears in snapper list
 - [ ] Verify appears in GRUB menu
 
-** 2.7 LUKS encryption (optional)
+** 2.7 Test basic btrfs (before encryption)
+- [ ] VM test: single-disk btrfs install
+- [ ] Verify subvolumes created correctly
+- [ ] Verify GRUB boots and shows snapshots
+- [ ] Verify snapper works
+- [ ] Verify genesis snapshot exists
+
+** 2.8 LUKS encryption (after basic btrfs works)
 - [ ] Add encryption prompt (yes/no)
 - [ ] Create LUKS container on root partition
 - [ ] Configure crypttab
@@ -107,20 +114,31 @@ BTRFS_OPTS="noatime,compress=zstd,space_cache=v2,discard=async"
 
 * Phase 3: Multi-disk Btrfs
 
-Goal: Mirror support for btrfs.
+Goal: Full multi-disk support for btrfs (matching ZFS capabilities).
 
-** 3.1 Btrfs RAID1 creation
-- [ ] Detect multi-disk selection
-- [ ] Create raid1 volume: mkfs.btrfs -d raid1 -m raid1 /dev/sdX /dev/sdY
-- [ ] Handle 2+ disk configurations
+** 3.1 RAID level support
+- [ ] Stripe (raid0): mkfs.btrfs -d raid0 -m raid0
+- [ ] Mirror (raid1): mkfs.btrfs -d raid1 -m raid1
+- [ ] raid10: mkfs.btrfs -d raid10 -m raid10 (4+ disks)
+- [ ] raid5: mkfs.btrfs -d raid5 -m raid5 (3+ disks, warn: unstable)
+- [ ] raid6: mkfs.btrfs -d raid6 -m raid6 (4+ disks, warn: unstable)
+- [ ] Detect multi-disk selection and offer appropriate levels
+- [ ] Handle mixed disk sizes gracefully
 
-** 3.2 EFI redundancy
+** 3.2 Encryption + multi-disk
+- [ ] LUKS on each disk before btrfs
+- [ ] crypttab entries for all disks
+- [ ] Test unlock sequence at boot
+- [ ] Single passphrase unlocks all (keyfile approach)
+
+** 3.3 EFI redundancy
 - [ ] Create EFI partition on all disks
 - [ ] Install GRUB to all EFI partitions
 - [ ] Create boot entries for each disk
 
-** 3.3 Degraded boot support
+** 3.4 Degraded boot support
 - [ ] Add degraded mount option for emergency
+- [ ] Kernel param: rootflags=degraded
 - [ ] Document recovery procedure
 
 * Phase 4: Testing Infrastructure
