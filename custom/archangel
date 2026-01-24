@@ -117,6 +117,13 @@ gather_input() {
             fi
         fi
 
+        # Btrfs-specific validation
+        if [[ "$FILESYSTEM" == "btrfs" ]]; then
+            if [[ "$NO_ENCRYPT" != "yes" && -z "$LUKS_PASSPHRASE" ]]; then
+                error "Config missing required: LUKS_PASSPHRASE (or set NO_ENCRYPT=yes)"
+            fi
+        fi
+
         # Validate filesystem choice
         if [[ "$FILESYSTEM" != "zfs" && "$FILESYSTEM" != "btrfs" ]]; then
             error "Invalid FILESYSTEM: $FILESYSTEM (must be 'zfs' or 'btrfs')"
@@ -165,9 +172,8 @@ gather_input() {
         get_encryption_choice
         [[ "$NO_ENCRYPT" != "yes" ]] && get_zfs_passphrase
     elif [[ "$FILESYSTEM" == "btrfs" ]]; then
-        # Btrfs encryption (LUKS) not yet implemented - Phase 2.8
-        info "Note: Btrfs encryption (LUKS) will be available in a future update."
-        NO_ENCRYPT="yes"
+        get_btrfs_encryption_choice
+        [[ "$NO_ENCRYPT" != "yes" ]] && get_luks_passphrase
     fi
 
     get_root_password
@@ -545,6 +551,58 @@ get_wifi() {
     fi
 }
 
+get_btrfs_encryption_choice() {
+    step "Btrfs Encryption (LUKS)"
+
+    echo ""
+    echo "LUKS encryption protects your data at rest."
+    echo "You'll need to enter a passphrase at each boot."
+    echo ""
+
+    prompt "Enable LUKS encryption? [Y/n]:"
+    read -p "> " encrypt_choice
+
+    if [[ "$encrypt_choice" =~ ^[Nn]$ ]]; then
+        NO_ENCRYPT="yes"
+        warn "Encryption DISABLED - data will not be encrypted at rest"
+    else
+        NO_ENCRYPT="no"
+        info "LUKS encryption enabled - you'll set a passphrase next"
+    fi
+}
+
+get_luks_passphrase() {
+    step "LUKS Encryption Passphrase"
+
+    echo ""
+    echo "Choose a strong passphrase for disk encryption."
+    echo "You'll need this passphrase every time you boot."
+    echo ""
+    echo "IMPORTANT: If you forget this passphrase, your data is UNRECOVERABLE!"
+    echo ""
+
+    while true; do
+        prompt "Enter LUKS encryption passphrase:"
+        read -rs LUKS_PASSPHRASE
+        echo ""
+
+        prompt "Confirm passphrase:"
+        read -rs confirm
+        echo ""
+
+        if [[ "$LUKS_PASSPHRASE" == "$confirm" ]]; then
+            if [[ ${#LUKS_PASSPHRASE} -lt 8 ]]; then
+                warn "Passphrase should be at least 8 characters. Try again."
+            else
+                info "Passphrase confirmed."
+                break
+            fi
+        else
+            warn "Passphrases don't match. Try again."
+        fi
+    done
+}
+
 get_encryption_choice() {
     step "ZFS Encryption"
     echo ""
@@ -667,6 +725,11 @@ show_summary() {
         fi
         echo "  Boot:         ZFSBootMenu on all disks (redundant)"
     else
+        if [[ "$NO_ENCRYPT" == "yes" ]]; then
+            echo "  Encryption:   None"
+        else
+            echo "  Encryption:   LUKS2"
+        fi
         echo "  Boot:         GRUB + grub-btrfs (snapshot boot)"
     fi
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1452,6 +1515,11 @@ print_btrfs_summary() {
     echo "  Hostname:     $HOSTNAME"
     echo "  Timezone:     $TIMEZONE"
     echo "  Filesystem:   Btrfs"
+    if [[ "$NO_ENCRYPT" == "yes" ]]; then
+        echo "  Encryption:   None"
+    else
+        echo "  Encryption:   LUKS2"
+    fi
     echo ""
     echo "Btrfs Snapshot Features:"
     echo "  - Boot from any snapshot via GRUB menu"
@@ -1531,15 +1599,25 @@ install_btrfs() {
     # Get partition references
     local root_part=$(get_root_partition "${SELECTED_DISKS[0]}")
     local efi_part=$(get_efi_partition "${SELECTED_DISKS[0]}")
+    local btrfs_device="$root_part"
 
     # Partition and format
     partition_disk "${SELECTED_DISKS[0]}"
     format_efi "$efi_part"
-    create_btrfs_volume "$root_part"
+
+    # LUKS encryption (if enabled)
+    if [[ "$NO_ENCRYPT" != "yes" ]]; then
+        create_luks_container "$root_part" "$LUKS_PASSPHRASE"
+        open_luks_container "$root_part" "$LUKS_PASSPHRASE"
+        btrfs_device="/dev/mapper/$LUKS_MAPPER_NAME"
+    fi
+
+    # Create btrfs on the device (raw partition or LUKS mapper)
+    create_btrfs_volume "$btrfs_device"
 
     # Create and mount subvolumes
-    create_btrfs_subvolumes "$root_part"
-    mount_btrfs_subvolumes "$root_part"
+    create_btrfs_subvolumes "$btrfs_device"
+    mount_btrfs_subvolumes "$btrfs_device"
 
     # Mount EFI
     mkdir -p /mnt/efi
@@ -1552,7 +1630,15 @@ install_btrfs() {
     configure_system
     configure_wifi
     configure_ssh
-    generate_btrfs_fstab "$root_part" "$efi_part"
+
+    # Configure encryption if enabled
+    if [[ "$NO_ENCRYPT" != "yes" ]]; then
+        configure_crypttab "$root_part"
+        configure_luks_grub "$root_part"
+        configure_luks_initramfs
+    fi
+
+    generate_btrfs_fstab "$btrfs_device" "$efi_part"
     configure_btrfs_initramfs
     configure_grub "$efi_part"
     configure_snapper
@@ -1565,6 +1651,9 @@ install_btrfs() {
 
     # Cleanup
     btrfs_cleanup
+    if [[ "$NO_ENCRYPT" != "yes" ]]; then
+        close_luks_container
+    fi
     print_btrfs_summary
 }
 
