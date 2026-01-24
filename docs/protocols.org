@@ -51,10 +51,10 @@ Do NOT estimate, guess, or rely on memory. Just run the command. It takes one se
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  STOP. THIS IS THE MOST IMPORTANT PROTOCOL IN THIS ENTIRE FILE.              ║
 ║                                                                              ║
-║  UPDATE docs/session-context.org EVERY OTHER EXCHANGE.                       ║
+║  UPDATE docs/session-context.org EVERY 3RD RESPONSE.                         ║
 ║                                                                              ║
-║  NOT "when convenient." NOT "when there's a lot to write." EVERY OTHER ONE.  ║
-║  Count: 1, 2, UPDATE. 1, 2, UPDATE. 1, 2, UPDATE.                            ║
+║  NOT "when convenient." NOT "when there's a lot to write." EVERY 3RD ONE.    ║
+║  Count: 1, 2, 3, UPDATE. 1, 2, 3, UPDATE. 1, 2, 3, UPDATE.                   ║
 ║                                                                              ║
 ║  FAILURE TO DO THIS HAS ALREADY CAUSED LOST WORK. DON'T LET IT HAPPEN AGAIN. ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -67,15 +67,15 @@ On 2026-01-22, a session crashed and 20+ minutes of detailed workflow planning w
 *** Location
 =docs/session-context.org= (always this exact path, every project)
 
-*** UPDATE FREQUENCY: EVERY. OTHER. EXCHANGE.
+*** UPDATE FREQUENCY: EVERY. 3RD. RESPONSE.
 
 This means:
 - Craig says something, you respond (1)
-- Craig says something, you respond (2) → **UPDATE THE FILE NOW**
-- Craig says something, you respond (1)
-- Craig says something, you respond (2) → **UPDATE THE FILE NOW**
+- Craig says something, you respond (2)
+- Craig says something, you respond (3) → **UPDATE THE FILE NOW**
+- Repeat: 1, 2, 3 → UPDATE
 
-"Exchange" = one user message + one Claude response. After TWO of these, update the file. No exceptions.
+"Response" = one Claude response. After THREE of these, update the file. No exceptions.
 
 *** What Counts as "Updating"
 

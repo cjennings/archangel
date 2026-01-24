@@ -3,39 +3,28 @@
 
 * Session: Saturday 2026-01-24 @ 10:07 CST
 
-** Key Accomplishments
+** Completed This Session
 
-*** Phase 2.8 LUKS Btrfs: COMPLETE
-- Fixed GRUB_ENABLE_CRYPTODISK bug (heredoc was overwriting settings)
-- Consolidated LUKS GRUB config into configure_grub() function
-- VM test PASSED for btrfs-luks configuration
+- Fixed LUKS btrfs GRUB bug (heredoc overwriting cryptodisk settings)
+- Fixed ISO bloat (17G vm-images excluded, now 2.0G)
+- btrfs-luks test: PASSED
+- Committed: 76119e7, pushed to origin
 
-*** ISO Build Size Fix
-- Diagnosed 15G bloated ISO (vm-images from archsetup being copied)
-- Fixed build.sh to use rsync with exclusions
-- ISO now 2.0G (proper size)
+** Current Task
 
-** Files Modified This Session
+About to run ZFS regression tests to verify refactor didn't break ZFS:
+- single-disk
+- mirror
+- raidz1
 
-- build.sh - rsync with exclusions for archsetup copy
-- custom/lib/btrfs.sh - LUKS GRUB config fix in configure_grub()
+** Project Status
 
-** Commits Pending
-- build.sh change (archsetup rsync exclusions)
-- custom/lib/btrfs.sh change (LUKS GRUB fix)
+| Phase | Status |
+|-------|--------|
+| 1 Refactor | DONE (needs ZFS regression test) |
+| 2 Btrfs+LUKS | DONE |
+| 3 Multi-disk btrfs | Next |
 
-** Overall Progress
-| Phase | Description          | Status   |
-|-------|----------------------|----------|
-| 1     | Refactor/Modularize  | COMPLETE |
-| 2     | Btrfs Single-disk    | COMPLETE |
-| 2.8   | LUKS Encryption      | COMPLETE |
-| 3     | Multi-disk Btrfs     | Not started |
-| 4     | Testing Infrastructure | Partial |
-| 5     | CLI Tools            | Not started |
-| 6     | Documentation        | Not started |
+** Uncommitted Changes
 
-** Next Steps
-1. Commit changes (build.sh, lib/btrfs.sh)
-2. Phase 3: Multi-disk btrfs support
-3. Or other priorities as Craig directs
+- docs/protocols.org (template sync)
