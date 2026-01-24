@@ -18,54 +18,59 @@
 - Expanded testing validation checks in research doc
 - Decided: snapper for snapshots, GRUB for btrfs boot
 
-*** 2. Phase 1.1: lib/ Structure (COMPLETE)
+*** 2. Phase 1: Refactor (COMPLETE)
+**** Phase 1.1: lib/ Structure
 Created modular library structure:
-- [X] custom/lib/common.sh - output, validation, fzf prompts
+- [X] custom/lib/common.sh - output, validation, fzf prompts, filesystem selection
 - [X] custom/lib/config.sh - argument parsing, config loading
 - [X] custom/lib/disk.sh - partitioning, disk selection
 - [X] custom/lib/zfs.sh - ZFS pool, datasets, services
 
+**** Phase 1.4: Filesystem Selection
+- [X] Added FILESYSTEM variable (zfs/btrfs)
+- [X] Added select_filesystem() with fzf prompt
+- [X] Btrfs selection shows "not yet implemented"
+- [X] Config file supports FILESYSTEM option
+
+**** Phase 1.5: Rename to archangel
+- [X] Renamed install-archzfs → archangel
+- [X] Updated build.sh references
+- [X] Updated config example to archangel.conf.example
+- [X] Updated script headers
+
 *** 3. Bug Fix: set -e compatibility
 Found and fixed critical bug during VM testing:
 - [[ condition ]] && error pattern fails with set -e
-- When condition is false, expression returns 1, triggering set -e exit
 - Fixed by converting to if/then/fi pattern
 
-*** 4. Build System
-- Updated build.sh to copy lib/ directory to ISO
-- Built and tested 15G ISO with lib files
+*** 4. VM Test PASSED
+Full end-to-end test:
+- ISO built with lib/ structure
+- Unattended install completed
+- ZFSBootMenu boots correctly
+- Genesis snapshots created
+- System fully functional
 
-** Commits This Session
+** Commits This Session (11 total)
 - 94c2f15: Add archsetup --chroot task
 - 49a8b2e: Add btrfs implementation plan
 - d8eb81a: Expand testing validation checks
 - 15ac415: Phase 1.1 - Create lib/ directory structure
 - 498ab4d: Fix build.sh to include lib/ in ISO
 - c74b1d7: Fix set -e compatibility in lib functions
+- 0f56f1f: Update session context
+- 7cfdc69: Phase 1.1 complete: VM test passed
+- b8973f3: Phase 1.4 - Add filesystem selection prompt
+- 18c07ee: Phase 1.5 - Rename to archangel
 
-** VM Testing Status - PASSED
-- Lib files present in ISO: CONFIRMED
-- install-archzfs --help: WORKS
-- Config loading: WORKS
-- ZFS pool creation: WORKS
-- Pacstrap: WORKS
-- System configuration: WORKS
-- ZFSBootMenu: WORKS
-- Genesis snapshots: CREATED
-- Boot from installed system: WORKS
+** Phase 1 Status: COMPLETE
 
-** Phase 1.1 Status: COMPLETE
-Full end-to-end VM test passed:
-1. ISO built with lib/ structure
-2. Unattended install completed successfully
-3. System boots via ZFSBootMenu
-4. ZFS pool imports correctly
-5. Genesis snapshots created
-
-** Next Steps
-1. Phase 1.2: Continue migrating more functions to libs
-2. Phase 1.4: Add filesystem selection prompt
-3. Phase 1.5: Rename to archangel
+** Next Steps (Phase 2: Btrfs Support)
+1. Create lib/btrfs.sh with btrfs functions
+2. Implement subvolume creation
+3. Implement snapper configuration
+4. Implement GRUB + grub-btrfs
+5. Test btrfs installation
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
