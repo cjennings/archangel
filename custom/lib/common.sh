@@ -101,6 +101,38 @@ fzf_multi() {
 }
 
 #############################
+# Filesystem Selection
+#############################
+
+# Select filesystem type (ZFS or Btrfs)
+# Sets global FILESYSTEM variable
+select_filesystem() {
+    step "Select Filesystem"
+
+    local options=(
+        "ZFS - Native encryption, best data integrity (recommended)"
+        "Btrfs - Native Linux, GRUB snapshot boot"
+    )
+
+    local selected
+    selected=$(fzf_select "Filesystem:" "${options[@]}")
+
+    case "$selected" in
+        ZFS*)
+            FILESYSTEM="zfs"
+            info "Selected: ZFS"
+            ;;
+        Btrfs*)
+            FILESYSTEM="btrfs"
+            info "Selected: Btrfs"
+            ;;
+        *)
+            error "No filesystem selected"
+            ;;
+    esac
+}
+
+#############################
 # Disk Utilities
 #############################
 
