@@ -13,55 +13,49 @@
 
 ** Work Completed
 
-*** 1. Recovered interrupted session context
-Previous session (11:28-13:15 today) covered:
-- ZFSBootMenu merge to main
-- Code review workflow creation
-- Btrfs expansion research
+*** 1. Btrfs Implementation Planning
+- Created docs/PLAN-archangel-btrfs.org with 6-phase implementation
+- Expanded testing validation checks in research doc
+- Decided: snapper for snapshots, GRUB for btrfs boot
 
-*** 2. Reviewed btrfs implementation approach
-- 5-phase plan: Refactor, Btrfs support, Testing, CLI tools, Docs
-- Snapper chosen over Timeshift (better Arch integration with snap-pac + grub-btrfs)
-- Btrfs uses GRUB, ZFS uses ZFSBootMenu
+*** 2. Phase 1.1: lib/ Structure (COMPLETE)
+Created modular library structure:
+- [X] custom/lib/common.sh - output, validation, fzf prompts
+- [X] custom/lib/config.sh - argument parsing, config loading
+- [X] custom/lib/disk.sh - partitioning, disk selection
+- [X] custom/lib/zfs.sh - ZFS pool, datasets, services
 
-*** 3. Scanned archsetup for chroot compatibility
-Analyzed ~/code/archsetup/archsetup (1852 lines) for chroot-incompatible operations:
+*** 3. Bug Fix: set -e compatibility
+Found and fixed critical bug during VM testing:
+- [[ condition ]] && error pattern fails with set -e
+- When condition is false, expression returns 1, triggering set -e exit
+- Fixed by converting to if/then/fi pattern
 
-**** Incompatible (need --chroot flag):
-- 5x systemctl start calls (lines 712, 807, 877, 905, 1199)
-- 3x ping checks (lines 243, 1105, 1107)
-- 1x tmpfs mount (line 702)
+*** 4. Build System
+- Updated build.sh to copy lib/ directory to ISO
+- Built and tested 15G ISO with lib files
 
-**** Compatible (work as-is):
-- 20+ systemctl enable calls
-- User creation (useradd, chpasswd)
-- Package installation (pacman, yay/makepkg)
-- All file configurations
+** Commits This Session
+- 94c2f15: Add archsetup --chroot task
+- 49a8b2e: Add btrfs implementation plan
+- d8eb81a: Expand testing validation checks
+- 15ac415: Phase 1.1 - Create lib/ directory structure
+- 498ab4d: Fix build.sh to include lib/ in ISO
+- c74b1d7: Fix set -e compatibility in lib functions
 
-*** 4. Added TODO for archsetup --chroot mode
-Added [#B] task to todo.org with full implementation details.
+** VM Testing Status
+- Lib files present in ISO: CONFIRMED
+- install-archzfs --help: WORKS
+- Config loading: WORKS
+- ZFS pool creation: WORKS
+- Pacstrap: Starts but needs fresh VM (stale state issue)
 
-** Files Modified This Session
-- todo.org - Added archsetup --chroot task, btrfs implementation TODO
-- docs/PLAN-archangel-btrfs.org - Created implementation plan
-- docs/research-btrfs-expansion.org - Expanded testing validation checks
-
-** Implementation Progress (Phase 1.1)
-
-Created lib/ directory structure:
-- [X] custom/lib/common.sh - output, validation, fzf prompts, disk utils
-- [X] custom/lib/config.sh - arg parsing, config loading, validation
-- [X] custom/lib/disk.sh - partitioning, EFI management, disk selection
-- [X] custom/lib/zfs.sh - pool, datasets, ZFSBootMenu, services, hooks
-
-Next: Integrate libs into install-archzfs, test, then add filesystem selection
-
-** Pending Items (from earlier + this session)
-1. Review code-review.org document
-2. Address Priority A cleanup tasks (README, LICENSE, etc.)
-3. Create btrfs implementation tasks
-4. Begin Phase 1: Refactor installer
+** Next Steps
+1. Need clean VM test with fresh disk state
+2. Rebuild ISO with set -e fix
+3. Continue debugging install completion
+4. Complete Phase 1 refactoring
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
-- Keep responses compact
+- Craig stepped away ~17:23, working autonomously
