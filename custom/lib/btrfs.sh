@@ -105,11 +105,14 @@ configure_luks_grub() {
     local uuid
     uuid=$(blkid -s UUID -o value "$partition")
 
+    # Enable GRUB cryptodisk support (required for encrypted /boot)
+    echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+
     # Add cryptdevice to GRUB cmdline
     sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards |" \
         /mnt/etc/default/grub
 
-    info "GRUB configured with cryptdevice parameter."
+    info "GRUB configured with cryptdevice parameter and cryptodisk enabled."
 }
 
 #############################
@@ -398,6 +401,25 @@ GRUB_DISABLE_OS_PROBER=true
 # Btrfs: tell GRUB where to find /boot within subvolume
 GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION=true
 EOF
+
+    # Add LUKS encryption settings if enabled
+    if [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]]; then
+        echo "" >> /mnt/etc/default/grub
+        echo "# LUKS encryption support" >> /mnt/etc/default/grub
+        echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+
+        # Get UUID of encrypted partition and add cryptdevice to cmdline
+        # Find the LUKS partition (partition 2 of the first disk)
+        local luks_part
+        luks_part=$(echo "$DISKS" | cut -d',' -f1)2
+        if [[ -b "$luks_part" ]]; then
+            local uuid
+            uuid=$(blkid -s UUID -o value "$luks_part")
+            sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards |" \
+                /mnt/etc/default/grub
+            info "Added cryptdevice parameter for LUKS partition."
+        fi
+    fi
 
     # Create /boot/grub directory
     mkdir -p /mnt/boot/grub
