@@ -43,18 +43,29 @@ Found and fixed critical bug during VM testing:
 - 498ab4d: Fix build.sh to include lib/ in ISO
 - c74b1d7: Fix set -e compatibility in lib functions
 
-** VM Testing Status
+** VM Testing Status - PASSED
 - Lib files present in ISO: CONFIRMED
 - install-archzfs --help: WORKS
 - Config loading: WORKS
 - ZFS pool creation: WORKS
-- Pacstrap: Starts but needs fresh VM (stale state issue)
+- Pacstrap: WORKS
+- System configuration: WORKS
+- ZFSBootMenu: WORKS
+- Genesis snapshots: CREATED
+- Boot from installed system: WORKS
+
+** Phase 1.1 Status: COMPLETE
+Full end-to-end VM test passed:
+1. ISO built with lib/ structure
+2. Unattended install completed successfully
+3. System boots via ZFSBootMenu
+4. ZFS pool imports correctly
+5. Genesis snapshots created
 
 ** Next Steps
-1. Need clean VM test with fresh disk state
-2. Rebuild ISO with set -e fix
-3. Continue debugging install completion
-4. Complete Phase 1 refactoring
+1. Phase 1.2: Continue migrating more functions to libs
+2. Phase 1.4: Add filesystem selection prompt
+3. Phase 1.5: Rename to archangel
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
