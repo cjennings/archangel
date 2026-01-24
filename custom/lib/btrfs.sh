@@ -197,64 +197,84 @@ EOF
 configure_snapper() {
     step "Configuring Snapper"
 
-    # Create snapper config directory
-    mkdir -p /mnt/etc/snapper/configs
+    # Snapper needs D-Bus which isn't available in chroot
+    # Create a firstboot service to properly initialize snapper
 
-    # Snapper config for root - create manually (avoids D-Bus requirement in chroot)
-    # Note: We already have @snapshots subvolume mounted at /.snapshots
-    info "Creating snapper config for root..."
+    info "Creating snapper firstboot configuration..."
 
-    # Set snapper timeline settings
-    # Keep: 6 hourly, 7 daily, 2 weekly, 1 monthly
-    info "Configuring snapshot retention policy..."
-    cat > /mnt/etc/snapper/configs/root << 'EOF'
-# Snapper config for root filesystem
-SUBVOLUME="/"
-FSTYPE="btrfs"
-QGROUP=""
+    # Create the firstboot script using echo (more reliable than HEREDOC)
+    {
+        echo '#!/bin/bash'
+        echo '# Snapper firstboot configuration'
+        echo 'set -e'
+        echo ''
+        echo '# Check if snapper is already configured'
+        echo 'if snapper list-configs 2>/dev/null | grep -q "^root"; then'
+        echo '    exit 0'
+        echo 'fi'
+        echo ''
+        echo 'echo "Configuring snapper for btrfs root..."'
+        echo ''
+        echo '# Unmount the pre-created @snapshots'
+        echo 'umount /.snapshots 2>/dev/null || true'
+        echo 'rmdir /.snapshots 2>/dev/null || true'
+        echo ''
+        echo '# Let snapper create its config'
+        echo 'snapper -c root create-config /'
+        echo ''
+        echo '# Replace snapper .snapshots with our @snapshots'
+        echo 'btrfs subvolume delete /.snapshots'
+        echo 'mkdir /.snapshots'
+        echo 'ROOT_DEV=$(findmnt -n -o SOURCE / | sed "s/\[.*\]//")'
+        echo 'mount -o subvol=@snapshots "$ROOT_DEV" /.snapshots'
+        echo 'chmod 750 /.snapshots'
+        echo ''
+        echo '# Configure timeline'
+        echo 'snapper -c root set-config "TIMELINE_CREATE=yes"'
+        echo 'snapper -c root set-config "TIMELINE_CLEANUP=yes"'
+        echo 'snapper -c root set-config "TIMELINE_LIMIT_HOURLY=6"'
+        echo 'snapper -c root set-config "TIMELINE_LIMIT_DAILY=7"'
+        echo 'snapper -c root set-config "TIMELINE_LIMIT_WEEKLY=2"'
+        echo 'snapper -c root set-config "TIMELINE_LIMIT_MONTHLY=1"'
+        echo 'snapper -c root set-config "NUMBER_LIMIT=50"'
+        echo ''
+        echo '# Create genesis snapshot'
+        echo 'snapper -c root create -d "genesis"'
+        echo ''
+        echo '# Update GRUB'
+        echo 'grub-mkconfig -o /boot/grub/grub.cfg'
+        echo ''
+        echo 'echo "Snapper configuration complete!"'
+    } > /mnt/usr/local/bin/snapper-firstboot
+    chmod +x /mnt/usr/local/bin/snapper-firstboot
 
-# Automatic timeline snapshots
-TIMELINE_CREATE="yes"
-TIMELINE_CLEANUP="yes"
+    # Create systemd service for firstboot
+    {
+        echo '[Unit]'
+        echo 'Description=Snapper First Boot Configuration'
+        echo 'After=local-fs.target dbus.service'
+        echo 'Wants=dbus.service'
+        echo 'ConditionPathExists=!/etc/snapper/.firstboot-done'
+        echo ''
+        echo '[Service]'
+        echo 'Type=oneshot'
+        echo 'ExecStart=/usr/local/bin/snapper-firstboot'
+        echo 'ExecStartPost=/usr/bin/touch /etc/snapper/.firstboot-done'
+        echo 'RemainAfterExit=yes'
+        echo ''
+        echo '[Install]'
+        echo 'WantedBy=multi-user.target'
+    } > /mnt/etc/systemd/system/snapper-firstboot.service
 
-# Retention policy
-TIMELINE_MIN_AGE="1800"
-TIMELINE_LIMIT_HOURLY="6"
-TIMELINE_LIMIT_DAILY="7"
-TIMELINE_LIMIT_WEEKLY="2"
-TIMELINE_LIMIT_MONTHLY="1"
-TIMELINE_LIMIT_YEARLY="0"
-
-# Cleanup settings
-NUMBER_CLEANUP="yes"
-NUMBER_MIN_AGE="1800"
-NUMBER_LIMIT="50"
-NUMBER_LIMIT_IMPORTANT="10"
-
-# User access
-ALLOW_USERS=""
-ALLOW_GROUPS=""
-
-# Sync ACL
-SYNC_ACL="no"
-
-# Background comparison
-BACKGROUND_COMPARISON="yes"
-
-# Empty pre-post cleanup
-EMPTY_PRE_POST_CLEANUP="yes"
-EMPTY_PRE_POST_MIN_AGE="1800"
-EOF
-
-    # Register the config with snapper
-    mkdir -p /mnt/etc/sysconfig
-    echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/sysconfig/snapper
+    # Enable the firstboot service
+    arch-chroot /mnt systemctl enable snapper-firstboot.service
 
     # Enable snapper timers
     arch-chroot /mnt systemctl enable snapper-timeline.timer
     arch-chroot /mnt systemctl enable snapper-cleanup.timer
 
-    info "Snapper configured with timeline snapshots enabled."
+    info "Snapper firstboot service configured."
+    info "Snapper will be fully configured on first boot."
 }
 
 #############################
@@ -270,29 +290,38 @@ configure_grub() {
     mkdir -p /mnt/efi
     mount "$efi_partition" /mnt/efi
 
-    # Configure GRUB defaults
+    # Configure GRUB defaults for btrfs
     info "Setting GRUB configuration..."
     cat > /mnt/etc/default/grub << 'EOF'
 # GRUB configuration for btrfs root with snapshots
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="Arch"
-GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
-GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3"
+GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200"
+
+# Serial console support (for headless/VM testing)
+GRUB_TERMINAL="console serial"
+GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
 
 # Disable os-prober (single-boot system)
 GRUB_DISABLE_OS_PROBER=true
+
+# Btrfs: tell GRUB where to find /boot within subvolume
+GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION=true
 EOF
 
-    # Create /boot/grub directory (grub-install expects this)
+    # Create /boot/grub directory
     mkdir -p /mnt/boot/grub
 
-    # Install GRUB to EFI
+    # Install GRUB to EFI with btrfs support
+    # Use --boot-directory to ensure modules are found correctly
     info "Installing GRUB to EFI partition..."
-    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB \
+    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi \
+        --bootloader-id=GRUB --boot-directory=/boot \
         || error "GRUB installation failed"
 
-    # Generate GRUB config (without grub-btrfs first time)
+    # Generate GRUB config
     info "Generating GRUB configuration..."
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg \
         || error "Failed to generate GRUB config"
@@ -324,31 +353,11 @@ configure_btrfs_pacman_hook() {
 create_btrfs_genesis_snapshot() {
     step "Creating Genesis Snapshot"
 
-    # Create snapshot manually (snapper requires D-Bus which isn't available in chroot)
-    # Snapper stores snapshots in /.snapshots/<num>/snapshot as read-only subvolumes
-    local snap_dir="/mnt/.snapshots/1"
-    mkdir -p "$snap_dir"
+    # Genesis snapshot will be created by snapper-firstboot service on first boot
+    # This ensures snapper is properly configured before creating snapshots
 
-    # Create the snapshot of root
-    btrfs subvolume snapshot -r /mnt "$snap_dir/snapshot" \
-        || error "Failed to create genesis snapshot"
-
-    # Create snapper info.xml (required for snapper to recognize the snapshot)
-    local timestamp
-    timestamp=$(date -u +"%Y-%m-%d %H:%M:%S")
-    cat > "$snap_dir/info.xml" << EOF
-<?xml version="1.0"?>
-<snapshot>
-  <type>single</type>
-  <num>1</num>
-  <date>$timestamp</date>
-  <description>genesis</description>
-  <cleanup>number</cleanup>
-</snapshot>
-EOF
-
-    info "Genesis snapshot created at /.snapshots/1/snapshot"
-    info "Restore with: snapper -c root rollback 1"
+    info "Genesis snapshot will be created on first boot."
+    info "The snapper-firstboot service handles this automatically."
 }
 
 #############################
