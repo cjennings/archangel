@@ -1,20 +1,22 @@
 #!/bin/bash
-# install-archzfs - Arch Linux ZFS Root Installation Script
+# archangel - Arch Linux Installer with Snapshot-Based Recovery
 # Craig Jennings <c@cjennings.net>
 #
-# Installs Arch Linux on ZFS root with optional native encryption.
-# Designed to be run from the custom archzfs ISO.
+# Installs Arch Linux on ZFS or Btrfs root with snapshot support.
+# Choose your filesystem: ZFS (native encryption) or Btrfs (GRUB snapshots).
 #
 # Features:
+# - Filesystem choice: ZFS or Btrfs
 # - All questions asked upfront, then unattended installation
 # - Optional WiFi configuration with connection test
 # - Optional ZFS native encryption (passphrase required at boot)
-# - Pre-pacman ZFS snapshots for safe upgrades
+# - Pre-pacman snapshots for safe upgrades
+# - Genesis snapshot for factory reset
 #
 # UNATTENDED MODE:
-#   Use --config-file /path/to/install-archzfs.conf for automated installs.
+#   Use --config-file /path/to/archangel.conf for automated installs.
 #   Config file must be explicitly specified to prevent accidental disk wipes.
-#   See /root/install-archzfs.conf.example for a template with all options.
+#   See /root/archangel.conf.example for a template with all options.
 
 set -e
 
@@ -59,13 +61,13 @@ ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
 NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
 
 # Logging
-LOGFILE="/tmp/install-archzfs-$(date +'%Y-%m-%d-%H-%M-%S').log"
+LOGFILE="/tmp/archangel-$(date +'%Y-%m-%d-%H-%M-%S').log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 # Log header with timestamp
 echo ""
 echo "================================================================================"
-echo "install-archzfs started @ $(date +'%Y-%m-%d %H:%M:%S')"
+echo "archangel started @ $(date +'%Y-%m-%d %H:%M:%S')"
 echo "================================================================================"
 echo ""
 

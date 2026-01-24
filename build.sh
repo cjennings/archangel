@@ -368,7 +368,7 @@ EOF
 
 # Copy our custom scripts
 info "Copying custom scripts..."
-cp "$CUSTOM_DIR/install-archzfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$CUSTOM_DIR/archangel" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp -r "$CUSTOM_DIR/lib" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
@@ -380,7 +380,7 @@ cp "$CUSTOM_DIR/zfsrollback" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
 # Copy example config for unattended installs
 mkdir -p "$PROFILE_DIR/airootfs/root"
-cp "$CUSTOM_DIR/install-archzfs.conf.example" "$PROFILE_DIR/airootfs/root/"
+cp "$CUSTOM_DIR/archangel.conf.example" "$PROFILE_DIR/airootfs/root/"
 
 # Copy rescue guide
 info "Copying rescue guide..."
@@ -390,7 +390,7 @@ cp "$CUSTOM_DIR/RESCUE-GUIDE.txt" "$PROFILE_DIR/airootfs/root/"
 info "Setting file permissions..."
 if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     sed -i '/^file_permissions=(/,/)/ {
-        /)/ i\  ["/usr/local/bin/install-archzfs"]="0:0:755"
+        /)/ i\  ["/usr/local/bin/archangel"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/install-claude"]="0:0:755"
@@ -470,7 +470,7 @@ if [[ -f "$ISO_FILE" ]]; then
     info "After booting:"
     echo "  - ZFS is pre-loaded (no setup needed)"
     echo "  - SSH is enabled (root password: $LIVE_ROOT_PASSWORD)"
-    echo "  - Run 'install-archzfs' to start installation"
+    echo "  - Run 'archangel' to start installation"
     echo ""
     info "SSH access (from host):"
     echo "  ssh -p 2222 root@localhost"
