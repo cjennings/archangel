@@ -68,19 +68,92 @@ close_luks_container() {
     cryptsetup close "$name" 2>/dev/null || true
 }
 
+# Multi-disk LUKS functions
+create_luks_containers() {
+    local passphrase="$1"
+    shift
+    local partitions=("$@")
+
+    step "Creating LUKS Encrypted Containers"
+
+    local i=0
+    for partition in "${partitions[@]}"; do
+        info "Setting up LUKS encryption on $partition..."
+        echo -n "$passphrase" | cryptsetup luksFormat --type luks2 \
+            --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
+            --iter-time 2000 --pbkdf argon2id \
+            "$partition" - \
+            || error "Failed to create LUKS container on $partition"
+        ((i++))
+    done
+
+    info "Created $i LUKS containers."
+}
+
+open_luks_containers() {
+    local passphrase="$1"
+    shift
+    local partitions=("$@")
+
+    step "Opening LUKS Containers"
+
+    local i=0
+    for partition in "${partitions[@]}"; do
+        local name="${LUKS_MAPPER_NAME}${i}"
+        [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"  # First one has no suffix
+        info "Opening LUKS container: $partition -> /dev/mapper/$name"
+        echo -n "$passphrase" | cryptsetup open "$partition" "$name" - \
+            || error "Failed to open LUKS container: $partition"
+        ((i++))
+    done
+
+    info "Opened ${#partitions[@]} LUKS containers."
+}
+
+close_luks_containers() {
+    local count="${1:-1}"
+
+    for ((i=0; i<count; i++)); do
+        local name="${LUKS_MAPPER_NAME}${i}"
+        [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"
+        cryptsetup close "$name" 2>/dev/null || true
+    done
+}
+
+# Get list of opened LUKS mapper devices
+get_luks_devices() {
+    local count="$1"
+    local devices=()
+
+    for ((i=0; i<count; i++)); do
+        local name="${LUKS_MAPPER_NAME}${i}"
+        [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"
+        devices+=("/dev/mapper/$name")
+    done
+
+    echo "${devices[@]}"
+}
+
 configure_crypttab() {
-    local partition="$1"
+    local partitions=("$@")
 
     step "Configuring crypttab"
 
-    local uuid
-    uuid=$(blkid -s UUID -o value "$partition")
+    echo "# LUKS encrypted root partitions" > /mnt/etc/crypttab
 
-    # Create crypttab entry
-    echo "# LUKS encrypted root" > /mnt/etc/crypttab
-    echo "$LUKS_MAPPER_NAME  UUID=$uuid  none  luks,discard" >> /mnt/etc/crypttab
+    local i=0
+    for partition in "${partitions[@]}"; do
+        local uuid
+        uuid=$(blkid -s UUID -o value "$partition")
+        local name="${LUKS_MAPPER_NAME}${i}"
+        [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"
 
-    info "crypttab configured for $LUKS_MAPPER_NAME"
+        echo "$name  UUID=$uuid  none  luks,discard" >> /mnt/etc/crypttab
+        info "crypttab: $name -> UUID=$uuid"
+        ((i++))
+    done
+
+    info "crypttab configured for $i partition(s)"
 }
 
 configure_luks_initramfs() {
@@ -139,15 +212,66 @@ btrfs_preflight() {
 # Btrfs Volume Creation
 #############################
 
+# Create btrfs filesystem (single or multi-device)
+# Usage: create_btrfs_volume device1 [device2 ...] [--raid-level level]
 create_btrfs_volume() {
-    local partition="$1"
+    local devices=()
+    local raid_level=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --raid-level)
+                raid_level="$2"
+                shift 2
+                ;;
+            *)
+                devices+=("$1")
+                shift
+                ;;
+        esac
+    done
 
     step "Creating Btrfs Filesystem"
 
-    info "Formatting $partition as btrfs..."
-    mkfs.btrfs -f -L "archroot" "$partition" || error "Failed to create btrfs filesystem"
+    local num_devices=${#devices[@]}
 
-    info "Btrfs filesystem created on $partition"
+    if [[ $num_devices -eq 1 ]]; then
+        # Single device
+        info "Formatting ${devices[0]} as btrfs..."
+        mkfs.btrfs -f -L "archroot" "${devices[0]}" || error "Failed to create btrfs filesystem"
+        info "Btrfs filesystem created on ${devices[0]}"
+    else
+        # Multi-device RAID
+        local data_profile="raid1"
+        local meta_profile="raid1"
+
+        case "$raid_level" in
+            stripe)
+                data_profile="raid0"
+                meta_profile="raid1"  # Always mirror metadata for safety
+                info "Creating striped btrfs (RAID0 data, RAID1 metadata) with $num_devices devices..."
+                ;;
+            mirror)
+                data_profile="raid1"
+                meta_profile="raid1"
+                info "Creating mirrored btrfs (RAID1) with $num_devices devices..."
+                ;;
+            *)
+                # Default to mirror for safety
+                data_profile="raid1"
+                meta_profile="raid1"
+                info "Creating mirrored btrfs (RAID1) with $num_devices devices..."
+                ;;
+        esac
+
+        mkfs.btrfs -f -L "archroot" \
+            -d "$data_profile" \
+            -m "$meta_profile" \
+            "${devices[@]}" || error "Failed to create btrfs filesystem"
+
+        info "Btrfs $raid_level filesystem created on ${devices[*]}"
+    fi
 }
 
 #############################
@@ -444,6 +568,121 @@ EOF
 }
 
 #############################
+# EFI Redundancy (Multi-disk)
+#############################
+
+# Install GRUB to all EFI partitions for redundancy
+install_grub_all_efi() {
+    local efi_partitions=("$@")
+
+    step "Installing GRUB to All EFI Partitions"
+
+    local i=1
+    for efi_part in "${efi_partitions[@]}"; do
+        # First EFI at /efi (already mounted), subsequent at /efi2, /efi3, etc.
+        local chroot_efi_dir="/efi"
+        local mount_point="/mnt/efi"
+        local bootloader_id="GRUB"
+
+        if [[ $i -gt 1 ]]; then
+            chroot_efi_dir="/efi${i}"
+            mount_point="/mnt/efi${i}"
+            bootloader_id="GRUB-disk${i}"
+
+            # Mount secondary EFI partitions
+            if ! mountpoint -q "$mount_point" 2>/dev/null; then
+                mkdir -p "$mount_point"
+                mount "$efi_part" "$mount_point" || { warn "Failed to mount $efi_part"; ((i++)); continue; }
+                # Also create the directory in chroot for grub-install
+                mkdir -p "/mnt${chroot_efi_dir}"
+                mount --bind "$mount_point" "/mnt${chroot_efi_dir}"
+            fi
+        fi
+
+        info "Installing GRUB to $efi_part ($bootloader_id)..."
+        arch-chroot /mnt grub-install --target=x86_64-efi \
+            --efi-directory="$chroot_efi_dir" \
+            --bootloader-id="$bootloader_id" \
+            --boot-directory=/boot \
+            || warn "GRUB install to $efi_part may have failed (continuing)"
+
+        ((i++))
+    done
+
+    info "GRUB installed to ${#efi_partitions[@]} EFI partition(s)."
+}
+
+# Create pacman hook to sync GRUB across all EFI partitions
+create_grub_sync_hook() {
+    local efi_partitions=("$@")
+
+    step "Creating GRUB Sync Hook"
+
+    # Only needed for multi-disk
+    if [[ ${#efi_partitions[@]} -lt 2 ]]; then
+        info "Single disk - no sync hook needed."
+        return
+    fi
+
+    # Create sync script
+    local script_content='#!/bin/bash
+# Sync GRUB to all EFI partitions after grub package update
+# Generated by archangel installer
+
+set -e
+
+EFI_PARTITIONS=('
+    for part in "${efi_partitions[@]}"; do
+        script_content+="\"$part\" "
+    done
+    script_content+=')
+
+PRIMARY_EFI="/efi"
+
+sync_grub() {
+    local i=0
+    for part in "${EFI_PARTITIONS[@]}"; do
+        if [[ $i -eq 0 ]]; then
+            # Primary - just reinstall GRUB
+            grub-install --target=x86_64-efi --efi-directory="$PRIMARY_EFI" \
+                --bootloader-id=GRUB --boot-directory=/boot 2>/dev/null || true
+        else
+            # Secondary - mount, install, unmount
+            local mount_point="/tmp/efi-sync-$i"
+            mkdir -p "$mount_point"
+            mount "$part" "$mount_point" 2>/dev/null || continue
+            grub-install --target=x86_64-efi --efi-directory="$mount_point" \
+                --bootloader-id="GRUB-disk$((i+1))" --boot-directory=/boot 2>/dev/null || true
+            umount "$mount_point" 2>/dev/null || true
+            rmdir "$mount_point" 2>/dev/null || true
+        fi
+        ((i++))
+    done
+}
+
+sync_grub
+'
+    echo "$script_content" > /mnt/usr/local/bin/grub-sync-efi
+    chmod +x /mnt/usr/local/bin/grub-sync-efi
+
+    # Create pacman hook
+    mkdir -p /mnt/etc/pacman.d/hooks
+    cat > /mnt/etc/pacman.d/hooks/99-grub-sync-efi.hook << 'HOOKEOF'
+[Trigger]
+Type = Package
+Operation = Upgrade
+Target = grub
+
+[Action]
+Description = Syncing GRUB to all EFI partitions...
+When = PostTransaction
+Exec = /usr/local/bin/grub-sync-efi
+HOOKEOF
+
+    info "GRUB sync hook created for ${#efi_partitions[@]} EFI partitions."
+}
+
+#############################
 # Pacman Snapshot Hook
 #############################
 
@@ -520,9 +759,16 @@ fallback_options="-S autodetect"
 EOF
 
     # Configure hooks for btrfs
-    # btrfs module is built into kernel, but we need the btrfs hook for multi-device
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block filesystems fsck)/' \
-        /mnt/etc/mkinitcpio.conf
+    # For multi-device btrfs, we need the btrfs hook for device assembly at boot
+    local num_disks=${#SELECTED_DISKS[@]}
+    if [[ $num_disks -gt 1 ]]; then
+        info "Multi-device btrfs: adding btrfs hook for device assembly"
+        sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block btrfs filesystems fsck)/' \
+            /mnt/etc/mkinitcpio.conf
+    else
+        sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block filesystems fsck)/' \
+            /mnt/etc/mkinitcpio.conf
+    fi
 
     # Regenerate initramfs
     info "Regenerating initramfs..."

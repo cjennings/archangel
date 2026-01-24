@@ -816,3 +816,8 @@ Also includes header with start time inside the log file.
 CLOSED: [2026-01-18 Sat]
 Make the ISO double as a general-purpose recovery disk.
 See custom/RESCUE-GUIDE.txt for comprehensive documentation of all tools.
+
+** TODO [#C] Consider adding btrfs RAID10 support
+Multi-disk btrfs currently only supports RAID1 (mirror).
+RAID10 (striped mirrors) would require 4+ disks but offers better performance.
+Evaluate if there are real use cases before implementing.
