@@ -122,6 +122,8 @@ validate_config() {
         ((errors++))
     fi
 
-    [[ $errors -gt 0 ]] && error "Config validation failed with $errors error(s)"
+    if [[ $errors -gt 0 ]]; then
+        error "Config validation failed with $errors error(s)"
+    fi
     info "Config validation passed"
 }
