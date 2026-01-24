@@ -39,11 +39,11 @@ create_luks_container() {
 
     info "Setting up LUKS encryption on $partition..."
 
-    # Create LUKS container
-    echo -n "$passphrase" | cryptsetup luksFormat --type luks2 \
+    # Create LUKS container (-q for batch mode, -d - to read key from stdin)
+    echo -n "$passphrase" | cryptsetup -q luksFormat --type luks2 \
         --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
         --iter-time 2000 --pbkdf argon2id \
-        "$partition" - \
+        -d - "$partition" \
         || error "Failed to create LUKS container"
 
     info "LUKS container created."
@@ -56,7 +56,7 @@ open_luks_container() {
 
     info "Opening LUKS container..."
 
-    echo -n "$passphrase" | cryptsetup open "$partition" "$name" - \
+    echo -n "$passphrase" | cryptsetup open "$partition" "$name" -d - \
         || error "Failed to open LUKS container"
 
     info "LUKS container opened as /dev/mapper/$name"
@@ -79,12 +79,12 @@ create_luks_containers() {
     local i=0
     for partition in "${partitions[@]}"; do
         info "Setting up LUKS encryption on $partition..."
-        echo -n "$passphrase" | cryptsetup luksFormat --type luks2 \
+        echo -n "$passphrase" | cryptsetup -q luksFormat --type luks2 \
             --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
             --iter-time 2000 --pbkdf argon2id \
-            "$partition" - \
+            -d - "$partition" \
             || error "Failed to create LUKS container on $partition"
-        ((i++))
+        ((++i))
     done
 
     info "Created $i LUKS containers."
@@ -102,9 +102,9 @@ open_luks_containers() {
         local name="${LUKS_MAPPER_NAME}${i}"
         [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"  # First one has no suffix
         info "Opening LUKS container: $partition -> /dev/mapper/$name"
-        echo -n "$passphrase" | cryptsetup open "$partition" "$name" - \
+        echo -n "$passphrase" | cryptsetup open "$partition" "$name" -d - \
             || error "Failed to open LUKS container: $partition"
-        ((i++))
+        ((++i))
     done
 
     info "Opened ${#partitions[@]} LUKS containers."
@@ -150,7 +150,7 @@ configure_crypttab() {
 
         echo "$name  UUID=$uuid  none  luks,discard" >> /mnt/etc/crypttab
         info "crypttab: $name -> UUID=$uuid"
-        ((i++))
+        ((++i))
     done
 
     info "crypttab configured for $i partition(s)"
@@ -592,7 +592,7 @@ install_grub_all_efi() {
             # Mount secondary EFI partitions
             if ! mountpoint -q "$mount_point" 2>/dev/null; then
                 mkdir -p "$mount_point"
-                mount "$efi_part" "$mount_point" || { warn "Failed to mount $efi_part"; ((i++)); continue; }
+                mount "$efi_part" "$mount_point" || { warn "Failed to mount $efi_part"; ((++i)); continue; }
                 # Also create the directory in chroot for grub-install
                 mkdir -p "/mnt${chroot_efi_dir}"
                 mount --bind "$mount_point" "/mnt${chroot_efi_dir}"
@@ -606,7 +606,7 @@ install_grub_all_efi() {
             --boot-directory=/boot \
             || warn "GRUB install to $efi_part may have failed (continuing)"
 
-        ((i++))
+        ((++i))
     done
 
     info "GRUB installed to ${#efi_partitions[@]} EFI partition(s)."
@@ -656,7 +656,7 @@ sync_grub() {
             umount "$mount_point" 2>/dev/null || true
             rmdir "$mount_point" 2>/dev/null || true
         fi
-        ((i++))
+        ((++i))
     done
 }
 

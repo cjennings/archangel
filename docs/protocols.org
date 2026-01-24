@@ -254,27 +254,49 @@ When Craig says this phrase:
 
 ** Long-Running Process Status Updates
 
-When monitoring a long-running process (rsync, large downloads, builds, etc.), provide status updates every 5 minutes.
+When monitoring a long-running process (rsync, large downloads, builds, VM tests, etc.), follow this protocol:
 
-***Format:***
+***At Start:***
+1. Run =date= to get accurate time
+2. Announce the task/job beginning
+3. Provide best-guess ETA for completion
+
 #+begin_example
-**14:32** - Rsync in progress: 312GB of 640GB transferred (~49%), ETA ~25 min
-**14:37** - Rsync continuing: 389GB of 640GB (~61%), ETA ~18 min
+**14:30** - Starting ISO build. ETA: ~10 minutes.
+#+end_example
+
+***Every 5 Minutes:***
+- Check progress and display status in format: =HH:MM= - terse description - ETA
+
+#+begin_example
+**14:35** - ISO build: packages installed, creating squashfs. ETA: ~5 min.
+**14:40** - ISO build: squashfs 95% complete. ETA: ~1 min.
+#+end_example
+
+***At Completion:***
+1. Play notification sound three times:
+   #+begin_src bash
+   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
+   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
+   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
+   #+end_src
+2. Provide summary of success or failure
+
+#+begin_example
+**14:42** - ISO build complete. Size: 2.0G. Ready for testing.
 #+end_example
 
 ***Guidelines:***
-- Check in approximately every 5 minutes
-- Include current time (run =date= to get accurate time)
-- Brief description of what's happening
-- Progress indication (percentage, files transferred, etc.)
-- ETA when possible (even a ballpark estimate is helpful)
-- Format doesn't need to be strict - just be descriptive
-- If ETA cannot be determined, omit it rather than guessing wildly
+- Always run =date= for accurate timestamps
+- Keep progress descriptions terse but informative
+- Update ETA as job progresses
+- If ETA cannot be determined, say "ETA unknown" rather than guessing wildly
 
 ***Why This Matters:***
 - Craig may be working on other things while waiting
 - Status updates provide confidence the process is still running
 - ETAs help with planning (e.g., "I have time for coffee" vs "stay close")
+- Sound notification alerts Craig when he's away from the screen
 - If something stalls, the updates make it obvious
 
 ** "Wrap it up" / "That's a wrap" / "Let's call it a wrap"
