@@ -148,7 +148,9 @@ select_disks() {
         read -rp "Enter disk path(s) separated by space: " selected
     fi
 
-    [[ -z "$selected" ]] && error "No disk selected"
+    if [[ -z "$selected" ]]; then
+        error "No disk selected"
+    fi
 
     # Extract just the device paths (remove size/model info)
     SELECTED_DISKS=()

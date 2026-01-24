@@ -42,7 +42,9 @@ log() {
 #############################
 
 require_root() {
-    [[ $EUID -ne 0 ]] && error "This script must be run as root"
+    if [[ $EUID -ne 0 ]]; then
+        error "This script must be run as root"
+    fi
 }
 
 command_exists() {

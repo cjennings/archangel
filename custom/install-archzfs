@@ -85,16 +85,16 @@ preflight_checks() {
 gather_input() {
     if [[ "$UNATTENDED" == true ]]; then
         # Validate required config values
-        [[ -z "$HOSTNAME" ]] && error "Config missing required: HOSTNAME"
-        [[ -z "$TIMEZONE" ]] && error "Config missing required: TIMEZONE"
-        [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]] && error "Config missing required: ZFS_PASSPHRASE"
-        [[ -z "$ROOT_PASSWORD" ]] && error "Config missing required: ROOT_PASSWORD"
-        [[ ${#SELECTED_DISKS[@]} -eq 0 ]] && error "Config missing required: DISKS"
+        if [[ -z "$HOSTNAME" ]]; then error "Config missing required: HOSTNAME"; fi
+        if [[ -z "$TIMEZONE" ]]; then error "Config missing required: TIMEZONE"; fi
+        if [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]]; then error "Config missing required: ZFS_PASSPHRASE"; fi
+        if [[ -z "$ROOT_PASSWORD" ]]; then error "Config missing required: ROOT_PASSWORD"; fi
+        if [[ ${#SELECTED_DISKS[@]} -eq 0 ]]; then error "Config missing required: DISKS"; fi
 
         # Set defaults for optional values
-        [[ -z "$LOCALE" ]] && LOCALE="en_US.UTF-8"
-        [[ -z "$KEYMAP" ]] && KEYMAP="us"
-        [[ -z "$ENABLE_SSH" ]] && ENABLE_SSH="yes"
+        [[ -z "$LOCALE" ]] && LOCALE="en_US.UTF-8" || true
+        [[ -z "$KEYMAP" ]] && KEYMAP="us" || true
+        [[ -z "$ENABLE_SSH" ]] && ENABLE_SSH="yes" || true
 
         # Determine RAID level if not specified
         if [[ -z "$RAID_LEVEL" && ${#SELECTED_DISKS[@]} -gt 1 ]]; then
