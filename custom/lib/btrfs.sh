@@ -197,16 +197,12 @@ EOF
 configure_snapper() {
     step "Configuring Snapper"
 
-    # Snapper config for root
-    # Note: snapper expects /.snapshots to exist and be a subvolume
+    # Create snapper config directory
+    mkdir -p /mnt/etc/snapper/configs
+
+    # Snapper config for root - create manually (avoids D-Bus requirement in chroot)
+    # Note: We already have @snapshots subvolume mounted at /.snapshots
     info "Creating snapper config for root..."
-
-    arch-chroot /mnt snapper -c root create-config / || error "Failed to create snapper config"
-
-    # Snapper creates its own .snapshots subvolume, but we already have @snapshots
-    # Delete snapper's and use ours
-    arch-chroot /mnt btrfs subvolume delete /.snapshots 2>/dev/null || true
-    mkdir -p /mnt/.snapshots
 
     # Set snapper timeline settings
     # Keep: 6 hourly, 7 daily, 2 weekly, 1 monthly
@@ -250,6 +246,10 @@ EMPTY_PRE_POST_CLEANUP="yes"
 EMPTY_PRE_POST_MIN_AGE="1800"
 EOF
 
+    # Register the config with snapper
+    mkdir -p /mnt/etc/sysconfig
+    echo 'SNAPPER_CONFIGS="root"' > /mnt/etc/sysconfig/snapper
+
     # Enable snapper timers
     arch-chroot /mnt systemctl enable snapper-timeline.timer
     arch-chroot /mnt systemctl enable snapper-cleanup.timer
@@ -280,19 +280,19 @@ GRUB_DISTRIBUTOR="Arch"
 GRUB_CMDLINE_LINUX_DEFAULT="loglevel=3 quiet"
 GRUB_CMDLINE_LINUX=""
 
-# Btrfs snapshot boot support
-GRUB_BTRFS_GRUB_DIRNAME="/efi/grub"
-
 # Disable os-prober (single-boot system)
 GRUB_DISABLE_OS_PROBER=true
 EOF
+
+    # Create /boot/grub directory (grub-install expects this)
+    mkdir -p /mnt/boot/grub
 
     # Install GRUB to EFI
     info "Installing GRUB to EFI partition..."
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB \
         || error "GRUB installation failed"
 
-    # Generate GRUB config
+    # Generate GRUB config (without grub-btrfs first time)
     info "Generating GRUB configuration..."
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg \
         || error "Failed to generate GRUB config"
@@ -324,15 +324,31 @@ configure_btrfs_pacman_hook() {
 create_btrfs_genesis_snapshot() {
     step "Creating Genesis Snapshot"
 
-    # Use snapper to create the genesis snapshot
-    arch-chroot /mnt snapper -c root create --description "genesis" \
+    # Create snapshot manually (snapper requires D-Bus which isn't available in chroot)
+    # Snapper stores snapshots in /.snapshots/<num>/snapshot as read-only subvolumes
+    local snap_dir="/mnt/.snapshots/1"
+    mkdir -p "$snap_dir"
+
+    # Create the snapshot of root
+    btrfs subvolume snapshot -r /mnt "$snap_dir/snapshot" \
         || error "Failed to create genesis snapshot"
 
-    info "Genesis snapshot created."
-    info "Restore with: snapper -c root rollback <number>"
+    # Create snapper info.xml (required for snapper to recognize the snapshot)
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%d %H:%M:%S")
+    cat > "$snap_dir/info.xml" << EOF
+<?xml version="1.0"?>
+<snapshot>
+  <type>single</type>
+  <num>1</num>
+  <date>$timestamp</date>
+  <description>genesis</description>
+  <cleanup>number</cleanup>
+</snapshot>
+EOF
 
-    # Show the snapshot
-    arch-chroot /mnt snapper -c root list
+    info "Genesis snapshot created at /.snapshots/1/snapshot"
+    info "Restore with: snapper -c root rollback 1"
 }
 
 #############################

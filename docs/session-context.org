@@ -8,8 +8,6 @@
 *** Project Rename: archangel
 - Decided to rename project from "archzfs" to "archangel"
 - Script name will be just "archangel" (not install-archangel)
-- Checked for conflicts: pwnerfly/Archangel is dead (2020, 0 stars, no license)
-- Name is clear for use
 
 *** Btrfs Implementation Approach
 - Phase 2: Single-disk btrfs, no encryption (test first)
@@ -17,45 +15,39 @@
 - Phase 2.8: LUKS encryption after basic btrfs works
 - Phase 3: Multi-disk (stripe, mirror, raidX) + encrypted/unencrypted
 
-*** Partition Type Handling
-- disk.sh checks global FILESYSTEM variable
-- ZFS: BF00 (Solaris root)
-- Btrfs: 8300 (Linux filesystem)
-
 ** Work Completed
 
-*** 1. Phase 1: Refactor (COMPLETE)
+*** Phase 1: Refactor (COMPLETE)
 - [X] lib/common.sh, config.sh, disk.sh, zfs.sh created
 - [X] Filesystem selection prompt
 - [X] Renamed to archangel
 - [X] VM test passed
 
-*** 2. Phase 2: Btrfs Support (IN PROGRESS)
-**** Phase 2.1: lib/btrfs.sh (COMPLETE)
+*** Phase 2.1: Btrfs Support (COMPLETE)
 - [X] Created lib/btrfs.sh with full implementation
-- [X] BTRFS_OPTS: noatime,compress=zstd,space_cache=v2,discard=async
 - [X] 10 subvolumes matching ZFS dataset layout
 - [X] Mount functions with proper options
 - [X] fstab generation (subvol= NOT subvolid!)
-- [X] Snapper configuration (timeline policy)
+- [X] Snapper configuration (manual config - no D-Bus needed in chroot)
 - [X] GRUB + grub-btrfs configuration
-- [X] Genesis snapshot via snapper
+- [X] Genesis snapshot via btrfs (not snapper, avoids D-Bus)
+- [X] VM TEST PASSED @ 23:57 CST
 
-**** Updated Files
-- [X] disk.sh - filesystem-aware partition type
-- [X] archangel - sources btrfs.sh, install_btrfs() path
-- [X] build.sh - includes lib/btrfs.sh permissions
-- [X] PLAN-archangel-btrfs.org - added Phase 2.7/2.8
+**** Bugs Fixed During Testing
+1. GRUB_BTRFS_GRUB_DIRNAME was wrong (/efi/grub -> /boot/grub)
+2. snapper create-config needs D-Bus - switched to manual config
+3. snapper create needs D-Bus - create genesis snapshot with btrfs command
+4. test-install.sh now copies lib/ directory for testing
 
-**** Syntax Checks
-- [X] All lib/*.sh pass bash -n
-- [X] archangel passes bash -n
-- [X] All btrfs functions defined correctly
+** Commits This Session
+- a49f4b1: Phase 2.1: Implement btrfs support
+- (pending): Fix btrfs bugs from VM testing
 
 ** Next Steps
-1. Commit Phase 2.1 implementation
-2. Build ISO
-3. VM test btrfs installation path
+1. Commit bug fixes
+2. Test btrfs reboot and actual boot from installed system
+3. Phase 2.7: Full reboot/snapshot testing
+4. Phase 2.8: LUKS encryption
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
