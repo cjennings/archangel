@@ -1,13 +1,12 @@
 #+TITLE: Session Context - Active Session
-#+DATE: 2026-01-23
+#+DATE: 2026-01-24
 
-* Session: Friday 2026-01-23 @ 14:08 CST (ongoing)
+* Session: Friday 2026-01-23 @ 14:08 CST (continued 2026-01-24)
 
 ** Key Decisions This Session
 
 *** Project Rename: archangel
 - Decided to rename project from "archzfs" to "archangel"
-- Script name will be just "archangel" (not install-archangel)
 
 *** Btrfs Implementation Approach
 - Phase 2: Single-disk btrfs, no encryption (test first)
@@ -23,32 +22,41 @@
 - [X] Renamed to archangel
 - [X] VM test passed
 
-*** Phase 2.1: Btrfs Support (COMPLETE)
+*** Phase 2.1-2.6: Btrfs Support (COMPLETE)
 - [X] Created lib/btrfs.sh with full implementation
 - [X] 10 subvolumes matching ZFS dataset layout
 - [X] Mount functions with proper options
 - [X] fstab generation (subvol= NOT subvolid!)
-- [X] Snapper configuration (manual config - no D-Bus needed in chroot)
-- [X] GRUB + grub-btrfs configuration
-- [X] Genesis snapshot via btrfs (not snapper, avoids D-Bus)
-- [X] VM TEST PASSED @ 23:57 CST
+- [X] GRUB + grub-btrfs configuration with serial console
+- [X] Snapper firstboot service (configures on first boot)
 
-**** Bugs Fixed During Testing
-1. GRUB_BTRFS_GRUB_DIRNAME was wrong (/efi/grub -> /boot/grub)
-2. snapper create-config needs D-Bus - switched to manual config
-3. snapper create needs D-Bus - create genesis snapshot with btrfs command
-4. test-install.sh now copies lib/ directory for testing
+*** Phase 2.7: Basic Btrfs Testing (COMPLETE @ 05:23 CST)
+- [X] VM boots from installed btrfs disk
+- [X] GRUB menu shows and auto-boots
+- [X] All 10 subvolumes mount correctly
+- [X] Snapper works when configured
+- [X] Genesis snapshot can be created
+- [X] grub-btrfs detects snapshots
+
+**** Issues Fixed During Testing
+1. GRUB couldn't find normal.mod - added proper boot-directory config
+2. GRUB_BTRFS_GRUB_DIRNAME was wrong - removed, use default
+3. HEREDOC not working in remote execution - switched to echo
+4. Snapper needs D-Bus - firstboot service approach
+5. rootflags=subvol=@ was duplicated - grub-mkconfig adds it
 
 ** Commits This Session
 - a49f4b1: Phase 2.1: Implement btrfs support
-- (pending): Fix btrfs bugs from VM testing
+- 35a661c: Fix btrfs bugs from VM testing
+- bd0616c: Fix btrfs GRUB boot and snapper firstboot
 
 ** Next Steps
-1. Commit bug fixes
-2. Test btrfs reboot and actual boot from installed system
-3. Phase 2.7: Full reboot/snapshot testing
-4. Phase 2.8: LUKS encryption
+1. Phase 2.8: LUKS encryption for btrfs
+2. Rebuild ISO with all fixes
+3. Full end-to-end automated test
+4. Phase 3: Multi-disk support
 
 ** Notes
 - Craig on remote console: 30 lines tall, ~145 columns wide
 - Testing approach: syntax first, then full VM test
+- Snapper requires D-Bus - can't configure in chroot, needs firstboot
