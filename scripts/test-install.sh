@@ -224,16 +224,18 @@ run_install() {
     local config_name
     config_name=$(basename "$config" .conf)
 
-    # Copy latest install-archzfs script to VM (in case ISO is outdated)
+    # Copy latest archangel script and lib/ to VM (in case ISO is outdated)
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -P "$SSH_PORT" "$PROJECT_DIR/custom/install-archzfs" root@localhost:/usr/local/bin/install-archzfs 2>/dev/null
+        -P "$SSH_PORT" "$PROJECT_DIR/custom/archangel" root@localhost:/usr/local/bin/archangel 2>/dev/null
+    sshpass -p "$SSH_PASSWORD" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -P "$SSH_PORT" "$PROJECT_DIR/custom/lib" root@localhost:/usr/local/bin/ 2>/dev/null
 
     # Copy config file to VM
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -P "$SSH_PORT" "$config" root@localhost:/root/test.conf 2>/dev/null
 
     # Run the installer (NO_ENCRYPT is set in the config file, not via flag)
-    ssh_cmd "install-archzfs --config-file /root/test.conf" || return 1
+    ssh_cmd "archangel --config-file /root/test.conf" || return 1
 
     return 0
 }
@@ -242,45 +244,61 @@ run_install() {
 verify_install() {
     local config="$1"
     local enable_ssh
+    local filesystem
     enable_ssh=$(grep "^ENABLE_SSH=" "$config" | cut -d= -f2)
+    filesystem=$(grep "^FILESYSTEM=" "$config" | cut -d= -f2)
+    filesystem="${filesystem:-zfs}"  # Default to ZFS
 
     # Basic checks via SSH (if enabled)
     if [[ "$enable_ssh" == "yes" ]]; then
-        # Check if we can still SSH (install script reboots, so this won't work)
-        # Instead, check the install log for success indicators
-        if ssh_cmd "grep -q 'Installation complete' /tmp/install-archzfs-*.log 2>/dev/null"; then
+        # Check install log for success indicators
+        if ssh_cmd "grep -q 'Installation complete' /tmp/archangel-*.log 2>/dev/null"; then
             info "Install log shows success"
         else
             warn "Could not verify install log"
         fi
 
-        # Check pool was created
-        if ssh_cmd "zpool list zroot" >/dev/null 2>&1; then
-            info "ZFS pool 'zroot' exists"
-        else
-            error "ZFS pool 'zroot' not found"
-            return 1
+        if [[ "$filesystem" == "zfs" ]]; then
+            # ZFS-specific checks
+            if ssh_cmd "zpool list zroot" >/dev/null 2>&1; then
+                info "ZFS pool 'zroot' exists"
+            else
+                error "ZFS pool 'zroot' not found"
+                return 1
+            fi
+
+            if ssh_cmd "zfs list -t snapshot | grep -q genesis"; then
+                info "ZFS genesis snapshot exists"
+            else
+                warn "ZFS genesis snapshot not found"
+            fi
+        elif [[ "$filesystem" == "btrfs" ]]; then
+            # Btrfs-specific checks
+            if ssh_cmd "btrfs subvolume list /mnt" >/dev/null 2>&1; then
+                info "Btrfs subvolumes exist"
+            else
+                error "Btrfs subvolumes not found"
+                return 1
+            fi
+
+            if ssh_cmd "arch-chroot /mnt snapper -c root list 2>/dev/null | grep -q genesis"; then
+                info "Btrfs genesis snapshot exists"
+            else
+                warn "Btrfs genesis snapshot not found"
+            fi
         fi
 
-        # Check genesis snapshot
-        if ssh_cmd "zfs list -t snapshot | grep -q genesis"; then
-            info "Genesis snapshot exists"
-        else
-            warn "Genesis snapshot not found (may not have completed)"
-        fi
-
-        # Check Avahi mDNS packages installed on target system
+        # Check Avahi mDNS packages
         if ssh_cmd "arch-chroot /mnt pacman -Q avahi nss-mdns >/dev/null 2>&1"; then
             info "Avahi packages installed"
         else
-            warn "Avahi packages not found on installed system"
+            warn "Avahi packages not found"
         fi
 
-        # Check avahi-daemon enabled on target system
         if ssh_cmd "arch-chroot /mnt systemctl is-enabled avahi-daemon >/dev/null 2>&1"; then
             info "Avahi daemon enabled"
         else
-            warn "Avahi daemon not enabled on installed system"
+            warn "Avahi daemon not enabled"
         fi
     else
         # For no-SSH tests, check serial console output
@@ -356,7 +374,7 @@ run_test() {
         stop_vm "$config_name"
 
         # Save logs
-        ssh_cmd "cat /tmp/install-archzfs-*.log" > "$LOG_DIR/${config_name}-install.log" 2>/dev/null || true
+        ssh_cmd "cat /tmp/archangel-*.log" > "$LOG_DIR/${config_name}-install.log" 2>/dev/null || true
         cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-serial.log" 2>/dev/null || true
 
         cleanup_disks "$config_name"
