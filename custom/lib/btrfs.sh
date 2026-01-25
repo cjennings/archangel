@@ -456,8 +456,8 @@ configure_snapper() {
         echo '# Create genesis snapshot'
         echo 'snapper -c root create -d "genesis"'
         echo ''
-        echo '# Update GRUB'
-        echo 'grub-mkconfig -o /boot/grub/grub.cfg'
+        echo '# Update GRUB (config on EFI partition)'
+        echo 'grub-mkconfig -o /efi/grub/grub.cfg'
         echo ''
         echo 'echo "Snapper configuration complete!"'
     } > /mnt/usr/local/bin/snapper-firstboot
@@ -545,20 +545,27 @@ EOF
         fi
     fi
 
-    # Create /boot/grub directory
-    mkdir -p /mnt/boot/grub
+    # Create grub directory on EFI partition
+    # GRUB modules on FAT32 EFI partition avoid btrfs subvolume path issues
+    mkdir -p /mnt/efi/grub
 
-    # Install GRUB to EFI with btrfs support
-    # Use --boot-directory to ensure modules are found correctly
+    # Install GRUB with boot-directory on EFI partition
     info "Installing GRUB to EFI partition..."
     arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi \
-        --bootloader-id=GRUB --boot-directory=/boot \
+        --bootloader-id=GRUB --boot-directory=/efi \
         || error "GRUB installation failed"
 
-    # Generate GRUB config
+    # Create symlink BEFORE grub-mkconfig (grub-btrfs expects /boot/grub)
+    rm -rf /mnt/boot/grub 2>/dev/null || true
+    arch-chroot /mnt ln -sfn /efi/grub /boot/grub
+
+    # Generate GRUB config (uses /boot/grub symlink -> /efi/grub)
     info "Generating GRUB configuration..."
     arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg \
         || error "Failed to generate GRUB config"
+
+    # Sync to ensure grub.cfg is written to FAT32 EFI partition
+    sync
 
     # Enable grub-btrfsd for automatic snapshot menu updates
     info "Enabling grub-btrfs daemon..."
@@ -603,7 +610,7 @@ install_grub_all_efi() {
         arch-chroot /mnt grub-install --target=x86_64-efi \
             --efi-directory="$chroot_efi_dir" \
             --bootloader-id="$bootloader_id" \
-            --boot-directory=/boot \
+            --boot-directory=/efi \
             || warn "GRUB install to $efi_part may have failed (continuing)"
 
         ((++i))
@@ -645,14 +652,14 @@ sync_grub() {
         if [[ $i -eq 0 ]]; then
             # Primary - just reinstall GRUB
             grub-install --target=x86_64-efi --efi-directory="$PRIMARY_EFI" \
-                --bootloader-id=GRUB --boot-directory=/boot 2>/dev/null || true
+                --bootloader-id=GRUB --boot-directory=/efi 2>/dev/null || true
         else
             # Secondary - mount, install, unmount
             local mount_point="/tmp/efi-sync-$i"
             mkdir -p "$mount_point"
             mount "$part" "$mount_point" 2>/dev/null || continue
             grub-install --target=x86_64-efi --efi-directory="$mount_point" \
-                --bootloader-id="GRUB-disk$((i+1))" --boot-directory=/boot 2>/dev/null || true
+                --bootloader-id="GRUB-disk$((i+1))" --boot-directory=/efi 2>/dev/null || true
             umount "$mount_point" 2>/dev/null || true
             rmdir "$mount_point" 2>/dev/null || true
         fi
@@ -786,6 +793,9 @@ btrfs_cleanup() {
 
     # Unmount in reverse order
     info "Unmounting subvolumes..."
+
+    # Sync all filesystems before unmounting (important for FAT32 EFI partition)
+    sync
 
     # Unmount EFI first
     umount /mnt/efi 2>/dev/null || true
