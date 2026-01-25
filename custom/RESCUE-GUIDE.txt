@@ -2576,8 +2576,28 @@ Navigation:
   Tab         - Next link
   Shift+Tab   - Previous link
 
-USEFUL URLS FOR RESCUE
-----------------------
+OFFLINE ARCH WIKI (NO NETWORK NEEDED)
+-------------------------------------
+This ISO includes the full Arch Wiki for offline use - invaluable when
+networking is broken and you need documentation.
+
+arch-wiki-lite (CLI, smaller):
+  wiki-search zfs              # Search for articles
+  wiki-search mkinitcpio       # Find mkinitcpio docs
+  wiki-search "grub rescue"    # Search with spaces
+
+arch-wiki-docs (HTML, complete):
+  Location: /usr/share/doc/arch-wiki/html/
+
+  Browse with w3m:
+    w3m /usr/share/doc/arch-wiki/html/index.html
+
+  Search for topic:
+    find /usr/share/doc/arch-wiki/html -iname "*zfs*"
+    w3m /usr/share/doc/arch-wiki/html/en/ZFS.html
+
+USEFUL URLS FOR RESCUE (WHEN ONLINE)
+------------------------------------
   https://wiki.archlinux.org
   https://wiki.archlinux.org/title/ZFS
   https://wiki.archlinux.org/title/GRUB

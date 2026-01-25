@@ -1,14 +1,21 @@
 * Open Work
 
-** TODO [#B] Implement btrfs support (archangel expansion)
+** DONE [#B] Implement btrfs support (archangel expansion)
+CLOSED: [2026-01-24 Sat]
 See [[file:docs/PLAN-archangel-btrfs.org][PLAN-archangel-btrfs.org]] for full implementation plan.
 
-6 phases: Refactor → Btrfs → Multi-disk → Testing → CLI tools → Docs
-Start with Phase 1 (refactor) to enable everything else.
+Completed phases:
+- Phase 1: Refactor (ZFS works)
+- Phase 2: Single-disk btrfs with snapper/grub-btrfs
+- Phase 2.8: LUKS encryption support
+- Phase 3: Multi-disk btrfs (RAID0/RAID1) with LUKS
 
-** TODO [#A] Review code review workflow document and provide feedback
+All tests passing: btrfs-single, btrfs-luks, btrfs-mirror, btrfs-stripe, btrfs-mirror-luks
+
+** TODO [#C] Review code review workflow document and provide feedback
 Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/code-review.org]] and refine based on feedback.
 Created: 2026-01-23
+Postponed: After archangel project completion.
 
 ** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
 After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
@@ -146,47 +153,13 @@ cp -r /usr/share/aur-packages /mnt/usr/share/
 Most AUR packages are small (<5MB each). Estimate ~50-100MB for full suite.
 Significantly less than pre-cloning git repos.
 
-** TODO [#A] Install Arch Wiki on ISO for offline package help
-Include offline Arch Wiki on the ISO for package documentation and troubleshooting.
-Invaluable for rescue scenarios when networking is broken - exactly when you need docs most.
+** DONE [#A] Install Arch Wiki on ISO for offline package help
+CLOSED: [2026-01-24 Sat]
+Added to profile/packages.x86_64:
+- arch-wiki-docs (full HTML version at /usr/share/doc/arch-wiki/html/)
+- arch-wiki-lite (CLI search via wiki-search command)
 
-*** Reader Options
-
-**** Option 1: arch-wiki-lite (AUR) - Recommended
-Purpose-built CLI reader for offline Arch Wiki.
-#+BEGIN_SRC bash
-$ wiki-search zfs
-$ wiki-search mkinitcpio
-#+END_SRC
-- Searches articles by keyword
-- Displays content as plain text in terminal
-- Add to our AUR package build list
-
-**** Option 2: arch-wiki-docs (official) + text browser
-- Package installs HTML to /usr/share/doc/arch-wiki/html/
-- Use w3m, lynx, or elinks to browse
-- Would need wrapper script for searching:
-#+BEGIN_SRC bash
-#!/bin/bash
-# archwiki - search and display offline Arch Wiki
-WIKI_DIR="/usr/share/doc/arch-wiki/html"
-SEARCH="$1"
-MATCHES=$(find "$WIKI_DIR" -iname "*${SEARCH}*" -type f)
-if [[ -n "$MATCHES" ]]; then
-    echo "$MATCHES" | fzf --preview 'w3m -dump {}' | xargs w3m
-fi
-#+END_SRC
-
-*** Implementation
-1. Add arch-wiki-lite to AUR package list (leverages existing AUR infrastructure)
-2. Also install arch-wiki-docs for complete HTML version
-3. Add w3m for HTML viewing as backup
-4. Document in RESCUE-GUIDE.txt
-
-*** Size
-- arch-wiki-docs: ~500MB compressed
-- arch-wiki-lite: ~200MB (text only, smaller)
-- Could include both for ~600MB total
+Both are in official repos (not AUR). Documented in RESCUE-GUIDE.txt.
 
 ** TODO [#A] Fix ZFS rollback breaking boot (/boot not on ZFS)
 ZFS rollbacks can leave the system unbootable because /boot is on a separate EFI partition
@@ -241,26 +214,11 @@ Replace GRUB with ZFSBootMenu which is designed for ZFS boot environments.
 - https://wiki.archlinux.org/title/Install_Arch_Linux_on_ZFS
 - https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/index.html
 
-** TODO [#A] Integrate ZFSBootMenu as alternative boot manager
-Idea from: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
-
-ZFSBootMenu is a powerful boot manager specifically designed for ZFS root systems.
-It provides boot environment selection, snapshot rollback from boot menu, and recovery options.
-
-*** Benefits
-- Boot directly into any ZFS snapshot
-- Rollback to previous boot environment without booting first
-- Better ZFS-native boot experience than GRUB
-- Single EFI file (~15MB) that can be updated independently
-
-*** Implementation
-- Download portable EFI from https://get.zfsbootmenu.org/efi
-- Include in ISO's /root/software/zfsbootmenu/
-- Add update script for post-installation updates
-- Consider as GRUB alternative or supplement
-
-*** Reference
-https://zfsbootmenu.org/
+** DONE [#A] Integrate ZFSBootMenu as alternative boot manager
+CLOSED: [2026-01-24 Sat]
+Implemented in custom/lib/zfs.sh configure_zfsbootmenu().
+Downloads EFI binary from get.zfsbootmenu.org and installs to /efi/EFI/ZBM/.
+ZFS installs use ZFSBootMenu; btrfs installs use GRUB.
 
 ** TODO [#A] Update README.org - remove all GRUB references (now uses ZFSBootMenu)
 README.org contains multiple outdated references to GRUB that are now incorrect:
@@ -428,21 +386,50 @@ Document the testing strategy and when to use each script.
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
 
-** TODO [#B] Add RAID configuration tests (mirror, raidz)
-Currently full-test.sh only tests single-disk installations.
-Add tests for multi-disk RAID configurations to catch regressions.
+** DONE [#B] Add RAID configuration tests (mirror, raidz)
+CLOSED: [2026-01-24 Sat]
+Test configs exist in scripts/test-configs/:
+- mirror.conf (ZFS 2-disk mirror)
+- raidz1.conf (ZFS 3-disk raidz1)
+- btrfs-mirror.conf (btrfs RAID1)
+- btrfs-stripe.conf (btrfs RAID0)
+- btrfs-mirror-luks.conf (btrfs RAID1 + LUKS)
 
-*** Test configurations to add
-- 2-disk mirror (most common RAID setup)
-- 3-disk raidz1 (if practical for VM testing)
-- Verify pool redundancy after installation
-- Test degraded pool boot scenario
+All tests passing via test-install.sh.
 
-*** Implementation
-- Add --raid flag to full-test.sh or separate test-raid.sh
-- Create multiple virtual disks for VM
-- Verify zpool status shows correct redundancy
-- Consider testing disk failure/resilience
+** TODO [#A] Add ZFS encrypted volume tests
+ZFS native encryption is implemented in lib/zfs.sh but not tested.
+All current ZFS test configs use NO_ENCRYPT=yes.
+
+*** Implementation Details
+ZFS encryption uses native AES-256-GCM (not LUKS). The passphrase is:
+1. Provided at pool creation: echo "$passphrase" | zpool create ... -O encryption=aes-256-gcm -O keyformat=passphrase
+2. Stored in ZFS properties (encrypted)
+3. Prompted by ZFSBootMenu at boot time (not initramfs encrypt hook)
+
+*** Test Configs to Create
+- zfs-luks.conf - Single disk ZFS with encryption
+- zfs-mirror-luks.conf - 2-disk mirror with encryption
+
+*** Config Format
+#+BEGIN_SRC
+HOSTNAME=test-zfs-luks
+FILESYSTEM=zfs
+DISKS=/dev/vda
+ZFS_PASSPHRASE=testpassphrase
+ROOT_PASSWORD=testpass
+ENABLE_SSH=yes
+#+END_SRC
+
+*** Verification Checks
+- zpool get feature@encryption zroot (should show enabled)
+- zfs get encryption zroot/ROOT (should show aes-256-gcm)
+- zfs get keystatus zroot/ROOT (should show available after unlock)
+
+*** Notes
+- ZFSBootMenu handles passphrase prompt at boot
+- Test framework may need adjustment if ZFSBootMenu prompt differs from LUKS
+- Passphrase unlocks all datasets in pool (single prompt)
 
 ** TODO [#B] Add pre-flight validation to install-archzfs
 Validate configuration and environment before any destructive operations.
@@ -482,35 +469,16 @@ validate_environment() {
 }
 #+END_SRC
 
-** TODO [#B] Extract install-archzfs into testable functions
-Current install-archzfs is a monolithic script that's hard to test in isolation.
-Refactoring into focused functions enables unit testing and better maintainability.
+** DONE [#B] Extract install-archzfs into testable functions
+CLOSED: [2026-01-24 Sat]
+Completed as Phase 1 of btrfs implementation. Refactored into:
+- custom/lib/common.sh - Colors, output, prompts
+- custom/lib/config.sh - Config file handling, argument parsing
+- custom/lib/disk.sh - Partitioning, EFI formatting
+- custom/lib/zfs.sh - ZFS pool/dataset creation, ZFSBootMenu
+- custom/lib/btrfs.sh - Btrfs volume/subvolume creation, snapper, LUKS
 
-*** Current pain points
-- Can't test partition creation without running full install
-- Can't test ZFS pool creation logic separately
-- Failures mid-install are hard to diagnose
-- No way to verify individual steps worked
-
-*** Proposed refactoring
-Extract into library of functions that can be sourced and tested:
-- lib/partition.sh - Disk partitioning functions
-- lib/zfs.sh - ZFS pool and dataset creation
-- lib/bootloader.sh - GRUB installation and configuration
-- lib/network.sh - Network configuration (mDNS, etc.)
-- lib/packages.sh - Package installation via pacstrap
-
-*** Testing approach
-- Unit tests for pure functions (config parsing, validation)
-- Integration tests using small loop devices
-- Mock destructive operations for safety
-- Test each function's error handling
-
-*** Benefits
-- Easier to debug failures (which function failed?)
-- Can test edge cases without full VM boot
-- Reusable functions for other projects
-- Clearer code organization
+Main script (archangel) sources libraries and orchestrates install flow.
 
 ** TODO [#B] Create Makefile with distinct build targets
 Replace or supplement build.sh with a Makefile for cleaner build orchestration.
