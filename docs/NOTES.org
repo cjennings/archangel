@@ -329,6 +329,48 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-01-25 Sun @ 00:15-08:34 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Phase 4.3 validation testing for btrfs installations
+- Non-LUKS btrfs tests all PASS: btrfs-single, btrfs-mirror, btrfs-stripe
+- Attempted LUKS automated reboot testing (sendkey + keyfile hybrid approach)
+- GRUB passphrase via sendkey WORKS (Slot 0 opened)
+- Initramfs encrypt hook does NOT receive sendkey - accepted as limitation
+- Fixed configure_btrfs_initramfs() - was overwriting HOOKS and removing encrypt hook
+- Added setup_luks_testing_keyfile() function for keyfile-based testing
+- Created TESTING-STRATEGY.org documenting the LUKS automation limitation
+- Copied ISO to Ventoy flash drive
+- Added manual LUKS verification task to todo.org (priority A)
+
+*Key Decisions:*
+- LUKS reboot automation is a known limitation - installation tests pass, reboot verification requires manual testing
+- Hybrid approach (sendkey for GRUB, keyfile for initramfs) was correct direction but initramfs encrypt hook reads input differently than GRUB
+- Documented in TESTING-STRATEGY.org for future reference
+
+*Files Modified:*
+- [[file:../custom/lib/btrfs.sh][custom/lib/btrfs.sh]] - LUKS keyfile support, encrypt hook fix
+- [[file:../custom/archangel][custom/archangel]] - Integrated keyfile setup call
+- [[file:../scripts/test-configs/btrfs-luks.conf][scripts/test-configs/btrfs-luks.conf]] - Added TESTING=yes
+- [[file:../scripts/test-configs/btrfs-mirror-luks.conf][scripts/test-configs/btrfs-mirror-luks.conf]] - Added TESTING=yes
+- [[file:TESTING-STRATEGY.org][docs/TESTING-STRATEGY.org]] - New file documenting approach
+- [[file:../todo.org][todo.org]] - Added manual LUKS verification task
+
+*Test Results:*
+| Config | Installation | Reboot |
+|--------+--------------+--------|
+| btrfs-single | PASS | PASS |
+| btrfs-mirror | PASS | PASS |
+| btrfs-stripe | PASS | PASS |
+| btrfs-luks | PASS | MANUAL |
+| btrfs-mirror-luks | PASS | MANUAL |
+
+*Next Steps:*
+- Review Phase 5 (CLI tools: archangel-snapshot, archangel-rollback, archangel-list)
+- Manual LUKS reboot verification when hardware available
+
 *** 2026-01-23 Fri @ 02:12 -0600
 
 *Status:* COMPLETE
