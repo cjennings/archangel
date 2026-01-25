@@ -68,6 +68,36 @@ close_luks_container() {
     cryptsetup close "$name" 2>/dev/null || true
 }
 
+# Testing keyfile for automated LUKS testing
+# When TESTING=yes, we embed a keyfile in initramfs to allow unattended boot
+LUKS_KEYFILE="/etc/cryptroot.key"
+
+setup_luks_testing_keyfile() {
+    local passphrase="$1"
+    shift
+    local partitions=("$@")
+
+    [[ "${TESTING:-}" != "yes" ]] && return 0
+
+    step "Setting Up Testing Keyfile (TESTING MODE)"
+    warn "Adding keyfile to initramfs for automated testing."
+    warn "This reduces security - for testing only!"
+
+    # Generate random keyfile
+    dd if=/dev/urandom of="/mnt${LUKS_KEYFILE}" bs=512 count=4 status=none \
+        || error "Failed to generate keyfile"
+    chmod 000 "/mnt${LUKS_KEYFILE}"
+
+    # Add keyfile to each LUKS partition (slot 1, passphrase stays in slot 0)
+    for partition in "${partitions[@]}"; do
+        info "Adding keyfile to $partition..."
+        echo -n "$passphrase" | cryptsetup luksAddKey "$partition" "/mnt${LUKS_KEYFILE}" -d - \
+            || error "Failed to add keyfile to $partition"
+    done
+
+    info "Testing keyfile configured for ${#partitions[@]} partition(s)."
+}
+
 # Multi-disk LUKS functions
 create_luks_containers() {
     local passphrase="$1"
@@ -141,6 +171,13 @@ configure_crypttab() {
 
     echo "# LUKS encrypted root partitions" > /mnt/etc/crypttab
 
+    # Use keyfile if in testing mode, otherwise prompt for passphrase
+    local key_source="none"
+    if [[ "${TESTING:-}" == "yes" ]]; then
+        key_source="$LUKS_KEYFILE"
+        info "Testing mode: using keyfile for automatic unlock"
+    fi
+
     local i=0
     for partition in "${partitions[@]}"; do
         local uuid
@@ -148,7 +185,7 @@ configure_crypttab() {
         local name="${LUKS_MAPPER_NAME}${i}"
         [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"
 
-        echo "$name  UUID=$uuid  none  luks,discard" >> /mnt/etc/crypttab
+        echo "$name  UUID=$uuid  $key_source  luks,discard" >> /mnt/etc/crypttab
         info "crypttab: $name -> UUID=$uuid"
         ((++i))
     done
@@ -167,6 +204,16 @@ configure_luks_initramfs() {
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
         /mnt/etc/mkinitcpio.conf
 
+    # Include keyfile in initramfs for testing mode (unattended boot)
+    if [[ "${TESTING:-}" == "yes" ]]; then
+        info "Testing mode: embedding keyfile in initramfs"
+        sed -i "s|^FILES=.*|FILES=($LUKS_KEYFILE)|" /mnt/etc/mkinitcpio.conf
+        # If FILES line doesn't exist, add it
+        if ! grep -q "^FILES=" /mnt/etc/mkinitcpio.conf; then
+            echo "FILES=($LUKS_KEYFILE)" >> /mnt/etc/mkinitcpio.conf
+        fi
+    fi
+
     info "Added encrypt hook to initramfs."
 }
 
@@ -182,7 +229,15 @@ configure_luks_grub() {
     echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
 
     # Add cryptdevice to GRUB cmdline
-    sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards |" \
+    # For testing mode, also add cryptkey parameter for automated unlock
+    local cryptkey_param=""
+    if [[ "${TESTING:-}" == "yes" ]]; then
+        # cryptkey path is relative to initramfs root (no device prefix needed)
+        cryptkey_param="cryptkey=$LUKS_KEYFILE "
+        info "Testing mode: adding cryptkey parameter for automated unlock"
+    fi
+
+    sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}|" \
         /mnt/etc/default/grub
 
     info "GRUB configured with cryptdevice parameter and cryptodisk enabled."
@@ -766,14 +821,17 @@ fallback_options="-S autodetect"
 EOF
 
     # Configure hooks for btrfs
-    # For multi-device btrfs, we need the btrfs hook for device assembly at boot
+    # Include encrypt hook if LUKS is enabled, btrfs hook if multi-device
     local num_disks=${#SELECTED_DISKS[@]}
+    local encrypt_hook=""
+    [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]] && encrypt_hook="encrypt "
+
     if [[ $num_disks -gt 1 ]]; then
         info "Multi-device btrfs: adding btrfs hook for device assembly"
-        sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block btrfs filesystems fsck)/' \
+        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block ${encrypt_hook}btrfs filesystems fsck)/" \
             /mnt/etc/mkinitcpio.conf
     else
-        sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block filesystems fsck)/' \
+        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block ${encrypt_hook}filesystems fsck)/" \
             /mnt/etc/mkinitcpio.conf
     fi
 

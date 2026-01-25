@@ -1,0 +1,144 @@
+#+TITLE: Testing Strategy
+#+AUTHOR: Craig Jennings
+#+DATE: 2026-01-25
+
+* Overview
+
+This document describes the testing strategy for the archzfs installer project,
+including automated VM testing and the rationale for key technical decisions.
+
+* Test Infrastructure
+
+** Test Scripts
+
+- =scripts/test-install.sh= - Main test runner
+- =scripts/test-configs/= - Configuration files for different test scenarios
+
+** Test Flow
+
+1. Build ISO with =./build.sh=
+2. Boot QEMU VM from ISO
+3. Run unattended installation via config file
+4. Verify installation (packages, services, filesystem)
+5. Reboot from installed disk (no ISO)
+6. Verify system survives reboot
+7. Test rollback functionality (btrfs only)
+
+* LUKS Encryption Testing
+
+** The Challenge
+
+LUKS-encrypted systems require TWO passphrase prompts at boot:
+
+1. *GRUB prompt* - GRUB must decrypt /boot to read kernel/initramfs
+2. *Initramfs prompt* - encrypt hook must decrypt root to mount filesystem
+
+This blocks automated testing because:
+- SSH is unavailable until after both decryptions complete
+- Both prompts require interactive passphrase entry
+
+** Options Evaluated
+
+*** Option A: Put /boot on EFI partition for testing
+
+Move /boot to the unencrypted EFI partition when TESTING=yes, so GRUB
+doesn't need to decrypt anything.
+
+*Rejected* - Tests different code path than production. Bugs in GRUB
+cryptodisk setup would not be caught. "Testing something different than
+what ships defeats the purpose."
+
+*** Option B: Accept limitation, enhance installation verification
+
+Skip reboot tests for LUKS. Instead, verify configs before cleanup:
+- Check crypttab, grub.cfg, mkinitcpio.conf are correct
+- If configs are right, boot should work
+
+*Rejected* - We already found bugs (empty grub.cfg from FAT32 sync) that
+only manifested at boot time. Config inspection wouldn't catch everything.
+
+*** Option C: Hybrid approach (Chosen)
+
+Use TWO mechanisms to handle the two prompts:
+
+1. *GRUB prompt* - QEMU monitor sendkey (timing is predictable)
+2. *Initramfs prompt* - Keyfile in initramfs (deterministic)
+
+The GRUB countdown provides clear timing signal:
+#+begin_example
+The highlighted entry will be executed automatically in 0s.
+Booting 'Arch Linux'
+Enter passphrase for hd0,gpt2:
+#+end_example
+
+We know exactly when the GRUB prompt appears. After sendkey handles GRUB,
+the keyfile handles initramfs automatically.
+
+** Why Option C
+
+- Tests actual production code path (critical requirement)
+- GRUB timing is predictable (countdown visible in serial)
+- Keyfile handles the harder timing problem (initramfs)
+- Only one sendkey interaction needed (GRUB prompt)
+
+** Implementation
+
+*** GRUB Passphrase (sendkey)
+
+1. Change serial from file-based to real-time (socket or pty)
+2. Monitor for "Enter passphrase for" text after GRUB countdown
+3. Send passphrase via QEMU monitor: =sendkey= commands
+4. Send Enter key to submit
+
+*** Initramfs Passphrase (keyfile)
+
+When =TESTING=yes= is set in config:
+
+1. Generate random 2KB keyfile at =/etc/cryptroot.key=
+2. Add keyfile to LUKS slot 1 (passphrase remains in slot 0)
+3. Set keyfile permissions to 000
+4. Add keyfile to mkinitcpio FILES= array
+5. Configure crypttab to use keyfile instead of "none"
+6. Initramfs unlocks automatically (no prompt)
+
+** Security Mitigations
+
+- Test-only flag: Only activates when TESTING=yes
+- Separate key slot: Keyfile in slot 1, passphrase in slot 0
+- Random per-build: Fresh keyfile generated each installation
+- Never shipped: Keyfile only in test VMs, not in ISO
+- Restricted permissions: chmod 000 on keyfile
+
+** Files Modified
+
+- =custom/lib/btrfs.sh= - setup_luks_testing_keyfile(), configure_crypttab(), configure_luks_initramfs()
+- =custom/archangel= - Calls keyfile setup in LUKS flow
+- =scripts/test-install.sh= - sendkey for GRUB, real-time serial monitoring
+- =scripts/test-configs/btrfs-luks.conf= - TESTING=yes
+- =scripts/test-configs/btrfs-mirror-luks.conf= - TESTING=yes
+
+* Test Configurations
+
+** Btrfs Tests
+
+| Config | Disks | LUKS | Status |
+|--------+-------+------+--------|
+| btrfs-single | 1 | No | Pass |
+| btrfs-luks | 1 | Yes | Pass (with TESTING=yes) |
+| btrfs-mirror | 2 | No | Pass |
+| btrfs-stripe | 2 | No | Pass |
+| btrfs-mirror-luks | 2 | Yes | Pass (with TESTING=yes) |
+
+** ZFS Tests
+
+| Config | Disks | Encryption | Status |
+|--------+-------+------------+--------|
+| single-disk | 1 | No | Pass |
+| mirror | 2 | No | Pass |
+| raidz1 | 3 | No | Pass |
+
+* References
+
+- Arch Wiki: dm-crypt/System configuration
+- HashiCorp Discuss: LUKS Encryption Key on Initial Reboot
+- GitHub: tylert/packer-build Issue #31 (LUKS unattended builds)
