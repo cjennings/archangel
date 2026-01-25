@@ -24,6 +24,22 @@ New format: archzfs-2026-01-24-vmlinuz-6.12.66-lts-x86_64.iso
 Date should come right after project name for easier sorting and identification.
 Update build.sh ISO_NAME variable.
 
+** TODO [#A] Manually verify LUKS btrfs installations boot correctly
+Automated reboot testing for LUKS configs is blocked - can't send passphrase to
+initramfs encrypt hook via QEMU. Installation tests pass, but need manual verification
+that systems actually boot and decrypt correctly.
+
+Test on physical hardware or VM with manual interaction:
+1. Boot from archzfs ISO
+2. Run: archangel --config-file with LUKS config
+3. Reboot, enter passphrase at GRUB prompt
+4. Enter passphrase at initramfs prompt
+5. Verify system boots to login
+
+Configs to test: btrfs-luks (single disk), btrfs-mirror-luks (2-disk RAID1)
+
+See [[file:docs/TESTING-STRATEGY.org][TESTING-STRATEGY.org]] for background on automation limitations.
+
 ** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
 After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
 leaves incorrect mkinitcpio configuration from the live ISO environment.
