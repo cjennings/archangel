@@ -684,7 +684,7 @@ get_ssh_config() {
     step "SSH Configuration"
     echo ""
     info "SSH enables remote access after installation."
-    info "Recommended for headless servers. Harden with archsetup later."
+    info "Recommended for headless servers. Harden after install (key auth, fail2ban)."
     echo ""
     prompt "Enable SSH with root login? [Y/n]:"
     read -p "> " ssh_choice
@@ -695,7 +695,7 @@ get_ssh_config() {
     else
         ENABLE_SSH="yes"
         info "SSH will be enabled with root password login."
-        warn "Remember to harden SSH (key auth, fail2ban) with archsetup!"
+        warn "Remember to harden SSH after install (key auth, fail2ban)!"
     fi
 }
 
@@ -1088,7 +1088,7 @@ configure_ssh() {
         arch-chroot /mnt systemctl enable sshd
 
         info "SSH enabled with root password login."
-        warn "Run archsetup to harden SSH (key auth, fail2ban)."
+        warn "Harden SSH after install (key auth, fail2ban)."
     else
         info "SSH not enabled. Enable manually if needed."
     fi
@@ -1343,18 +1343,7 @@ configure_zfs_tools() {
     chmod +x /mnt/usr/local/bin/zfsrollback
 
     info "ZFS management scripts installed: zfssnapshot, zfsrollback"
-    info "Note: Install sanoid via archsetup for automated snapshot retention."
-}
-
-copy_archsetup() {
-    step "Installing archsetup Launcher"
-
-    cat > /mnt/usr/local/bin/archsetup << 'EOF'
-#!/bin/bash
-curl -fsSL https://cjennings.net/archsetup | bash
-EOF
-    chmod +x /mnt/usr/local/bin/archsetup
-    info "archsetup launcher installed to /usr/local/bin/archsetup"
+    info "Tip: Install sanoid for automated snapshot retention."
 }
 
 sync_efi_partitions() {
@@ -1486,7 +1475,7 @@ print_summary() {
     echo "  - Boot from any snapshot (Ctrl+D at boot menu)"
     echo "  - Genesis snapshot: pristine post-install state"
     echo "  - Pre-pacman snapshots for safe upgrades"
-    echo "  - Sanoid/syncoid configured by archsetup"
+    echo "  - Install sanoid/syncoid for automated retention"
     echo ""
     echo "Boot Menu Keys (at ZFSBootMenu):"
     echo "  Enter    - Boot selected environment"
@@ -1584,7 +1573,6 @@ install_zfs() {
     configure_zfs_services
     configure_pacman_hook
     configure_zfs_tools
-    copy_archsetup
     sync_efi_partitions
     create_genesis_snapshot
     cleanup
@@ -1680,7 +1668,6 @@ install_btrfs() {
     configure_snapper
     configure_btrfs_services
     configure_btrfs_pacman_hook
-    copy_archsetup
 
     # Genesis snapshot
     create_btrfs_genesis_snapshot
