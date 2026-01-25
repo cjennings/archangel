@@ -171,9 +171,43 @@ start_vm() {
     cat "$VM_DIR/qemu-${test_name}.pid" 2>/dev/null
 }
 
+# Start VM from installed disk (no ISO)
+start_vm_from_disk() {
+    local test_name="$1"
+    local disk_count="$2"
+    local disk_args
+    disk_args=$(get_disk_args "$disk_count" "$test_name")
+
+    # Reuse existing OVMF vars (preserves EFI boot entries from install)
+    local ovmf_vars="$VM_DIR/OVMF_VARS_${test_name}.fd"
+
+    # Start VM without ISO, boot from disk
+    qemu-system-x86_64 \
+        -name "archzfs-test-$test_name" \
+        -machine type=q35,accel=kvm \
+        -cpu host \
+        -m "$VM_RAM" \
+        -smp "$VM_CPUS" \
+        -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+        -drive if=pflash,format=raw,file="$ovmf_vars" \
+        $disk_args \
+        -boot c \
+        -netdev user,id=net0,hostfwd=tcp::"$SSH_PORT"-:22 \
+        -device virtio-net-pci,netdev=net0 \
+        -serial file:"$SERIAL_LOG" \
+        -display none \
+        -daemonize \
+        -pidfile "$VM_DIR/qemu-${test_name}.pid" \
+        2>/dev/null
+
+    sleep 2
+    cat "$VM_DIR/qemu-${test_name}.pid" 2>/dev/null
+}
+
 # Stop VM
 stop_vm() {
     local test_name="$1"
+    local keep_vars="${2:-false}"  # Optional: keep OVMF vars for reboot test
     local pid_file="$VM_DIR/qemu-${test_name}.pid"
 
     if [[ -f "$pid_file" ]]; then
@@ -187,18 +221,21 @@ stop_vm() {
         rm -f "$pid_file"
     fi
 
-    # Also clean up OVMF vars
-    rm -f "$VM_DIR/OVMF_VARS_${test_name}.fd"
+    # Clean up OVMF vars unless asked to keep them
+    if [[ "$keep_vars" != "true" ]]; then
+        rm -f "$VM_DIR/OVMF_VARS_${test_name}.fd"
+    fi
 }
 
 # Wait for SSH to be available
 wait_for_ssh() {
     local timeout="$1"
+    local password="${2:-$SSH_PASSWORD}"  # Optional password, defaults to SSH_PASSWORD
     local start_time
     start_time=$(date +%s)
 
     while true; do
-        if sshpass -p "$SSH_PASSWORD" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        if sshpass -p "$password" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
             -p "$SSH_PORT" root@localhost "echo ok" 2>/dev/null | grep -q ok; then
             return 0
         fi
@@ -212,9 +249,10 @@ wait_for_ssh() {
     done
 }
 
-# Run SSH command
+# Run SSH command (uses SSH_PASSWORD by default, or INSTALLED_PASSWORD if set)
 ssh_cmd() {
-    sshpass -p "$SSH_PASSWORD" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    local password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
+    sshpass -p "$password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -p "$SSH_PORT" root@localhost "$@" 2>/dev/null
 }
 
@@ -312,6 +350,127 @@ verify_install() {
     return 0
 }
 
+# Verify system boots from installed disk
+verify_reboot_survival() {
+    local config="$1"
+    local filesystem
+    filesystem=$(grep "^FILESYSTEM=" "$config" | cut -d= -f2)
+    filesystem="${filesystem:-zfs}"
+
+    step "Verifying reboot survival..."
+
+    # Check SSH is working (proves system booted)
+    if ! ssh_cmd "echo 'System booted successfully'"; then
+        error "Cannot connect to rebooted system"
+        return 1
+    fi
+    info "System booted from installed disk"
+
+    # Check filesystem is mounted correctly
+    if [[ "$filesystem" == "zfs" ]]; then
+        if ssh_cmd "zpool status zroot >/dev/null 2>&1"; then
+            info "ZFS pool healthy after reboot"
+        else
+            error "ZFS pool not available after reboot"
+            return 1
+        fi
+    elif [[ "$filesystem" == "btrfs" ]]; then
+        if ssh_cmd "btrfs filesystem show / >/dev/null 2>&1"; then
+            info "Btrfs filesystem healthy after reboot"
+        else
+            error "Btrfs filesystem not available after reboot"
+            return 1
+        fi
+    fi
+
+    # Check snapper/snapshot service is running
+    if [[ "$filesystem" == "btrfs" ]]; then
+        if ssh_cmd "systemctl is-active snapper-timeline.timer >/dev/null 2>&1"; then
+            info "Snapper timeline timer active"
+        else
+            warn "Snapper timeline timer not active"
+        fi
+    fi
+
+    return 0
+}
+
+# Verify snapshot and rollback work
+verify_rollback() {
+    local config="$1"
+    local filesystem
+    filesystem=$(grep "^FILESYSTEM=" "$config" | cut -d= -f2)
+    filesystem="${filesystem:-zfs}"
+
+    step "Verifying rollback functionality..."
+
+    # Create a test file
+    ssh_cmd "echo 'test-marker-$(date +%s)' > /root/rollback-test-file"
+    if ! ssh_cmd "test -f /root/rollback-test-file"; then
+        error "Failed to create test file"
+        return 1
+    fi
+    info "Test file created"
+
+    if [[ "$filesystem" == "btrfs" ]]; then
+        # Create snapshot
+        if ! ssh_cmd "snapper -c root create -d 'rollback-test'"; then
+            error "Failed to create snapshot"
+            return 1
+        fi
+        info "Snapshot created"
+
+        # Get the snapshot number
+        local snap_num
+        snap_num=$(ssh_cmd "snapper -c root list | grep 'rollback-test' | awk '{print \$1}'")
+        if [[ -z "$snap_num" ]]; then
+            error "Could not find snapshot number"
+            return 1
+        fi
+
+        # Delete the test file (change to rollback)
+        ssh_cmd "rm -f /root/rollback-test-file"
+
+        # Rollback
+        if ! ssh_cmd "snapper -c root rollback $snap_num"; then
+            warn "Snapper rollback command returned error (may be expected)"
+        fi
+        info "Rollback initiated"
+
+    elif [[ "$filesystem" == "zfs" ]]; then
+        # Create snapshot
+        if ! ssh_cmd "zfs snapshot zroot/ROOT/default@rollback-test"; then
+            error "Failed to create ZFS snapshot"
+            return 1
+        fi
+        info "ZFS snapshot created"
+
+        # Delete the test file
+        ssh_cmd "rm -f /root/rollback-test-file"
+
+        # Rollback
+        if ! ssh_cmd "zfs rollback zroot/ROOT/default@rollback-test"; then
+            error "Failed to rollback ZFS snapshot"
+            return 1
+        fi
+        info "ZFS rollback completed"
+    fi
+
+    # Verify file is back (for ZFS, immediate; for btrfs, needs reboot)
+    if [[ "$filesystem" == "zfs" ]]; then
+        if ssh_cmd "test -f /root/rollback-test-file"; then
+            info "Rollback verified - test file restored"
+        else
+            error "Rollback failed - test file not restored"
+            return 1
+        fi
+    else
+        info "Btrfs rollback requires reboot to take effect"
+    fi
+
+    return 0
+}
+
 # Run a single test
 run_test() {
     local config="$1"
@@ -383,7 +542,7 @@ run_test() {
         return 1
     fi
 
-    # Verify
+    # Verify installation (while still in live ISO)
     step "Verifying installation..."
     if verify_install "$config"; then
         info "Verification passed"
@@ -391,8 +550,66 @@ run_test() {
         warn "Verification had issues (may be expected if install rebooted)"
     fi
 
+    # Stop VM to prepare for reboot test (keep OVMF vars for EFI boot)
+    step "Stopping VM for reboot test..."
+    stop_vm "$config_name" true
+
+    # Boot from installed disk (no ISO)
+    step "Booting from installed disk..."
+    : > "$SERIAL_LOG"  # Clear serial log
+    local vm_pid2
+    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count")
+
+    if [[ -z "$vm_pid2" ]]; then
+        error "Failed to start VM from disk"
+        cleanup_disks "$config_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$config_name")
+        return 1
+    fi
+    info "VM started from disk (PID: $vm_pid2)"
+
+    # Get installed system's root password from config
+    local installed_password
+    installed_password=$(grep '^ROOT_PASSWORD=' "$config" | cut -d= -f2)
+
+    # Wait for system to boot from disk (using installed system's password)
+    step "Waiting for installed system to boot (timeout: ${BOOT_TIMEOUT}s)..."
+    if ! wait_for_ssh "$BOOT_TIMEOUT" "$installed_password"; then
+        error "Installed system did not boot successfully"
+        stop_vm "$config_name"
+
+        cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
+        error "Serial log saved to: $LOG_DIR/${config_name}-reboot-serial.log"
+
+        cleanup_disks "$config_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$config_name")
+        return 1
+    fi
+
+    # Use installed system's password for subsequent SSH commands
+    export INSTALLED_PASSWORD="$installed_password"
+
+    # Verify reboot survival
+    if ! verify_reboot_survival "$config"; then
+        error "Reboot survival check failed"
+        stop_vm "$config_name"
+        cleanup_disks "$config_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$config_name")
+        return 1
+    fi
+
+    # Verify rollback functionality
+    if ! verify_rollback "$config"; then
+        warn "Rollback verification had issues"
+        # Don't fail the test for rollback issues - it's a bonus check
+    fi
+
     # Cleanup
     step "Cleaning up..."
+    unset INSTALLED_PASSWORD  # Reset for next test
     stop_vm "$config_name"
     cleanup_disks "$config_name"
 
