@@ -1658,6 +1658,7 @@ install_btrfs() {
 
     # Configure encryption if enabled
     if [[ "$NO_ENCRYPT" != "yes" ]]; then
+        setup_luks_testing_keyfile "$LUKS_PASSPHRASE" "${root_parts[@]}"
         configure_crypttab "${root_parts[@]}"
         configure_luks_grub "${root_parts[0]}"
         configure_luks_initramfs
