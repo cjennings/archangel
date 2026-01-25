@@ -110,8 +110,8 @@ select_filesystem() {
     step "Select Filesystem"
 
     local options=(
-        "ZFS - Native encryption, best data integrity (recommended)"
-        "Btrfs - Native Linux, GRUB snapshot boot"
+        "ZFS - Built-in encryption, best data integrity (recommended)"
+        "Btrfs - Copy-on-write, LUKS encryption, GRUB snapshot boot"
     )
 
     local selected
