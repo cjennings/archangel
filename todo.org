@@ -17,6 +17,13 @@ Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/cod
 Created: 2026-01-23
 Postponed: After archangel project completion.
 
+** TODO [#A] Rename ISO to (project)-(YYYY-MM-DD)-vmlinuz-(version).iso
+Current format: archzfs-vmlinuz-6.12.66-lts-2026-01-24-x86_64.iso
+New format: archzfs-2026-01-24-vmlinuz-6.12.66-lts-x86_64.iso
+
+Date should come right after project name for easier sorting and identification.
+Update build.sh ISO_NAME variable.
+
 ** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
 After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
 leaves incorrect mkinitcpio configuration from the live ISO environment.

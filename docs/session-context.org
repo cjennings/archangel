@@ -1,30 +1,112 @@
 #+TITLE: Session Context - Active Session
-#+DATE: 2026-01-24
+#+DATE: 2026-01-25
 
-* Session: Saturday 2026-01-24 @ 10:07 CST
+* Session: Saturday 2026-01-24 @ 18:09 CST (continued to ~00:10 Sunday)
 
-** Completed This Session
+** Current Task: Phase 4.3 Validation Checks - Reboot Test Debugging
 
-- Fixed LUKS btrfs GRUB bug (heredoc overwriting cryptodisk settings)
-- Fixed ISO bloat (17G vm-images excluded, now 2.0G)
-- btrfs-luks test: PASSED
-- Committed: 76119e7, pushed to origin
+*** Summary
+We're implementing automated reboot survival and rollback tests for btrfs
+installations. The installation itself works, but the reboot test is failing
+because GRUB drops to grub> prompt after reboot.
 
-** Current Task
+*** Root Cause Identified
+The grub.cfg file is EMPTY (0 bytes) after the VM is killed, even though it
+was 5652 bytes when checked inside the running VM. This is a FAT32 filesystem
+sync issue - data wasn't flushed before the VM was terminated.
 
-About to run ZFS regression tests to verify refactor didn't break ZFS:
-- single-disk
-- mirror
-- raidz1
+*** Fixes Applied (committed)
+1. GRUB modules stored on EFI partition (FAT32) with --boot-directory=/efi
+2. Symlink /boot/grub -> /efi/grub created BEFORE grub-mkconfig
+3. Added sync after grub-mkconfig (ensure FAT32 write completes)
+4. Added sync before unmounting EFI in cleanup
+5. Test framework now uses correct password (ROOT_PASSWORD from config) for
+   post-reboot SSH instead of ISO password (archzfs)
 
-** Project Status
+*** Commits Made This Session
+- 7bb88b9 Fix GRUB boot for btrfs with subvolumes
+- 36d429e Add reboot survival and rollback verification tests
+- 79b4522 Update test config and documentation
 
-| Phase | Status |
-|-------|--------|
-| 1 Refactor | DONE (needs ZFS regression test) |
-| 2 Btrfs+LUKS | DONE |
-| 3 Multi-disk btrfs | Next |
+*** Files Modified
+- custom/lib/btrfs.sh - GRUB on EFI, sync calls
+- scripts/test-install.sh - reboot/rollback test infrastructure, password handling
+- scripts/test-configs/btrfs-single.conf - added NO_ENCRYPT=yes
+- custom/RESCUE-GUIDE.txt - offline Arch Wiki section
+- todo.org - updated completed tasks
 
-** Uncommitted Changes
+*** Test Infrastructure Added to test-install.sh
+#+begin_src bash
+# New functions:
+start_vm_from_disk()     # Boot VM from installed disk (no ISO)
+stop_vm() keep_vars      # Optional param to preserve EFI boot entries
+wait_for_ssh() password  # Optional password param (for installed system)
+ssh_cmd()                # Uses INSTALLED_PASSWORD when set
+verify_reboot_survival() # Checks system boots, filesystem healthy
+verify_rollback()        # Tests snapshot create/rollback
 
-- docs/protocols.org (template sync)
+# Flow in run_test():
+# 1. Boot ISO, install system
+# 2. Verify installation
+# 3. stop_vm with keep_vars=true (preserve OVMF_VARS)
+# 4. start_vm_from_disk (no ISO, boot from disk)
+# 5. wait_for_ssh using ROOT_PASSWORD from config
+# 6. verify_reboot_survival
+# 7. verify_rollback
+# 8. Cleanup
+#+end_src
+
+*** Current Test Status
+- Installation: PASSES (verified manually and in tests)
+- Post-install verification: PASSES
+- Reboot test: FAILS - grub.cfg is empty after VM killed
+
+The sync fix was just committed but NOT yet tested. Need to:
+1. Rebuild ISO with the sync fixes
+2. Run btrfs-single test
+3. Verify grub.cfg is not empty after reboot
+
+*** Key Technical Details
+- GRUB prefix is (,gpt1)/grub when using --boot-directory=/efi
+- grub.cfg must be at /efi/grub/grub.cfg (EFI partition)
+- Symlink /boot/grub -> /efi/grub makes grub-btrfs work
+- FAT32 needs explicit sync before VM termination
+- OVMF_VARS.fd stores EFI boot entries - must preserve between VM stop/start
+- Test uses port 2222 for SSH forwarding
+
+*** Debug Commands Used
+#+begin_src bash
+# Check EFI partition from inside VM:
+ls -la /mnt/efi/grub/
+cat /mnt/efi/grub/grub.cfg
+
+# Mount installed disk from host:
+sudo qemu-nbd -c /dev/nbd0 vm/disk.qcow2
+sudo mount /dev/nbd0p1 /tmp/efi-check
+cat /tmp/efi-check/grub/grub.cfg
+
+# Check serial log for GRUB output:
+cat test-logs/btrfs-single-reboot-serial.log
+#+end_src
+
+** Remaining Btrfs Plan Phases
+- Phase 4.3: Validation checks - IN PROGRESS (sync fix needs testing)
+- Phase 5: CLI tools (archangel-snapshot, archangel-rollback, archangel-list)
+- Phase 6: Documentation (README, RESCUE-GUIDE, BTRFS.org)
+
+** Test Status Before Reboot Test Additions
+All btrfs tests were passing:
+- btrfs-single, btrfs-luks, btrfs-mirror, btrfs-stripe, btrfs-mirror-luks
+- ZFS: single-disk, mirror, raidz1
+
+** Next Steps
+1. Rebuild ISO (includes sync fixes)
+2. Run: ./scripts/test-install.sh btrfs-single
+3. If still failing, check serial log and verify grub.cfg has content
+4. Once passing, run full btrfs test suite
+5. Continue to Phase 5 or 6
+
+** Open Questions / Potential Issues
+- Multi-disk btrfs GRUB functions also updated but not tested after sync fix
+- grub-btrfsd service might need config for non-standard grub.cfg location
+- Rollback test not yet validated (system needs to boot first)
