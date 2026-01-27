@@ -12,24 +12,10 @@
 #
 # Test configurations are in scripts/test-configs/
 
-.PHONY: all test test-unit test-install build release clean lint help
+.PHONY: all test test-unit test-install build release clean lint
 
 # Default target
 all: test build
-
-help:
-	@echo "archzfs Makefile targets:"
-	@echo ""
-	@echo "  make              - Run all tests and build ISO"
-	@echo "  make test         - Run all tests (unit + integration)"
-	@echo "  make test-unit    - Run unit tests only (fast)"
-	@echo "  make test-install - Run VM install tests (slow)"
-	@echo "  make build        - Build the ISO (requires sudo)"
-	@echo "  make release      - Full test + build + deploy ISO"
-	@echo "  make clean        - Remove build artifacts"
-	@echo "  make lint         - Run shellcheck on all scripts"
-	@echo ""
-	@echo "Test configs are in scripts/test-configs/"
 
 # Unit tests (fast, no VM needed)
 test-unit:
