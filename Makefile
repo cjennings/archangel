@@ -1,9 +1,8 @@
-# Makefile for archzfs ISO build and testing
+# Makefile for archangel ISO build and testing
 #
 # Usage:
-#   make              - Run all tests and build
-#   make test         - Run all tests (unit + integration)
-#   make test-unit    - Run unit tests only (fast)
+#   make              - Run lint and build
+#   make test         - Run lint
 #   make test-install - Run install tests in VM (slow)
 #   make build        - Build the ISO
 #   make release      - Full test + build + deploy
@@ -12,20 +11,15 @@
 #
 # Test configurations are in scripts/test-configs/
 
-.PHONY: all test test-unit test-install build release clean lint
+.PHONY: all test test-install build release clean lint
 
 # Default target
-all: test build
-
-# Unit tests (fast, no VM needed)
-test-unit:
-	@echo "==> Running unit tests..."
-	./scripts/test-zfs-snap-prune.sh
+all: lint build
 
 # Lint all bash scripts
 lint:
 	@echo "==> Running shellcheck..."
-	@shellcheck -x build.sh scripts/*.sh custom/install-archzfs custom/grub-zfs-snap custom/zfs-snap-prune || true
+	@shellcheck -x build.sh scripts/*.sh custom/archangel custom/archsetup-zfs custom/zfsrollback custom/zfssnapshot custom/lib/*.sh || true
 	@echo "==> Shellcheck complete"
 
 # Build the ISO (requires sudo)
@@ -38,8 +32,8 @@ test-install: build
 	@echo "==> Running install tests..."
 	./scripts/test-install.sh
 
-# All tests
-test: lint test-unit
+# All tests (lint only - VM tests via test-install)
+test: lint
 
 # Full release: test everything, build, deploy
 release: test test-install
