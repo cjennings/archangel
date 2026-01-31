@@ -1,5 +1,5 @@
 #!/bin/bash
-# full-test.sh - Comprehensive installation testing for archzfs ISO
+# full-test.sh - Comprehensive installation testing for archangel ISO
 #
 # Runs automated installation tests for all disk configurations:
 #   - Single disk
@@ -8,7 +8,7 @@
 #
 # Each test:
 #   1. Boots ISO in headless QEMU
-#   2. Runs unattended install-archzfs
+#   2. Runs unattended archangel
 #   3. Reboots into installed system
 #   4. Verifies ZFS pool is healthy
 #
@@ -40,7 +40,7 @@ OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
 # SSH settings
 SSH_PORT=2224  # Different port to avoid conflicts
 SSH_USER="root"
-SSH_PASS_LIVE="archzfs"           # Live ISO password
+SSH_PASS_LIVE="archangel"         # Live ISO password
 SSH_PASS_INSTALLED="testroot123"  # Installed system password (from config)
 SSH_PASS="$SSH_PASS_LIVE"         # Current password (switches after install)
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5"
@@ -90,7 +90,7 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "Usage: $0 [--quick] [--verbose]"
             echo ""
-            echo "Comprehensive installation testing for archzfs ISO."
+            echo "Comprehensive installation testing for archangel ISO."
             echo ""
             echo "Options:"
             echo "  --quick, -q     Run single-disk test only (faster)"
@@ -167,7 +167,7 @@ start_vm_iso() {
     done
 
     qemu-system-x86_64 \
-        -name "archzfs-fulltest" \
+        -name "archangel-fulltest" \
         -machine q35,accel=kvm \
         -cpu host \
         -smp "$VM_CPUS" \
@@ -207,7 +207,7 @@ start_vm_disk() {
     done
 
     qemu-system-x86_64 \
-        -name "archzfs-fulltest" \
+        -name "archangel-fulltest" \
         -machine q35,accel=kvm \
         -cpu host \
         -smp "$VM_CPUS" \
@@ -340,11 +340,11 @@ $config
 CONF"
 
     # Run installation
-    info "Running install-archzfs (this takes several minutes)..."
+    info "Running archangel (this takes several minutes)..."
     local install_start=$(date +%s)
 
     # Run install in background and monitor
-    ssh_cmd "nohup install-archzfs --config-file /tmp/install.conf > /tmp/install.log 2>&1 &"
+    ssh_cmd "nohup archangel --config-file /tmp/install.conf > /tmp/install.log 2>&1 &"
 
     # Wait for installation to complete
     local elapsed=0
@@ -354,7 +354,7 @@ CONF"
         ((elapsed += check_interval))
 
         # Check if install process is still running
-        if ! ssh_cmd "pgrep -f 'install-archzfs' > /dev/null" 2>/dev/null; then
+        if ! ssh_cmd "pgrep -f 'archangel' > /dev/null" 2>/dev/null; then
             # Process finished - check result by looking for success indicators
             local exit_check=$(ssh_cmd "tail -30 /tmp/install.log" 2>/dev/null)
             # Check for various success indicators
@@ -541,7 +541,7 @@ print_summary() {
 
 # Main
 main() {
-    banner "ARCHZFS FULL INSTALLATION TEST"
+    banner "ARCHANGEL FULL INSTALLATION TEST"
 
     check_deps
     find_iso

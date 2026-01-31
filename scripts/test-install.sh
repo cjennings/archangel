@@ -1,5 +1,5 @@
 #!/bin/bash
-# test-install.sh - Automated installation testing for archzfs
+# test-install.sh - Automated installation testing for archangel
 #
 # Runs unattended installs in VMs using test config files.
 # Verifies installation success via SSH (when enabled) or console.
@@ -22,7 +22,7 @@ VM_RAM="4096"
 VM_CPUS="4"
 VM_DISK_SIZE="20G"
 export SSH_PORT="2222"
-export SSH_PASSWORD="archzfs"
+export SSH_PASSWORD="archangel"
 SERIAL_LOG="$LOG_DIR/serial.log"
 
 # Timeouts (seconds)
@@ -149,7 +149,7 @@ start_vm() {
 
     # Start VM with serial console logging
     qemu-system-x86_64 \
-        -name "archzfs-test-$test_name" \
+        -name "archangel-test-$test_name" \
         -machine type=q35,accel=kvm \
         -cpu host \
         -m "$VM_RAM" \
@@ -183,7 +183,7 @@ start_vm_from_disk() {
 
     # Start VM without ISO, boot from disk
     qemu-system-x86_64 \
-        -name "archzfs-test-$test_name" \
+        -name "archangel-test-$test_name" \
         -machine type=q35,accel=kvm \
         -cpu host \
         -m "$VM_RAM" \

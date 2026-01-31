@@ -1,5 +1,5 @@
 #!/bin/bash
-# test-vm.sh - Test the archzfs ISO in a QEMU virtual machine
+# test-vm.sh - Test the archangel ISO in a QEMU virtual machine
 #
 # Usage:
 #   ./test-vm.sh                    # Create new VM and boot ISO (single disk)
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # VM Configuration
-VM_NAME="archzfs-test"
+VM_NAME="archangel-test"
 VM_DIR="$PROJECT_DIR/vm"
 VM_DISK="$VM_DIR/$VM_NAME.qcow2"
 VM_DISK2="$VM_DIR/$VM_NAME-disk2.qcow2"
@@ -139,8 +139,8 @@ boot_iso() {
     echo "  - Press Ctrl+Alt+G to release mouse grab"
     echo "  - Press Ctrl+Alt+F to toggle fullscreen"
     echo "  - Serial console output appears in this terminal"
-    echo "  - SSH: ssh -p 2222 root@localhost (password: archzfs)"
-    echo "  - Run 'install-archzfs' to start installation"
+    echo "  - SSH: ssh -p 2222 root@localhost (password: archangel)"
+    echo "  - Run 'archangel' to start installation"
     echo "  - Monitor socket: $MONITOR_SOCKET"
     echo ""
 
@@ -258,7 +258,7 @@ show_help() {
     echo "  CPUs: $VM_CPUS"
     echo ""
     echo "SSH into running VM:"
-    echo "  ssh -p 2222 root@localhost (password: archzfs)"
+    echo "  ssh -p 2222 root@localhost (password: archangel)"
 }
 
 # Main
