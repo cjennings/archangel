@@ -40,11 +40,11 @@ release: test test-install
 	@echo "==> Deploying ISO..."
 	@# Move old ISOs to archive
 	@mkdir -p archive
-	@mv -f archzfs-*.iso archive/ 2>/dev/null || true
+	@mv -f archangel-*.iso archive/ 2>/dev/null || true
 	@# Copy new ISO to project root
-	@cp out/archzfs-*.iso .
+	@cp out/archangel-*.iso .
 	@echo "==> Release complete:"
-	@ls -lh archzfs-*.iso
+	@ls -lh archangel-*.iso
 
 # Clean build artifacts
 clean:
@@ -56,4 +56,4 @@ clean:
 # Clean everything including releases
 distclean: clean
 	rm -rf archive
-	rm -f archzfs-*.iso
+	rm -f archangel-*.iso

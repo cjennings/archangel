@@ -14,7 +14,7 @@ OUT_DIR="$SCRIPT_DIR/out"
 CUSTOM_DIR="$SCRIPT_DIR/custom"
 
 # Live ISO root password (for SSH access during testing/emergencies)
-LIVE_ROOT_PASSWORD="archzfs"
+LIVE_ROOT_PASSWORD="archangel"
 
 # Colors for output
 RED='\033[0;31m'
@@ -161,7 +161,7 @@ linux-lts-headers
 wget
 networkmanager
 
-# mDNS for network discovery (ssh root@archzfs.local)
+# mDNS for network discovery (ssh root@archangel.local)
 avahi
 nss-mdns
 
@@ -222,6 +222,7 @@ fsarchiver
 partimage
 xfsprogs
 btrfs-progs
+snapper
 f2fs-tools
 exfatprogs
 ncdu
@@ -267,12 +268,12 @@ info "LTS Kernel version: $KERNEL_VER"
 
 # Update profiledef.sh with our ISO name
 info "Updating ISO metadata..."
-# Format: archzfs-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso
+# Format: archangel-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso
 ISO_DATE=$(date +%Y-%m-%d)
-sed -i "s/^iso_name=.*/iso_name=\"archzfs-vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
+sed -i "s/^iso_name=.*/iso_name=\"archangel-vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
 sed -i "s/^iso_version=.*/iso_version=\"${ISO_DATE}\"/" "$PROFILE_DIR/profiledef.sh"
 # Fixed label for stable GRUB boot entry (default is date-based ARCH_YYYYMM)
-sed -i "s/^iso_label=.*/iso_label=\"ARCHZFS\"/" "$PROFILE_DIR/profiledef.sh"
+sed -i "s/^iso_label=.*/iso_label=\"ARCHANGEL\"/" "$PROFILE_DIR/profiledef.sh"
 
 # Create airootfs directories
 mkdir -p "$PROFILE_DIR/airootfs/usr/local/bin"
@@ -284,20 +285,20 @@ info "Enabling SSH on live ISO..."
 ln -sf /usr/lib/systemd/system/sshd.service \
     "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/sshd.service"
 
-# Enable Avahi mDNS for network discovery (ssh root@archzfs.local)
+# Enable Avahi mDNS for network discovery (ssh root@archangel.local)
 info "Enabling Avahi mDNS..."
 ln -sf /usr/lib/systemd/system/avahi-daemon.service \
     "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants/avahi-daemon.service"
 
-# Set hostname to "archzfs" for mDNS discovery
-info "Setting hostname to archzfs..."
-echo "archzfs" > "$PROFILE_DIR/airootfs/etc/hostname"
+# Set hostname to "archangel" for mDNS discovery
+info "Setting hostname to archangel..."
+echo "archangel" > "$PROFILE_DIR/airootfs/etc/hostname"
 
 # Create /etc/hosts with proper hostname entries
 cat > "$PROFILE_DIR/airootfs/etc/hosts" << 'EOF'
 127.0.0.1   localhost
 ::1         localhost
-127.0.1.1   archzfs.localdomain archzfs
+127.0.1.1   archangel.localdomain archangel
 EOF
 
 # Configure nsswitch.conf for mDNS resolution

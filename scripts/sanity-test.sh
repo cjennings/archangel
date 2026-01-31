@@ -1,5 +1,5 @@
 #!/bin/bash
-# sanity-test.sh - Automated sanity test for archzfs ISO
+# sanity-test.sh - Automated sanity test for archangel ISO
 #
 # Boots the ISO in a headless QEMU VM, waits for SSH, runs verification
 # commands, and reports pass/fail. Fully automated - no human input required.
@@ -22,7 +22,7 @@ VM_DISK="$VM_DIR/sanity-test.qcow2"
 VM_DISK_SIZE="10G"
 VM_RAM="2048"
 VM_CPUS="2"
-VM_NAME="archzfs-sanity"
+VM_NAME="archangel-sanity"
 
 # UEFI firmware
 OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
@@ -32,7 +32,7 @@ OVMF_VARS="$VM_DIR/sanity-test-OVMF_VARS.fd"
 # SSH settings
 SSH_PORT=2223  # Different port to avoid conflicts with test-vm.sh
 SSH_USER="root"
-SSH_PASS="archzfs"
+SSH_PASS="archangel"
 SSH_TIMEOUT=180  # Max seconds to wait for SSH
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5"
 
@@ -62,7 +62,7 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             echo "Usage: $0 [--verbose]"
             echo ""
-            echo "Automated sanity test for archzfs ISO."
+            echo "Automated sanity test for archangel ISO."
             echo "Boots ISO in headless QEMU, verifies via SSH, reports results."
             exit 0
             ;;
@@ -232,8 +232,8 @@ run_sanity_tests() {
         "zfs-"
 
     # Test 4: Custom scripts present
-    run_test "install-archzfs script present" \
-        "test -x /usr/local/bin/install-archzfs && echo 'exists'" \
+    run_test "archangel script present" \
+        "test -x /usr/local/bin/archangel && echo 'exists'" \
         "exists"
 
     run_test "zfsrollback script present" \
@@ -242,14 +242,6 @@ run_sanity_tests() {
 
     run_test "zfssnapshot script present" \
         "test -x /usr/local/bin/zfssnapshot && echo 'exists'" \
-        "exists"
-
-    run_test "grub-zfs-snap script present" \
-        "test -x /usr/local/bin/grub-zfs-snap && echo 'exists'" \
-        "exists"
-
-    run_test "zfs-snap-prune script present" \
-        "test -x /usr/local/bin/zfs-snap-prune && echo 'exists'" \
         "exists"
 
     # Test 5: fzf installed (required by zfsrollback)
@@ -287,10 +279,10 @@ run_sanity_tests() {
         "grep -q 'mdns' /etc/nsswitch.conf && echo 'configured'" \
         "configured"
 
-    # Test 9: Hostname set to archzfs
-    run_test "Hostname is archzfs" \
+    # Test 9: Hostname set to archangel
+    run_test "Hostname is archangel" \
         "cat /etc/hostname" \
-        "archzfs"
+        "archangel"
 
     # Test 10: Kernel version (LTS)
     run_test "Running LTS kernel" \
@@ -301,6 +293,47 @@ run_sanity_tests() {
     run_test "archsetup directory present" \
         "test -d /code/archsetup && echo 'exists'" \
         "exists"
+
+    # Test 11: Btrfs tools installed (dual filesystem support)
+    run_test "Btrfs tools installed" \
+        "command -v btrfs && echo 'found'" \
+        "found"
+
+    run_test "mkfs.btrfs available" \
+        "command -v mkfs.btrfs && echo 'found'" \
+        "found"
+
+    # Test 12: Snapper installed (Btrfs snapshot management)
+    run_test "Snapper installed" \
+        "command -v snapper && echo 'found'" \
+        "found"
+
+    # Test 13: archangel installer components
+    run_test "archangel script executable" \
+        "file /usr/local/bin/archangel | grep -q 'script' && echo 'executable'" \
+        "executable"
+
+    run_test "archangel lib directory present" \
+        "test -d /usr/local/bin/lib && echo 'exists'" \
+        "exists"
+
+    run_test "archangel lib/common.sh present" \
+        "test -f /usr/local/bin/lib/common.sh && echo 'exists'" \
+        "exists"
+
+    run_test "archangel config example present" \
+        "test -f /root/archangel.conf.example && echo 'exists'" \
+        "exists"
+
+    # Test 14: GRUB installed (for Btrfs bootloader)
+    run_test "GRUB installed" \
+        "command -v grub-install && echo 'found'" \
+        "found"
+
+    # Test 15: Cryptsetup for LUKS (Btrfs encryption)
+    run_test "Cryptsetup installed" \
+        "command -v cryptsetup && echo 'found'" \
+        "found"
 
     echo ""
 }
@@ -328,7 +361,7 @@ print_summary() {
 main() {
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}          ARCHZFS ISO SANITY TEST${NC}"
+    echo -e "${CYAN}          ARCHANGEL ISO SANITY TEST${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 

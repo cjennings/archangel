@@ -6,7 +6,7 @@
 # - Otherwise, boot from ISO
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VM_DISK="$SCRIPT_DIR/../vm/archzfs-test.qcow2"
+VM_DISK="$SCRIPT_DIR/../vm/archangel-test.qcow2"
 
 if [[ -f "$VM_DISK" ]] && [[ $(stat -c%s "$VM_DISK") -gt 200000 ]]; then
     # Disk exists and is larger than ~200KB (has been written to)

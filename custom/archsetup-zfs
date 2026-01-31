@@ -6,7 +6,7 @@
 # This is a ZFS-specific variant of archsetup.
 # It replaces btrfs snapshot tooling with ZFS equivalents.
 #
-# Run this after install-archzfs completes and you've rebooted.
+# Run this after archangel completes and you've rebooted.
 
 # Commentary
 #
@@ -15,7 +15,7 @@
 # - Adds: sanoid/syncoid configuration verification
 # - Keeps: All other package installations and configurations
 #
-# The ZFS snapshot infrastructure is already configured by install-archzfs:
+# The ZFS snapshot infrastructure is already configured by archangel:
 # - sanoid.timer for automatic snapshots
 # - pacman hook for pre-upgrade snapshots
 # - syncoid script for TrueNAS replication
@@ -340,7 +340,7 @@ essential_services() {
     pacman_install pacman-contrib
     systemctl enable --now paccache.timer >> "$logfile" 2>&1
 
-    # ZFS snapshot services (already configured by install-archzfs)
+    # ZFS snapshot services (already configured by archangel)
     display "subtitle" "ZFS Snapshot Services"
     action="verifying sanoid timer" && display "task" "$action"
     systemctl enable --now sanoid.timer >> "$logfile" 2>&1 || \
@@ -416,7 +416,7 @@ main() {
     echo "  ~/code/archsetup/archsetup"
     echo ""
     echo "The ZFS-specific services (sanoid, pacman hooks,"
-    echo "syncoid) were already configured by install-archzfs."
+    echo "syncoid) were already configured by archangel."
     echo ""
 
     # When fully implemented, this will call:

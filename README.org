@@ -1,31 +1,40 @@
-#+TITLE: archzfs - Arch Linux ZFS Root Installation ISO
+#+TITLE: archangel - Arch Linux ZFS/Btrfs Installation ISO
 #+AUTHOR:
 #+OPTIONS: toc:3
 
 * Overview
 
-archzfs is a custom Arch Linux ISO build system that creates a live environment
-optimized for installing Arch Linux on ZFS root filesystems. It provides an
-interactive installer with support for encrypted ZFS, multi-disk RAID
+archangel is a custom Arch Linux ISO build system that creates a live environment
+optimized for installing Arch Linux on ZFS or Btrfs root filesystems. It provides an
+interactive installer with support for encrypted filesystems, multi-disk RAID
 configurations, and automatic snapshot management.
 
-The ISO includes all necessary ZFS tools pre-loaded, eliminating the need for
+The ISO includes all necessary tools pre-loaded, eliminating the need for
 manual module loading or package installation during the install process.
 
 * Features
 
-- *ZFS Root Filesystem* - Full ZFS installation with native encryption
-- *Multi-Disk RAID* - Support for mirror, stripe, raidz1/2/3 configurations
-- *EFI Boot Redundancy* - GRUB installed on all disks for boot resilience
+- *Dual Filesystem Support* - Choose ZFS or Btrfs during installation
+- *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
+- *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
+- *EFI Boot Redundancy* - Bootloader installed on all disks for resilience
 - *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi selection
 - *Genesis Snapshot* - Automatic pristine-state snapshot after installation
-- *Rollback Script* - One-command factory reset via ~/root/rollback-to-genesis~
-- *Pre-Pacman Snapshots* - Automatic snapshots before package operations
-- *Snapshot Retention* - Automatic pruning keeps disk usage bounded
-- *GRUB Snapshot Boot* - Boot into any ZFS snapshot directly from GRUB menu
+- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for booting snapshots
 - *NetworkManager* - WiFi configuration copied to installed system
 - *SSH Ready* - Optional SSH with root login for headless servers
-- *LTS Kernel* - Uses linux-lts for stability with ZFS
+- *LTS Kernel* - Uses linux-lts for stability
+
+** Filesystem Comparison
+
+| Feature | ZFS | Btrfs |
+|---------+-----+-------|
+| Bootloader | ZFSBootMenu | GRUB + grub-btrfs |
+| Encryption | Native ZFS encryption | LUKS2 |
+| Snapshots | zfs snapshot | snapper |
+| Snapshot boot | Built into ZFSBootMenu | grub-btrfs menu |
+| RAID support | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
+| EFI size | 512MB | 1GB |
 
 * Quick Start
 
@@ -40,7 +49,7 @@ sudo ./build.sh
 ./scripts/test-vm.sh --multi-disk
 #+END_SRC
 
-Boot the ISO and run ~install-archzfs~ to start the installation.
+Boot the ISO and run ~archangel~ to start the installation.
 
 * Prerequisites
 
@@ -52,7 +61,7 @@ Boot the ISO and run ~install-archzfs~ to start the installation.
 
 ** Runtime Dependencies (included in ISO)
 - ZFS kernel modules (via zfs-dkms)
-- GRUB with ZFS support
+- Btrfs tools
 - NetworkManager
 - fzf for interactive selection
 
@@ -67,17 +76,16 @@ sudo ./build.sh
 The build script will:
 1. Copy the base Arch releng profile
 2. Switch to linux-lts kernel
-3. Add the archzfs repository
-4. Add custom packages (ZFS, NetworkManager, fzf, etc.)
-5. Copy the install-archzfs script
+3. Add the archzfs repository (for ZFS packages)
+4. Add custom packages (ZFS, Btrfs, NetworkManager, fzf, etc.)
+5. Copy the archangel installer script
 6. Build the ISO using mkarchiso
 
 ** Build Output
 
-- ISO location: ~out/archzfs-vmlinuz-{version}-lts-YYYY-MM-DD-x86_64.iso~
-- Example: ~archzfs-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso~
+- ISO location: ~out/archangel-vmlinuz-{version}-lts-YYYY-MM-DD-x86_64.iso~
+- Example: ~archangel-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso~
 - Build logs: visible in terminal output
-- Build time: typically 5-15 minutes depending on cache
 
 ** Clean Rebuild
 
@@ -89,25 +97,27 @@ sudo ./build.sh
 * Project Structure
 
 #+BEGIN_EXAMPLE
-archzfs/
+archangel/
 ├── build.sh                       # Main ISO build script
 ├── custom/
-│   ├── install-archzfs            # Interactive installation script
-│   ├── install-archzfs.conf.example  # Example config for unattended install
-│   ├── grub-zfs-snap              # ZFS snapshot GRUB menu generator
-│   ├── zfs-snap-prune             # Snapshot retention/pruning script
-│   ├── 40_zfs_snapshots           # GRUB generator script (for /etc/grub.d/)
-│   └── zz-grub-zfs-snap.hook      # Pacman hook for auto-regeneration
+│   ├── archangel                  # Interactive installation script
+│   ├── archangel.conf.example     # Example config for unattended install
+│   ├── lib/                       # Modular installer components
+│   │   ├── common.sh              # Shared utilities
+│   │   ├── config.sh              # Configuration handling
+│   │   ├── disk.sh                # Disk partitioning
+│   │   ├── zfs.sh                 # ZFS-specific functions
+│   │   └── btrfs.sh               # Btrfs-specific functions
+│   ├── zfssnapshot                # ZFS snapshot utility
+│   └── zfsrollback                # ZFS rollback utility
 ├── scripts/
-│   └── test-vm.sh                 # QEMU test VM launcher
-├── profile/                       # archiso profile (generated during build)
-│   ├── airootfs/                  # Files copied to live ISO
-│   │   └── usr/local/bin/         # Contains install-archzfs
-│   ├── packages.x86_64            # Package list for ISO
-│   └── pacman.conf                # Pacman config with archzfs repo
+│   ├── test-vm.sh                 # QEMU test VM launcher
+│   ├── test-install.sh            # Automated install tests
+│   ├── sanity-test.sh             # Quick ISO verification
+│   └── build-release              # Build and distribute ISO
 ├── vm/                            # VM disk images (created by test-vm.sh)
-├── work/                          # Build working directory (created by build.sh)
-├── out/                           # Built ISO output (created by build.sh)
+├── work/                          # Build working directory
+├── out/                           # Built ISO output
 └── docs/                          # Documentation
 #+END_EXAMPLE
 
@@ -115,8 +125,8 @@ archzfs/
 
 | Script | Description |
 |--------+-------------|
-| ~build.sh~ | Builds the ISO. Copies releng profile, adds ZFS packages, configures kernel, runs mkarchiso |
-| ~custom/install-archzfs~ | Interactive installer run on the live ISO. Handles disk partitioning, ZFS pool creation, base system install, bootloader setup |
+| ~build.sh~ | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso |
+| ~custom/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
 | ~scripts/test-vm.sh~ | Launches QEMU VM for testing. Supports single and multi-disk configurations |
 
 * Testing with VMs
@@ -132,7 +142,7 @@ This creates a 50GB virtual disk and boots the ISO.
 ** Multi-Disk RAID Test
 
 #+BEGIN_SRC bash
-# Two 50GB disks (for mirror or stripe)
+# Two 50GB disks (for mirror)
 ./scripts/test-vm.sh --multi-disk
 
 # Three 50GB disks (for raidz1)
@@ -142,11 +152,11 @@ This creates a 50GB virtual disk and boots the ISO.
 ** SSH Access to VM
 
 #+BEGIN_SRC bash
-# Password: archzfs
+# Password: archangel
 ssh -p 2222 root@localhost
 
 # Or with sshpass
-sshpass -p archzfs ssh -p 2222 root@localhost
+sshpass -p archangel ssh -p 2222 root@localhost
 #+END_SRC
 
 ** Clean VM State
@@ -161,99 +171,48 @@ sshpass -p archzfs ssh -p 2222 root@localhost
 ./scripts/test-vm.sh --boot-disk
 #+END_SRC
 
-* Development Workflow
-
-** Iterative Testing with Genesis Rollback
-
-After completing an installation in the VM, you can rollback to the genesis
-snapshot and re-test without reinstalling. This is useful for testing archsetup
-or other post-install scripts.
-
-*** In the VM (after installation and reboot):
-
-#+BEGIN_SRC bash
-# Rollback to pristine post-install state
-/root/rollback-to-genesis
-
-# Reboot to apply
-reboot
-#+END_SRC
-
-*** From the host:
-
-#+BEGIN_SRC bash
-# The VM disk retains the ZFS pool
-# Just boot from disk again
-./scripts/test-vm.sh --boot-disk
-#+END_SRC
-
-** Updating the Install Script
-
-#+BEGIN_SRC bash
-# Edit the script
-vim custom/install-archzfs
-
-# Copy to a running VM for immediate testing
-sshpass -p archzfs scp -P 2222 custom/install-archzfs root@localhost:/usr/local/bin/
-
-# Or rebuild the ISO for fresh testing
-sudo ./build.sh
-#+END_SRC
-
 * Installation Walkthrough
 
-The ~install-archzfs~ script provides a guided installation with fzf-based
+The ~archangel~ script provides a guided installation with fzf-based
 selection interfaces.
 
 ** Phase 1: Configuration Gathering
 
-1. *Hostname* - System hostname
-2. *Timezone* - Fuzzy search through all timezones (preview shows current time)
-3. *Locale* - All locales available (preview shows format examples)
-4. *Keymap* - Console keyboard layout
-5. *Disk Selection* - Multi-select with TAB (preview shows disk details)
-6. *RAID Level* - For multi-disk: mirror, stripe, raidz1/2/3 (preview shows capacity calculations)
-7. *WiFi* - Scan and select network (preview shows signal/security)
-8. *ZFS Passphrase* - Encryption passphrase (required at every boot)
+1. *Filesystem* - Choose ZFS or Btrfs
+2. *Hostname* - System hostname
+3. *Timezone* - Fuzzy search through all timezones
+4. *Locale* - All locales available
+5. *Keymap* - Console keyboard layout
+6. *Disk Selection* - Multi-select with TAB (preview shows disk details)
+7. *RAID Level* - For multi-disk: mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
+8. *Encryption* - Encryption passphrase (ZFS native or LUKS2)
 9. *Root Password* - System root password
 10. *SSH* - Enable SSH with root login (default: yes)
 
 ** Phase 2: Unattended Installation
 
 After configuration, the installation runs without intervention:
-- Disk partitioning (EFI + ZFS on each disk)
-- ZFS pool creation with encryption
-- Dataset creation (ROOT, home, var, etc.)
+- Disk partitioning (EFI + root on each disk)
+- Filesystem creation with encryption
+- Dataset/subvolume creation
 - Base system installation via pacstrap
 - System configuration (locale, timezone, hostname)
-- Bootloader installation (GRUB on all EFI partitions)
+- Bootloader installation (ZFSBootMenu or GRUB)
 - Genesis snapshot creation
-
-** RAID Level Options
-
-| Disks | Available Options |
-|-------+-------------------|
-| 1     | Single (no RAID)  |
-| 2     | Mirror, Stripe    |
-| 3+    | Mirror, Stripe, RAIDZ1 |
-| 4+    | Mirror, Stripe, RAIDZ1, RAIDZ2 |
-| 5+    | Mirror, Stripe, RAIDZ1, RAIDZ2, RAIDZ3 |
 
 * Unattended Installation
 
-For automated or headless installations, use a config file to provide all
-configuration values upfront. The installer will run without any user
-interaction.
+For automated or headless installations, use a config file.
 
 ** Using a Config File
 
 #+BEGIN_SRC bash
 # Copy and edit the example config
-cp /root/install-archzfs.conf.example /root/my-install.conf
+cp /root/archangel.conf.example /root/my-install.conf
 vim /root/my-install.conf
 
 # Run with config file
-install-archzfs --config-file /root/my-install.conf
+archangel --config-file /root/my-install.conf
 #+END_SRC
 
 *Important*: The config file is ONLY used when explicitly specified with
@@ -262,118 +221,19 @@ to prevent accidental disk destruction.
 
 ** Config File Reference
 
-Example config file (~install-archzfs.conf.example~ is included on the ISO):
-
-#+BEGIN_SRC bash
-#############################
-# System Configuration
-#############################
-
-# Hostname for the installed system (required)
-HOSTNAME=archzfs
-
-# Timezone (required) - Use format: Region/City
-# Examples: America/Los_Angeles, Europe/London, Asia/Tokyo
-TIMEZONE=America/Los_Angeles
-
-# Locale (optional, default: en_US.UTF-8)
-LOCALE=en_US.UTF-8
-
-# Console keymap (optional, default: us)
-KEYMAP=us
-
-#############################
-# Disk Configuration
-#############################
-
-# Disks to use for installation (required)
-# Single disk: DISKS=/dev/vda
-# Multiple disks: DISKS=/dev/vda,/dev/vdb,/dev/vdc
-DISKS=/dev/vda
-
-# RAID level for multi-disk setups (optional)
-# Options: mirror, stripe, raidz1, raidz2, raidz3
-# Default: mirror (when multiple disks specified)
-# Leave empty for single disk
-RAID_LEVEL=
-
-#############################
-# Security
-#############################
-
-# ZFS encryption passphrase (required)
-# This will be required at every boot to unlock the pool
-ZFS_PASSPHRASE=changeme
-
-# Root password (required)
-ROOT_PASSWORD=changeme
-
-#############################
-# Network Configuration
-#############################
-
-# Enable SSH with root login (optional, default: yes)
-# Set to "no" to disable SSH
-ENABLE_SSH=yes
-
-# WiFi configuration (optional)
-# Leave empty for ethernet-only or to skip WiFi setup
-WIFI_SSID=
-WIFI_PASSWORD=
-#+END_SRC
-
-** Required vs Optional Fields
-
 | Field | Required | Default | Description |
 |-------+----------+---------+-------------|
+| ~FILESYSTEM~ | No | zfs | Filesystem type (zfs or btrfs) |
 | ~HOSTNAME~ | Yes | - | System hostname |
 | ~TIMEZONE~ | Yes | - | Timezone (Region/City format) |
 | ~DISKS~ | Yes | - | Comma-separated disk paths |
-| ~ZFS_PASSPHRASE~ | Yes | - | ZFS encryption passphrase |
+| ~ZFS_PASSPHRASE~ | Yes* | - | Encryption passphrase (*if not NO_ENCRYPT) |
 | ~ROOT_PASSWORD~ | Yes | - | Root user password |
 | ~LOCALE~ | No | en_US.UTF-8 | System locale |
 | ~KEYMAP~ | No | us | Console keyboard layout |
 | ~RAID_LEVEL~ | No | mirror | RAID type for multi-disk |
 | ~ENABLE_SSH~ | No | yes | Enable SSH server |
-| ~WIFI_SSID~ | No | - | WiFi network name |
-| ~WIFI_PASSWORD~ | No | - | WiFi password |
-
-** Example Configurations
-
-*** Single Disk Server
-
-#+BEGIN_SRC bash
-HOSTNAME=webserver
-TIMEZONE=UTC
-DISKS=/dev/sda
-ZFS_PASSPHRASE=MySecurePass123
-ROOT_PASSWORD=RootPass456
-ENABLE_SSH=yes
-#+END_SRC
-
-*** Two-Disk Mirror (Recommended for Servers)
-
-#+BEGIN_SRC bash
-HOSTNAME=fileserver
-TIMEZONE=America/New_York
-DISKS=/dev/sda,/dev/sdb
-RAID_LEVEL=mirror
-ZFS_PASSPHRASE=MySecurePass123
-ROOT_PASSWORD=RootPass456
-ENABLE_SSH=yes
-#+END_SRC
-
-*** Three-Disk RAIDZ1
-
-#+BEGIN_SRC bash
-HOSTNAME=storage
-TIMEZONE=Europe/London
-DISKS=/dev/sda,/dev/sdb,/dev/sdc
-RAID_LEVEL=raidz1
-ZFS_PASSPHRASE=MySecurePass123
-ROOT_PASSWORD=RootPass456
-ENABLE_SSH=yes
-#+END_SRC
+| ~NO_ENCRYPT~ | No | no | Skip encryption (testing only) |
 
 * Bare Metal Installation
 
@@ -381,290 +241,66 @@ ENABLE_SSH=yes
 
 #+BEGIN_SRC bash
 # Write ISO to USB drive (replace /dev/sdX)
-sudo dd if=out/archzfs-vmlinuz-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=out/archangel-vmlinuz-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
 #+END_SRC
 
 ** Booting
 
 1. Boot from USB (may need to disable Secure Boot)
 2. Wait for live environment to load
-3. Run ~install-archzfs~
+3. Run ~archangel~
 
-** WiFi Setup
+** Post-Reboot
 
-The installer will scan for WiFi networks and present them in fzf.
-Select your network and enter the password. The connection is tested
-before proceeding and will be copied to the installed system.
+*** ZFS Systems
+1. Enter ZFS encryption passphrase at ZFSBootMenu prompt
+2. Select boot environment (or wait for default)
+3. Log in as root
 
-** SSH Access After Reboot
-
-If you enabled SSH during installation:
-1. The system will have NetworkManager enabled
-2. WiFi credentials are copied from the live environment
-3. SSH is enabled with root password login
-4. Connect via: ~ssh root@<ip-address>~
-
-*Important*: Harden SSH after first login (disable password auth, use keys).
-
-** Post-Reboot Steps
-
-1. Enter ZFS encryption passphrase at boot
-2. Log in as root
-3. Run ~archsetup~ for further configuration
+*** Btrfs Systems
+1. GRUB menu appears
+2. Enter LUKS passphrase when prompted
+3. Log in as root
 
 * Post-Installation
 
-** ZFS Snapshot Boot Entries (grub-zfs-snap)
-
-The installer configures GRUB to display bootable ZFS snapshots in the boot menu.
-This allows you to boot directly into a previous system state without manually
-rolling back.
-
-*** How It Works
-
-- A GRUB submenu "ZFS Snapshots" appears in the boot menu
-- Shows up to 10 most recent snapshots of the root dataset
-- Selecting a snapshot boots the system in read-only mode from that snapshot
-- The running system sees the snapshot's files, but changes go to a temporary overlay
-
-*** When Snapshots Appear in GRUB
-
-The GRUB menu is automatically updated:
-- After kernel updates (~linux-lts~)
-- After ZFS package updates (~zfs-dkms~, ~zfs-utils~)
-- After GRUB updates
-- After any kernel module installation
-
-*** Manual Snapshot Management
+** ZFS Snapshot Management
 
 #+BEGIN_SRC bash
-# Create a snapshot before making changes
-zfs snapshot zroot/ROOT/default@before-experiment
+# Create a snapshot
+zfssnapshot "before-experiment"
 
-# Regenerate GRUB menu to include new snapshot
-grub-zfs-snap
+# Interactive rollback with fzf
+zfsrollback
 
-# List snapshots that will appear in GRUB
-grub-zfs-snap --list
+# List snapshots
+zfs list -t snapshot
 #+END_SRC
 
-*** Customization
-
-Environment variables control behavior:
+** Btrfs Snapshot Management
 
 #+BEGIN_SRC bash
-# Change pool name (default: zroot)
-POOL_NAME=mypool grub-zfs-snap
+# Create a snapshot (via snapper)
+snapper -c root create -d "before-experiment"
 
-# Change root dataset (default: ROOT/default)
-ROOT_DATASET=ROOT/arch grub-zfs-snap
+# List snapshots
+snapper -c root list
 
-# Show more snapshots in menu (default: 10)
-MAX_SNAPSHOTS=20 grub-zfs-snap
+# Rollback (requires reboot)
+snapper -c root rollback <number>
 #+END_SRC
-
-*** Booting from a Snapshot
-
-1. Reboot and select "ZFS Snapshots" from GRUB menu
-2. Choose the desired snapshot by date/name
-3. System boots with that snapshot's root filesystem
-4. Files are read-only - to make permanent, rollback from normal boot
 
 ** Genesis Snapshot
 
-The installer creates a recursive snapshot of the entire pool named ~genesis~.
-This represents the pristine post-install state.
+Both filesystems create a "genesis" snapshot after installation, representing
+the pristine post-install state.
 
 #+BEGIN_SRC bash
-# View genesis snapshots
+# ZFS: View genesis snapshot
 zfs list -t snapshot | grep genesis
-#+END_SRC
 
-** Rollback to Factory State
-
-#+BEGIN_SRC bash
-# Interactive rollback with confirmation
-/root/rollback-to-genesis
-
-# Reboot to apply
-reboot
-#+END_SRC
-
-*Warning*: This destroys all changes since installation!
-
-** Useful ZFS Commands
-
-#+BEGIN_SRC bash
-# List all snapshots
-zfs list -t snapshot
-
-# Create manual snapshot
-zfs snapshot zroot/home@my-backup
-
-# Rollback to snapshot
-zfs rollback zroot/home@my-backup
-
-# Pool status
-zpool status
-
-# Pool usage
-zpool list
-#+END_SRC
-
-** Snapshot Retention Policy
-
-The system automatically prunes old snapshots to prevent unbounded disk usage.
-
-*** Retention Rules
-
-| Rule | Description |
-|------+-------------|
-| Keep 20 most recent | Always preserved regardless of age |
-| Delete if >180 days | Snapshots beyond position 20, older than 6 months |
-| Genesis protected | Never deleted, regardless of position or age |
-
-*** How It Works
-
-Pruning runs automatically:
-- *After every pacman operation* - Pre-pacman hook triggers prune after creating new snapshot
-- *Daily via systemd timer* - Catches any missed pruning, syncs GRUB menu
-
-*** Manual Pruning
-
-#+BEGIN_SRC bash
-# Preview what would be deleted
-zfs-snap-prune --dry-run
-
-# Run with verbose output
-zfs-snap-prune --verbose
-
-# Check current snapshots
-zfs-snap-prune --help
-#+END_SRC
-
-*** Customizing Retention
-
-Set environment variables before running:
-
-#+BEGIN_SRC bash
-# Keep more snapshots (default: 20)
-KEEP_COUNT=50 zfs-snap-prune
-
-# Shorter retention period (default: 180 days)
-MAX_AGE_DAYS=90 zfs-snap-prune
-
-# Different pool/dataset
-POOL_NAME=tank ROOT_DATASET=ROOT/arch zfs-snap-prune
-#+END_SRC
-
-To change defaults permanently, edit ~/usr/local/bin/zfs-snap-prune~.
-
-*** Example: One Year of Use
-
-With weekly pacman updates (~52/year) plus genesis:
-- Total snapshots created: ~53
-- Snapshots kept: ~27 (20 recent + ~6 within 180 days + genesis)
-- Snapshots pruned: ~26 (older than 180 days, beyond position 20)
-
-* Keeping Up-to-Date
-
-** Kernel Updates on Installed Systems
-
-The installed system uses *zfs-dkms* which builds ZFS modules from source. This
-means kernel updates work automatically:
-
-1. *Pacman installs new kernel* - ~linux-lts~ update via pacman/topgrade
-2. *DKMS hook triggers* - Automatically compiles ZFS for the new kernel
-3. *mkinitcpio hook triggers* - Regenerates initramfs with new ZFS modules
-4. *Reboot* - System boots with new kernel and matching ZFS modules
-
-*** Why DKMS?
-
-| Approach | Pros | Cons |
-|----------+------+------|
-| ~zfs-dkms~ (what we use) | Always compatible, builds for any kernel | Slower updates (compile time) |
-| ~zfs-linux-lts~ (prebuilt) | Fast updates | Must wait for archzfs to release matching version |
-
-We use DKMS because it guarantees compatibility - you're never stuck waiting
-for the archzfs maintainers to release a new package.
-
-*** Verify After Kernel Update
-
-#+BEGIN_SRC bash
-# Check ZFS module matches running kernel
-uname -r                      # Current kernel version
-modinfo zfs | grep vermagic   # ZFS module version
-
-# These should show the same kernel version
-#+END_SRC
-
-*** If Something Goes Wrong
-
-If a kernel update breaks ZFS (rare with LTS kernel):
-
-#+BEGIN_SRC bash
-# Boot from archzfs ISO
-# Import the pool
-zpool import -f zroot
-
-# Enter passphrase when prompted, then mount
-zfs mount -a
-mount /dev/vda1 /mnt/boot  # EFI partition
-
-# Chroot and fix
-arch-chroot /mnt
-
-# Option 1: Rebuild DKMS modules
-dkms autoinstall
-mkinitcpio -P
-
-# Option 2: Rollback to previous snapshot
-# (exit chroot first)
-/mnt/root/rollback-to-genesis
-#+END_SRC
-
-*** Pre-Pacman Snapshots
-
-The installer configures automatic snapshots before every pacman operation.
-If a kernel update causes issues, you can rollback:
-
-#+BEGIN_SRC bash
-# List recent snapshots
-zfs list -t snapshot -o name,creation | grep ROOT
-
-# Rollback to pre-update snapshot
-zfs rollback zroot/ROOT/default@autosnap_YYYY-MM-DD_HH:MM:SS
-reboot
-#+END_SRC
-
-** Rebuilding the ISO
-
-Rebuild the ISO when:
-- New Linux LTS kernel is released (for new installations)
-- New ZFS version is released
-- You've made changes to install-archzfs
-- archzfs repository packages are updated
-
-*** Rebuild Process
-
-#+BEGIN_SRC bash
-# Clean and rebuild
-sudo rm -rf work out
-sudo ./build.sh
-#+END_SRC
-
-The build automatically pulls the latest packages from:
-- Official Arch repositories
-- archzfs repository (https://archzfs.com)
-
-*** Checking for Updates
-
-#+BEGIN_SRC bash
-# Check current linux-lts version in repos
-pacman -Si linux-lts | grep Version
-
-# Check archzfs package versions
-curl -s https://archzfs.com/archzfs/x86_64/ | grep -o 'zfs-linux-lts-[^"]*'
+# Btrfs: View genesis snapshot
+snapper -c root list | grep genesis
 #+END_SRC
 
 * Troubleshooting
@@ -682,7 +318,6 @@ sudo ./build.sh
 The ISO includes DKMS-built ZFS modules. If modules fail to load:
 - Check ~dmesg | grep -i zfs~ for errors
 - Ensure you're using the LTS kernel
-- The archzfs repo may be out of sync with kernel updates (wait for update)
 
 ** Disk Not Showing in Selection
 
@@ -690,31 +325,24 @@ The ISO includes DKMS-built ZFS modules. If modules fail to load:
 - Check ~lsblk~ to verify disk visibility
 - USB drives may need a moment to be detected
 
-** WiFi Networks Not Found
-
-- Verify WiFi hardware is present: ~ip link~
-- In VMs, there is no WiFi adapter (expected)
-- Try rescanning: ~nmcli device wifi rescan~
-
 ** Boot Fails After Installation
 
+*** ZFS
+- Check ZFSBootMenu appears (if not, check EFI boot order with ~efibootmgr~)
+- Verify pool can import: boot ISO, ~zpool import -f zroot~
+
+*** Btrfs
 - Verify EFI boot entries: ~efibootmgr -v~
 - Check GRUB config: ~/boot/grub/grub.cfg~
-- Ensure ZFS modules in initramfs: ~lsinitcpio /boot/initramfs-linux-lts.img | grep zfs~
-
-** Encryption Passphrase Not Accepted
-
-- Keyboard layout at boot is US by default
-- Passphrase is case-sensitive
-- Check for num-lock state
 
 * Links
 
 - [[https://archzfs.com][archzfs Repository]] - ZFS packages for Arch Linux
 - [[https://openzfs.github.io/openzfs-docs/][OpenZFS Documentation]] - Official ZFS documentation
-- [[https://wiki.archlinux.org/title/ZFS][Arch Wiki - ZFS]] - Arch-specific ZFS information
-- [[https://wiki.archlinux.org/title/Archiso][Arch Wiki - Archiso]] - Building custom Arch ISOs
-- [[https://github.com/openzfs/zfs][OpenZFS on GitHub]] - ZFS source code
+- [[https://get.zfsbootmenu.org][ZFSBootMenu]] - ZFS boot manager
+- [[https://wiki.archlinux.org/title/Btrfs][Arch Wiki - Btrfs]] - Btrfs information
+- [[https://wiki.archlinux.org/title/Snapper][Arch Wiki - Snapper]] - Btrfs snapshot management
+- [[https://github.com/Antynea/grub-btrfs][grub-btrfs]] - Boot Btrfs snapshots from GRUB
 
 * License
 
