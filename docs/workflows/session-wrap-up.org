@@ -359,7 +359,47 @@ git status
 
 Should show: "working tree clean" and indicate branch is up to date with remote.
 
-** Step 3: Valediction
+** Step 3: Delete Session Context File
+
+The session context file must be deleted at the end of every successful wrap-up.
+
+*** Why This Is Critical
+
+The existence of =docs/session-context.org= indicates an interrupted session. If you don't delete it:
+- Next session will think the previous session crashed
+- Context recovery will be triggered unnecessarily
+- Creates confusion about session state
+
+*** How to Delete
+
+#+begin_src bash
+rm docs/session-context.org
+#+end_src
+
+*** When to Skip
+
+NEVER skip this step. If the file doesn't exist, that's fine (the rm command will just report no file). But if it exists, it MUST be deleted.
+
+** Step 4: Verify Clean Git State
+
+*** CRITICAL: Git Status Must Be Completely Clean
+
+Before proceeding to valediction, =git status= MUST show:
+- "nothing to commit, working tree clean"
+- Branch is up to date with remote(s)
+
+*** If Git Status Is NOT Clean
+
+1. **Untracked files exist:** Ask Craig - "There are untracked files. Should I add and commit them, or leave them untracked?"
+2. **Uncommitted changes exist:** Ask Craig - "There are uncommitted changes. Should I commit them now?"
+3. **Unpushed commits exist:** Push them (this shouldn't require asking)
+4. **Any other unclear state:** Ask Craig before proceeding
+
+*** The Rule
+
+Unless Craig explicitly says "leave git dirty" or "don't worry about that file," the working tree must be clean at session end. When in doubt, ASK.
+
+** Step 5: Valediction
 
 Provide a brief, warm goodbye message to Craig.
 
@@ -451,6 +491,8 @@ Do NOT:
 8. **Forgetting to verify clean working tree** - Always confirm =git status= shows clean
 9. **Making session notes too brief** - Better too much detail than too little
 10. **Not checking if files were actually modified** - Run =git status= first
+11. **Leaving session-context.org behind** - MUST be deleted at end of every wrap-up
+12. **Leaving dirty git state without explicit approval** - Ask Craig if anything is unclear
 
 * Validation Checklist
 
@@ -466,8 +508,9 @@ Before considering wrap-up complete, verify:
 - [ ] Commit message follows required format (no Claude attribution)
 - [ ] Commit executed successfully
 - [ ] Pushed to ALL remote repositories (checked with =git remote -v=)
-- [ ] =git status= shows "working tree clean"
+- [ ] =git status= shows "nothing to commit, working tree clean" (CRITICAL - ask if unclear)
 - [ ] Push confirmed successful to all remotes
+- [ ] =docs/session-context.org= DELETED (CRITICAL - file must not exist after wrap-up)
 - [ ] Valediction provided with accomplishments, readiness, reminders
 - [ ] Critical reminders surfaced if they exist
 - [ ] Warm, professional closing provided

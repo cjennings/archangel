@@ -173,6 +173,16 @@ Use this to:
 - Consider Emacs packages along with other software when recommending software solutions
 - Look for ways to streamline routine work with Emacs custom code if no packages exist
 
+*** Wayland Environment (No XWayland)
+Craig runs a pure Wayland setup (Hyprland) and avoids XWayland/Xorg apps.
+
+- Clipboard: Use =wl-copy= and =wl-paste= (NOT =xclip= or =xsel=)
+- Window management: Use Hyprland commands (NOT =xkill=, =xdotool=, etc.)
+- Prefer Wayland-native tools over X11 equivalents
+- Open URLs in browser: Use =google-chrome-stable "URL" &>/dev/null &=
+  - The =&>/dev/null &= is required to detach the process and suppress output
+  - Without it, the command may appear to hang or produce no result
+
 ** Miscellaneous Information
 - Craig currently lives in New Orleans, LA
 - Craig's phone number: 510-316-9357

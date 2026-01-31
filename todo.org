@@ -1,25 +1,7 @@
 * Open Work
-
-** DONE [#B] Implement btrfs support (archangel expansion)
-CLOSED: [2026-01-24 Sat]
-See [[file:docs/PLAN-archangel-btrfs.org][PLAN-archangel-btrfs.org]] for full implementation plan.
-
-Completed phases:
-- Phase 1: Refactor (ZFS works)
-- Phase 2: Single-disk btrfs with snapper/grub-btrfs
-- Phase 2.8: LUKS encryption support
-- Phase 3: Multi-disk btrfs (RAID0/RAID1) with LUKS
-
-All tests passing: btrfs-single, btrfs-luks, btrfs-mirror, btrfs-stripe, btrfs-mirror-luks
-
-** TODO [#C] Review code review workflow document and provide feedback
-Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/code-review.org]] and refine based on feedback.
-Created: 2026-01-23
-Postponed: After archangel project completion.
-
 ** TODO [#A] Rename ISO to (project)-(YYYY-MM-DD)-vmlinuz-(version).iso
-Current format: archzfs-vmlinuz-6.12.66-lts-2026-01-24-x86_64.iso
-New format: archzfs-2026-01-24-vmlinuz-6.12.66-lts-x86_64.iso
+Current format: archangel-vmlinuz-6.12.66-lts-2026-01-24-x86_64.iso
+New format: archangel-2026-01-24-vmlinuz-6.12.66-lts-x86_64.iso
 
 Date should come right after project name for easier sorting and identification.
 Update build.sh ISO_NAME variable.
@@ -30,7 +12,7 @@ initramfs encrypt hook via QEMU. Installation tests pass, but need manual verifi
 that systems actually boot and decrypt correctly.
 
 Test on physical hardware or VM with manual interaction:
-1. Boot from archzfs ISO
+1. Boot from archangel ISO
 2. Run: archangel --config-file with LUKS config
 3. Reboot, enter passphrase at GRUB prompt
 4. Enter passphrase at initramfs prompt
@@ -40,8 +22,8 @@ Configs to test: btrfs-luks (single disk), btrfs-mirror-luks (2-disk RAID1)
 
 See [[file:docs/TESTING-STRATEGY.org][TESTING-STRATEGY.org]] for background on automation limitations.
 
-** TODO [#A] Fix mkinitcpio configuration in install-archzfs (causes boot failure)
-After kernel updates or mkinitcpio regeneration, systems fail to boot because install-archzfs
+** TODO [#A] Fix mkinitcpio configuration in archangel (causes boot failure)
+After kernel updates or mkinitcpio regeneration, systems fail to boot because archangel
 leaves incorrect mkinitcpio configuration from the live ISO environment.
 
 See [[file:docs/2026-01-22-mkinitcpio-config-boot-failure.org][bug report]] for full details.
@@ -176,14 +158,6 @@ cp -r /usr/share/aur-packages /mnt/usr/share/
 Most AUR packages are small (<5MB each). Estimate ~50-100MB for full suite.
 Significantly less than pre-cloning git repos.
 
-** DONE [#A] Install Arch Wiki on ISO for offline package help
-CLOSED: [2026-01-24 Sat]
-Added to profile/packages.x86_64:
-- arch-wiki-docs (full HTML version at /usr/share/doc/arch-wiki/html/)
-- arch-wiki-lite (CLI search via wiki-search command)
-
-Both are in official repos (not AUR). Documented in RESCUE-GUIDE.txt.
-
 ** TODO [#A] Fix ZFS rollback breaking boot (/boot not on ZFS)
 ZFS rollbacks can leave the system unbootable because /boot is on a separate EFI partition
 that doesn't get rolled back with the ZFS root filesystem.
@@ -237,15 +211,12 @@ Replace GRUB with ZFSBootMenu which is designed for ZFS boot environments.
 - https://wiki.archlinux.org/title/Install_Arch_Linux_on_ZFS
 - https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/index.html
 
-** DONE [#A] Integrate ZFSBootMenu as alternative boot manager
-CLOSED: [2026-01-24 Sat]
-Implemented in custom/lib/zfs.sh configure_zfsbootmenu().
-Downloads EFI binary from get.zfsbootmenu.org and installs to /efi/EFI/ZBM/.
-ZFS installs use ZFSBootMenu; btrfs installs use GRUB.
+** TODO [#A] Update README.org with GRUB references amd ZFSBootMenu referemces
 
-** TODO [#A] Update README.org - remove all GRUB references (now uses ZFSBootMenu)
+Note: the information here is old. we have added btrfs to the filesystem choices since this task was written. this task still needs to be completed, just considering that we use both grub for btrfs and zfsbootmenu for zfs. 
+
 README.org contains multiple outdated references to GRUB that are now incorrect:
-- Line 19: "EFI Boot Redundancy - GRUB installed on all disks" - now uses ZFSBootMenu
+- Line 19: "EFI Boot Redundancy - GRUB installed on all disks" - now uses ZFSBootMenu for ZFS insalls
 - Lines 417-472: Entire section on "grub-zfs-snap" and GRUB snapshot boot entries - doesn't exist
 - Lines 98-100: Project structure lists grub-zfs-snap, zfs-snap-prune, 40_zfs_snapshots - files don't exist
 
@@ -259,6 +230,70 @@ README.org contains multiple outdated references to GRUB that are now incorrect:
 README.org line 723 references [[file:LICENSE][LICENSE]] but the file doesn't exist.
 Create LICENSE file with GPL-3.0 text as stated in README.
 
+** TODO [#A] Delete or complete custom/archsetup-zfs
+The script has full function definitions but main() just prints "this is a skeleton".
+A skeleton script that pretends to work is worse than nothing.
+
+*** Options
+1. Delete it entirely - users can run archsetup from ~/code/archsetup
+2. Complete the implementation
+3. Replace with a simple launcher that calls archsetup with ZFS-specific flags
+
+** TODO [#A] Add initial user password to install-archzfs config
+Currently hardcoded as "welcome" in archsetup-zfs. Should be configurable via:
+- Interactive prompt during install-archzfs
+- Config file option for unattended installs
+- Document that password must be changed on first login
+
+** TODO [#A] Add ZFS encrypted volume tests
+ZFS native encryption is implemented in lib/zfs.sh but not tested.
+All current ZFS test configs use NO_ENCRYPT=yes.
+
+*** Implementation Details
+ZFS encryption uses native AES-256-GCM (not LUKS). The passphrase is:
+1. Provided at pool creation: echo "$passphrase" | zpool create ... -O encryption=aes-256-gcm -O keyformat=passphrase
+2. Stored in ZFS properties (encrypted)
+3. Prompted by ZFSBootMenu at boot time (not initramfs encrypt hook)
+
+*** Test Configs to Create
+- zfs-luks.conf - Single disk ZFS with encryption
+- zfs-mirror-luks.conf - 2-disk mirror with encryption
+
+*** Config Format
+#+BEGIN_SRC
+HOSTNAME=test-zfs-luks
+FILESYSTEM=zfs
+DISKS=/dev/vda
+ZFS_PASSPHRASE=testpassphrase
+ROOT_PASSWORD=testpass
+ENABLE_SSH=yes
+#+END_SRC
+
+*** Verification Checks
+- zpool get feature@encryption zroot (should show enabled)
+- zfs get encryption zroot/ROOT (should show aes-256-gcm)
+- zfs get keystatus zroot/ROOT (should show available after unlock)
+
+*** Notes
+- ZFSBootMenu handles passphrase prompt at boot
+- Test framework may need adjustment if ZFSBootMenu prompt differs from LUKS
+- Passphrase unlocks all datasets in pool (single prompt)
+
+** DONE [#A] Install Arch Wiki on ISO for offline package help
+CLOSED: [2026-01-24 Sat]
+Added to profile/packages.x86_64:
+- arch-wiki-docs (full HTML version at /usr/share/doc/arch-wiki/html/)
+- arch-wiki-lite (CLI search via wiki-search command)
+
+Both are in official repos (not AUR). Documented in RESCUE-GUIDE.txt.
+
+** DONE [#A] Integrate ZFSBootMenu as alternative boot manager
+CLOSED: [2026-01-24 Sat]
+Implemented in custom/lib/zfs.sh configure_zfsbootmenu().
+Downloads EFI binary from get.zfsbootmenu.org and installs to /efi/EFI/ZBM/.
+ZFS installs use ZFSBootMenu; btrfs installs use GRUB.
+
+** TODO [#B] grub menu too small on hidpi displays
 ** TODO [#B] Add --chroot mode to archsetup for in-chroot execution
 Enable running archsetup from within install-archangel chroot so users get a fully
 configured workstation on first boot instead of running archsetup manually post-reboot.
@@ -304,21 +339,6 @@ If yes:
 - Git clone operations
 - All file/config operations
 
-** TODO [#A] Delete or complete custom/archsetup-zfs
-The script has full function definitions but main() just prints "this is a skeleton".
-A skeleton script that pretends to work is worse than nothing.
-
-*** Options
-1. Delete it entirely - users can run archsetup from ~/code/archsetup
-2. Complete the implementation
-3. Replace with a simple launcher that calls archsetup with ZFS-specific flags
-
-** TODO [#A] Add initial user password to install-archzfs config
-Currently hardcoded as "welcome" in archsetup-zfs. Should be configurable via:
-- Interactive prompt during install-archzfs
-- Config file option for unattended installs
-- Document that password must be changed on first login
-
 ** TODO [#B] Delete stale SESSION-CONTEXT.md
 SESSION-CONTEXT.md in project root is from 2026-01-19 and references old GRUB workflow.
 Superseded by docs/session-context.org. Delete to avoid confusion.
@@ -350,36 +370,6 @@ These directories exist but aren't documented or gitignored:
 ** TODO [#B] Fill in README.org #+AUTHOR field
 Line 2 has empty #+AUTHOR: - looks unfinished. Add author info.
 
-** TODO [#C] Standardize shell script conventions
-*** Shebang inconsistency
-- build.sh: #!/bin/bash
-- zfssnapshot: #!/bin/env bash
-- archsetup-zfs: #!/bin/sh
-Pick one convention (recommend #!/usr/bin/env bash for portability)
-
-*** Email inconsistency
-- Some files: c@cjennings.net
-- archsetup-zfs: craigmartinjennings@gmail.com
-Standardize to one email address.
-
-** TODO [#C] Add .editorconfig for consistent formatting
-No project-wide formatting rules. Add .editorconfig to enforce:
-- Indent style (spaces vs tabs)
-- Indent size
-- End of line
-- Trim trailing whitespace
-- Final newline
-
-** TODO [#C] Consolidate test scripts documentation
-scripts/ has multiple test files with unclear relationships:
-- test-vm.sh - Manual VM testing
-- sanity-test.sh - Quick automated checks
-- test-install.sh - Installation testing
-- full-test.sh - Comprehensive testing
-- test-zfs-snap-prune.sh - Unit tests for prune script
-
-Document the testing strategy and when to use each script.
-
 ** TODO [#B] Set up CI/CD pipeline for automated ISO builds
 
 *** Options to evaluate
@@ -408,51 +398,6 @@ Document the testing strategy and when to use each script.
 - Consider bhyve VM with Arch Linux for native builds
 - Mount dataset for build artifacts and cache
 - Snapshot before/after builds for easy cleanup
-
-** DONE [#B] Add RAID configuration tests (mirror, raidz)
-CLOSED: [2026-01-24 Sat]
-Test configs exist in scripts/test-configs/:
-- mirror.conf (ZFS 2-disk mirror)
-- raidz1.conf (ZFS 3-disk raidz1)
-- btrfs-mirror.conf (btrfs RAID1)
-- btrfs-stripe.conf (btrfs RAID0)
-- btrfs-mirror-luks.conf (btrfs RAID1 + LUKS)
-
-All tests passing via test-install.sh.
-
-** TODO [#A] Add ZFS encrypted volume tests
-ZFS native encryption is implemented in lib/zfs.sh but not tested.
-All current ZFS test configs use NO_ENCRYPT=yes.
-
-*** Implementation Details
-ZFS encryption uses native AES-256-GCM (not LUKS). The passphrase is:
-1. Provided at pool creation: echo "$passphrase" | zpool create ... -O encryption=aes-256-gcm -O keyformat=passphrase
-2. Stored in ZFS properties (encrypted)
-3. Prompted by ZFSBootMenu at boot time (not initramfs encrypt hook)
-
-*** Test Configs to Create
-- zfs-luks.conf - Single disk ZFS with encryption
-- zfs-mirror-luks.conf - 2-disk mirror with encryption
-
-*** Config Format
-#+BEGIN_SRC
-HOSTNAME=test-zfs-luks
-FILESYSTEM=zfs
-DISKS=/dev/vda
-ZFS_PASSPHRASE=testpassphrase
-ROOT_PASSWORD=testpass
-ENABLE_SSH=yes
-#+END_SRC
-
-*** Verification Checks
-- zpool get feature@encryption zroot (should show enabled)
-- zfs get encryption zroot/ROOT (should show aes-256-gcm)
-- zfs get keystatus zroot/ROOT (should show available after unlock)
-
-*** Notes
-- ZFSBootMenu handles passphrase prompt at boot
-- Test framework may need adjustment if ZFSBootMenu prompt differs from LUKS
-- Passphrase unlocks all datasets in pool (single prompt)
 
 ** TODO [#B] Add pre-flight validation to install-archzfs
 Validate configuration and environment before any destructive operations.
@@ -492,17 +437,6 @@ validate_environment() {
 }
 #+END_SRC
 
-** DONE [#B] Extract install-archzfs into testable functions
-CLOSED: [2026-01-24 Sat]
-Completed as Phase 1 of btrfs implementation. Refactored into:
-- custom/lib/common.sh - Colors, output, prompts
-- custom/lib/config.sh - Config file handling, argument parsing
-- custom/lib/disk.sh - Partitioning, EFI formatting
-- custom/lib/zfs.sh - ZFS pool/dataset creation, ZFSBootMenu
-- custom/lib/btrfs.sh - Btrfs volume/subvolume creation, snapper, LUKS
-
-Main script (archangel) sources libraries and orchestrates install flow.
-
 ** TODO [#B] Create Makefile with distinct build targets
 Replace or supplement build.sh with a Makefile for cleaner build orchestration.
 
@@ -515,7 +449,7 @@ Replace or supplement build.sh with a Makefile for cleaner build orchestration.
 - make test-quick - Quick single-disk test only - depends on lint
 - make aur - Build AUR packages only
 - make iso - Build ISO only (skip AUR if already built)
-- make deploy - Copy ISO to truenas.local AND Ventoy drive (if inserted)
+- make deploy - Copy ISO to truenas.local and USB drive (if present)
 - make all - Full build + tests
 
 *** Benefits
@@ -587,6 +521,75 @@ exec 1> >(tee -a "$LOG_FILE") 2>&1
 - Check log for known error patterns (e.g., DKMS failures) and fail fast
 - Rotate old logs to prevent disk space issues
 - Include system info header (date, kernel version, etc.)
+
+** DONE [#B] Implement btrfs support (archangel expansion)
+CLOSED: [2026-01-24 Sat]
+See [[file:docs/PLAN-archangel-btrfs.org][PLAN-archangel-btrfs.org]] for full implementation plan.
+
+Completed phases:
+- Phase 1: Refactor (ZFS works)
+- Phase 2: Single-disk btrfs with snapper/grub-btrfs
+- Phase 2.8: LUKS encryption support
+- Phase 3: Multi-disk btrfs (RAID0/RAID1) with LUKS
+
+All tests passing: btrfs-single, btrfs-luks, btrfs-mirror, btrfs-stripe, btrfs-mirror-luks
+
+** DONE [#B] Add RAID configuration tests (mirror, raidz)
+CLOSED: [2026-01-24 Sat]
+Test configs exist in scripts/test-configs/:
+- mirror.conf (ZFS 2-disk mirror)
+- raidz1.conf (ZFS 3-disk raidz1)
+- btrfs-mirror.conf (btrfs RAID1)
+- btrfs-stripe.conf (btrfs RAID0)
+- btrfs-mirror-luks.conf (btrfs RAID1 + LUKS)
+
+All tests passing via test-install.sh.
+
+** DONE [#B] Extract install-archzfs into testable functions
+CLOSED: [2026-01-24 Sat]
+Completed as Phase 1 of btrfs implementation. Refactored into:
+- custom/lib/common.sh - Colors, output, prompts
+- custom/lib/config.sh - Config file handling, argument parsing
+- custom/lib/disk.sh - Partitioning, EFI formatting
+- custom/lib/zfs.sh - ZFS pool/dataset creation, ZFSBootMenu
+- custom/lib/btrfs.sh - Btrfs volume/subvolume creation, snapper, LUKS
+
+Main script (archangel) sources libraries and orchestrates install flow.
+
+** TODO [#C] Review code review workflow document and provide feedback
+Review [[file:docs/project-workflows/code-review.org][docs/project-workflows/code-review.org]] and refine based on feedback.
+Created: 2026-01-23
+Postponed: After archangel project completion.
+
+** TODO [#C] Standardize shell script conventions
+*** Shebang inconsistency
+- build.sh: #!/bin/bash
+- zfssnapshot: #!/bin/env bash
+- archsetup-zfs: #!/bin/sh
+Pick one convention (recommend #!/usr/bin/env bash for portability)
+
+*** Email inconsistency
+- Some files: c@cjennings.net
+- archsetup-zfs: craigmartinjennings@gmail.com
+Standardize to one email address.
+
+** TODO [#C] Add .editorconfig for consistent formatting
+No project-wide formatting rules. Add .editorconfig to enforce:
+- Indent style (spaces vs tabs)
+- Indent size
+- End of line
+- Trim trailing whitespace
+- Final newline
+
+** TODO [#C] Consolidate test scripts documentation
+scripts/ has multiple test files with unclear relationships:
+- test-vm.sh - Manual VM testing
+- sanity-test.sh - Quick automated checks
+- test-install.sh - Installation testing
+- full-test.sh - Comprehensive testing
+- test-zfs-snap-prune.sh - Unit tests for prune script
+
+Document the testing strategy and when to use each script.
 
 ** TODO [#C] Consider adding bootable archzfs ISO to GRUB boot menu
 Store the archzfs ISO on disk and add a GRUB menu entry to boot it directly - no USB drive needed for recovery/reinstall.
