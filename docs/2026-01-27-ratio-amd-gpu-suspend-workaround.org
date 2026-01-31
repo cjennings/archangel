@@ -1,0 +1,217 @@
+#+TITLE: Ratio AMD GPU Suspend Freeze - Workaround & Fix Tracking
+#+DATE: 2026-01-27
+
+* Summary
+
+Ratio (Framework Desktop, AMD Ryzen AI Max / Strix Halo) freezes hard on
+resume from suspend due to a VPE power gating race condition in the amdgpu
+driver. The freeze requires a hard power cycle, which causes journal
+corruption and can leave the btrfs filesystem read-only.
+
+As of 2026-01-27, the proper kernel fix exists (merged in 6.18) but is
+unusable due to separate CWSR bugs in 6.18+. Ratio runs kernel 6.12 LTS,
+which does not have the fix and will not receive a backport.
+
+A systemd suspend mask is applied as a workaround to prevent the system from
+ever entering the suspend/resume path.
+
+* The Bug
+
+** What Happens
+
+~8% of suspend/resume cycles on Strix Halo result in a hard system freeze
+approximately 1 second after the screen turns on during resume.
+
+** Root Cause: VPE Power Gating Race Condition
+
+The freeze is caused by a race condition in the amdgpu driver's VPE (Video
+Processing Engine) power management during resume:
+
+1. System resumes from suspend.
+2. amdgpu schedules =amdgpu_device_delayed_init_work_handler= (2s delay) to
+   run self-tests, including =vpe_ring_test_ib= which briefly powers on VPE.
+3. The ring buffer test is very short. VPE goes idle.
+4. After 1 second of idle, =vpe_idle_work_handler= fires and tells the SMU
+   (System Management Unit) to power gate (shut down) VPE.
+5. *But VPE is still at a high DPM level.* Newer VPE firmware only drops DPM
+   back to the lowest level (DPM0) after a workload has run for 2+ seconds.
+   The ring buffer test was too short to trigger that drop.
+6. The SMU tries to power gate VPE while it's at a high DPM level. On Strix
+   Halo, this hangs the SMU.
+7. The SMU hang cascades -- VCN, JPEG, and other GPU IPs can't be managed.
+   Half the GPU is frozen.
+8. The thread that issued the SMU command is stuck. System is locked up.
+   No further logging is possible.
+
+It only triggers on resume because that's when the driver runs the ring
+buffer self-test. During normal operation, VPE either isn't used or has had
+enough time to settle its DPM level before power gating.
+
+** Error Messages (if visible before freeze)
+
+#+begin_example
+SMU: I'm not done with your previous command
+Failed to power gate VPE!
+Dpm disable vpe failed, ret = -62
+Failed to power gate JPEG
+Failed to power gate VCN instance 0
+Dpm disable uvd failed
+#+end_example
+
+** References
+
+- [[https://lkml.org/lkml/2025/8/24/139][Original VPE_IDLE_TIMEOUT patch (LKML, Aug 2025)]]
+- [[https://www.mail-archive.com/amd-gfx@lists.freedesktop.org/msg130657.html][VPE DPM0 fix v5 (amd-gfx, Oct 2025)]]
+- [[https://www.mail-archive.com/amd-gfx@lists.freedesktop.org/msg130804.html][Follow-up: missing return statement fix]]
+- [[https://gitlab.freedesktop.org/drm/amd/-/issues/4615][Freedesktop bug #4615]]
+- [[https://community.frame.work/t/attn-critical-bugs-in-amdgpu-driver-included-with-kernel-6-18-x-6-19-x/79221][Framework Community: Critical 6.18/6.19 CWSR bugs]]
+
+* Kernel Fix Status
+
+** The Proper Fix
+
+Mario Limonciello (AMD) wrote =drm/amd: Check that VPE has reached DPM0 in
+idle handler= -- makes the idle handler check that VPE has actually reached
+DPM0 before attempting the power gate. Targets VPE 6.1.1 (Strix Halo) with
+firmware versions below =0x0a640500=.
+
+Merged into Linux 6.18 during the RC phase (drm-fixes-6.18, Oct 29, 2025).
+Closes freedesktop bug #4615.
+
+** Why We Can't Use 6.18
+
+Kernel 6.18.x and 6.19.x have critical CWSR (Compute Wavefront Save/Restore)
+bugs that cause hard GPU hangs on RDNA3/RDNA4 during compute workloads. The
+Framework Community recommends staying on 6.15-6.17 for Strix Halo until
+AMD resolves both VPE and CWSR issues in the same kernel.
+
+** Backport Status
+
+The fix was tagged =Cc: stable@vger.kernel.org= for backport but has NOT
+appeared in any 6.12 LTS release as of 6.12.67. It likely won't be
+backported to 6.12 due to infrastructure differences.
+
+** When to Check Again
+
+Monitor these for resolution:
+- Arch =linux-lts= package updates (=pacman -Si linux-lts=)
+- [[https://cdn.kernel.org/pub/linux/kernel/v6.x/][Kernel.org changelogs]] for 6.12.x stable releases
+- [[https://community.frame.work/t/attn-critical-bugs-in-amdgpu-driver-included-with-kernel-6-18-x-6-19-x/79221][Framework Community thread]] for CWSR resolution status
+- [[https://gitlab.freedesktop.org/drm/amd/-/issues/4615][Freedesktop #4615]] for any further developments
+
+* What We Applied (2026-01-27)
+
+** Workaround: Disable Suspend via systemd
+
+Prevents the system from entering the suspend/resume path entirely.
+The GPU bug is still present but never triggered.
+
+#+begin_src bash
+# Applied 2026-01-27:
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+#+end_src
+
+Effects:
+- hypridle can no longer suspend the system
+- Screen stays on at idle (active power draw)
+- No more freeze → hard reboot → filesystem corruption cycle
+
+** Kernel Parameters NOT Applied
+
+The following parameters were identified as fixes but caused boot failures
+on ratio when previously attempted (twice):
+
+#+begin_example
+amdgpu.pg_mask=0         # Disables all GPU power gating
+amdgpu.cwsr_enable=0     # Disables Compute Wavefront Save/Restore
+#+end_example
+
+It is unclear whether the boot failures were caused by the parameters
+themselves or by a corrupted initramfs from running mkinitcpio while the
+GPU was in a bad state. Testing via the GRUB =e= key (temporary, no
+permanent change) is planned but deferred.
+
+** Current Kernel Command Line (for reference)
+
+#+begin_example
+BOOT_IMAGE=/@/boot/vmlinuz-linux-lts root=UUID=5b9f7f7f-2477-488f-8fb1-52b5c7d90e98
+rw rootflags=subvol=@ console=tty0 console=ttyS0,115200 rw loglevel=2
+rd.systemd.show_status=auto rd.udev.log_level=2 nvme.noacpi=1
+mem_sleep_default=deep nowatchdog random.trust_cpu=off quiet splash
+#+end_example
+
+* How to Undo When a Fixed Kernel Arrives
+
+** Step 1: Verify the Fix is in the New Kernel
+
+Check that the VPE DPM0 fix is present:
+
+#+begin_src bash
+# Check kernel version
+uname -r
+
+# Search for the fix in the changelog
+# Look for "VPE" or "DPM0" or "vpe_idle" in the relevant changelog:
+# https://cdn.kernel.org/pub/linux/kernel/v6.x/ChangeLog-<version>
+
+# Or check the source directly:
+grep -r "vpe_need_dpm0_at_power_down\|vpe_get_dpm_level" /usr/src/linux/drivers/gpu/drm/amd/ 2>/dev/null
+#+end_src
+
+Also verify that CWSR bugs are resolved (check Framework Community thread).
+
+** Step 2: Unmask Suspend Targets
+
+#+begin_src bash
+sudo systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target
+#+end_src
+
+** Step 3: Test Suspend/Resume
+
+#+begin_src bash
+# Test a single suspend/resume cycle
+sudo systemctl suspend
+
+# If system resumes cleanly, test a few more times
+# The original bug had ~8% failure rate, so test at least 20 cycles
+#+end_src
+
+** Step 4: If Kernel Parameters Were Applied
+
+If =amdgpu.pg_mask=0= and =amdgpu.cwsr_enable=0= were added to GRUB, remove
+them once the kernel fix is confirmed working:
+
+#+begin_src bash
+# Edit GRUB config
+sudo vim /etc/default/grub
+# Remove amdgpu.pg_mask=0 and amdgpu.cwsr_enable=0 from GRUB_CMDLINE_LINUX_DEFAULT
+
+# Rebuild GRUB config
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+# Reboot and test suspend
+#+end_src
+
+* Log Evidence (2026-01-27 Investigation)
+
+** System Info
+
+- Machine: Framework Desktop (AMD Ryzen AI Max 300 Series)
+- Hostname: ratio
+- Kernel: 6.12.67-1-lts
+- Filesystem: btrfs RAID1 on 2x NVMe (nvme0n1p2 + nvme1n1p2)
+- GPU: AMD Strix Halo (RDNA 3.5)
+
+** Findings
+
+- 13 boots between Jan 25-27, most ending in suspend then hard freeze
+- Journal corruption on boots -5, -3, and -7 (unclean shutdown)
+- =mc= (Midnight Commander) stuck in D state (uninterruptible I/O) during
+  failed freeze attempts, in =io_schedule → folio_wait_bit_common →
+  filemap_read= path
+- Suspend freeze pattern: =PM: suspend entry (deep)= → =PM: suspend exit= →
+  =PM: suspend entry (s2idle)= → no more logs → hard reboot required
+- =mu= database corruption (error 121) from repeated unclean shutdowns
+- btrfs device stats: zero errors on both NVMe drives
+- No explicit BTRFS read-only event logged (freeze kills logging before it
+  can be recorded)
