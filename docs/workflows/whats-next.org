@@ -60,7 +60,7 @@ Follow this decision tree in order:
 - **If user declines:** Continue to next step
 
 *** 2. Check Active Reminders
-- Review Active Reminders section in project's NOTES.org (if it exists)
+- Review Active Reminders section in project's notes.org (if it exists)
 - **If found:** Recommend reminder task
 - **If user declines:** Ask for priority and add to todo.org, then continue
 
@@ -118,7 +118,7 @@ Reason: Blocks daily reading/annotation workflow
 * Workflow Steps
 
 1. **Scan in-progress tasks** - Check for incomplete work from previous session
-2. **Check reminders** - Review Active Reminders in NOTES.org
+2. **Check reminders** - Review Active Reminders in notes.org
 3. **Scan for deadlines** - Look for time-sensitive tasks in todo.org
 4. **Apply priority cascade** - Use V2MOM method order or simple priority ranking
 5. **Make recommendation** - One task (or 2-3 if uncertain)

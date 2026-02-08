@@ -4,7 +4,7 @@
 
 * About This File
 
-This file contains archived session history entries older than 2 weeks from the current date. Sessions are automatically moved here during the wrap-up workflow to keep NOTES.org at a manageable size.
+This file contains archived session history entries older than 2 weeks from the current date. Sessions are automatically moved here during the wrap-up workflow to keep notes.org at a manageable size.
 
 Sessions are listed in reverse chronological order (most recent first).
 
@@ -21,7 +21,7 @@ Sessions are listed in reverse chronological order (most recent first).
 - Added docs/ to git (decided to track publicly)
 - Built fresh ISO (archzfs-claude-2026.01.17-x86_64.iso, 4.9G)
 - Tested ISO in QEMU VM
-- Documented project goals and design decisions in NOTES.org
+- Documented project goals and design decisions in notes.org
 
 *Key Decisions Made:*
 - Use linux-lts + zfs-dkms from archzfs.com (DKMS ensures kernel compatibility)

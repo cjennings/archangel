@@ -7,22 +7,40 @@
 This file contains instructions and protocols for how Claude should behave when working with Craig. These protocols are consistent across all projects.
 
 **When to read this:**
-- At the start of EVERY session (before NOTES.org)
+- At the start of EVERY session (this is the single entry point)
 - Before making any significant decisions
 - When unclear about user preferences or conventions
 
 **What's in this file:**
+- Directory architecture (docs/ file/directory map)
 - Session management protocols (context files, compacting)
 - Terminology and trigger phrases
 - User information and preferences
 - Git commit requirements
 - File format and naming conventions
+- Startup instructions (runs docs/workflows/startup.org)
 
 **What's NOT in this file:**
-- Project-specific context (see NOTES.org)
-- Session history (see NOTES.org)
-- Active reminders (see NOTES.org)
-- Pending decisions (see NOTES.org)
+- Project-specific context (see notes.org)
+- Session history (see notes.org)
+- Active reminders (see notes.org)
+- Pending decisions (see notes.org)
+
+* Directory Architecture
+
+The =docs/= directory has a specific structure. Every file and directory has a defined purpose:
+
+| Item | Purpose |
+|------+---------|
+| =protocols.org= | Single entry point — behavioral instructions + directory map |
+| =notes.org= | Project data: context, reminders, decisions, session history |
+| =session-context.org= | Live crash recovery (exists only during active sessions) |
+| =previous-session-history.org= | Archived session history |
+| =workflows/= | Template workflows (synced from claude-templates, never edit in project) |
+| =project-workflows/= | Project-specific workflows (never touched by sync) |
+| =scripts/= | Template scripts |
+| =announcements/= | One-off cross-project instructions from Craig |
+| =someday-maybe.org= | Project ideas backlog |
 
 * IMPORTANT - MUST DO
 
@@ -93,7 +111,7 @@ Include:
 *** Why This Is Non-Negotiable
 
 If the machine freezes, the network drops, or Claude crashes:
-- Session history in NOTES.org? NOT WRITTEN YET (only at wrap-up)
+- Session history in notes.org? NOT WRITTEN YET (only at wrap-up)
 - Your memory of the conversation? GONE
 - The ONLY way to recover context? THIS FILE
 
@@ -109,7 +127,15 @@ If you know you're about to compact, update the session context file FIRST, with
 Review the session context file to make sure you aren't forgetting key aspects of our discussion or plan, then continue working with the user.
 
 ** When Session Ends (Wrap-Up Workflow)
-Write your session summary to NOTES.org, leveraging the session context file. Delete session-context.org ONLY AFTER you've written the session history entry. The file's existence indicates an interrupted session, so it must be deleted at the end of each successful wrap-up.
+Write your session summary to notes.org, leveraging the session context file. Delete session-context.org ONLY AFTER you've written the session history entry. The file's existence indicates an interrupted session, so it must be deleted at the end of each successful wrap-up.
+
+** NEVER =cd= Into Directories You Will Delete
+
+If you =cd= into a directory and then delete that directory, the shell's working directory becomes invalid. All subsequent commands will fail silently (exit code 1) with no useful error message. The only fix is to restart the session.
+
+***Rule:*** Always use absolute paths for file operations in temporary directories. Never =cd= into extraction directories, build directories, or any directory that will be cleaned up.
+
+This caused a session break on 2026-02-06 when an extraction directory was =cd='d into and then deleted during cleanup.
 
 * Important Terminology
 
@@ -131,12 +157,12 @@ This does **NOT** mean "let's DO X right now."
 *Example:*
 - "I want to create a refactor workflow" -> Create docs/workflows/refactor.org using create-workflow process
 
-When Craig uses this phrasing, trigger the create-workflow process from docs/workflows/create-workflow.org.
+When Craig uses this phrasing, trigger the create-workflow process from docs/workflows/create-workflow.org. New workflows go to =docs/project-workflows/= by default. Only put a workflow in =docs/workflows/= (and =~/projects/claude-templates/docs/workflows/=) if Craig explicitly says it's for all projects.
 
 ** "Wrap it up" / "That's a wrap" / "Let's call it a wrap"
 
 Execute the wrap-up workflow (details in Session Protocols section below):
-1. Write session notes to NOTES.org
+1. Write session notes to notes.org
 2. Git commit and push all changes
 3. Valediction summary
 
@@ -158,7 +184,7 @@ Craig's global task list is available at: =/home/cjennings/sync/org/roam/inbox.o
 Use this to:
 - See all the tasks that he's working on outside of projects like this one
 
-**Note:** Some projects may have a project-specific task file (e.g., =todo.org= at project root). Check NOTES.org for project-specific task locations.
+**Note:** Some projects may have a project-specific task file (e.g., =todo.org= at project root). Check notes.org for project-specific task locations.
 
 ** Working Style
 
@@ -189,18 +215,32 @@ Craig runs a pure Wayland setup (Hyprland) and avoids XWayland/Xorg apps.
 - Craig maintains a remote server at the cjennings.net domain
 - This project is in a git repository which is associated with a remote repository on cjennings.net
 
-** Shell Functions - Alarms
+** Setting Alarms / Reminders
 
-Craig has a shell function for setting reminders.
+Use Craig's =notify= script with the =at= daemon for persistent reminders.
 
 **IMPORTANT:** Always check the current date and time (=date=) before setting alarms to ensure accurate calculations.
 
-*** alarm (PERSISTENT - use for reminders)
-Sets an alarm at a specific time using the =at= daemon. Persists after session ends.
+*** Setting an alarm
+#+begin_src bash
+echo 'notify alarm "Title" "Message"' | at 10:55am
+#+end_src
+
+*** Examples
 #+begin_example
-alarm 10:10am "Take BP reading"
-alarm 2:00pm "Leave for PT"
+echo 'notify alarm "Standup" "Daily standup in 5 minutes"' | at 10:55am
+echo 'notify alarm "BP Reading" "Time to take BP"' | at 2:00pm
+echo 'notify alert "Meeting" "Ryan call starting"' | at 11:25am
 #+end_example
+
+*** Notify types available
+- =alarm= - Alarm clock icon, alarm sound
+- =alert= - Yellow exclamation, attention tone
+- =info= - Blue info icon, confident tone
+- =success= - Green checkmark, pleasant chime
+- =fail= - Red X, warning tone
+
+Full usage: =notify --help= or see =~/.local/bin/notify=
 
 *** Managing alarms
 - =atq= - list all scheduled alarms
@@ -237,12 +277,12 @@ When creating commits:
 ** IMPORTANT: Reminders Protocol
 
 When starting a new session:
-- Check "Active Reminders" section in NOTES.org
+- Check "Active Reminders" section in notes.org
 - Remind Craig of outstanding tasks he's asked to be reminded about
 - This ensures important follow-up actions aren't forgotten between sessions
 
 When Craig says "remind me" about something:
-1. Add it to Active Reminders section in NOTES.org
+1. Add it to Active Reminders section in notes.org
 2. If it's something he needs to DO, also add to the todo.org file in the project root as an org-mode task (e.g., =* TODO [description]=). If this project does not have a todo.org at the project root, alert Craig and offer to create it.
 3. If not already provided, ask for the priority and a date for scheduled or deadline.
 
@@ -250,17 +290,20 @@ When Craig says "remind me" about something:
 
 When Craig says this phrase:
 
-1. **Check for exact match** in docs/workflows/ directory
-   - If exact match found: Read =docs/workflows/[workflow-name].org= and guide through process
+1. **Check =docs/workflows/= for match**
+   - If exact match found: Read and guide through process
    - Example: "refactor workflow" -> read docs/workflows/refactor.org
 
-2. **If no exact match but similar word exists:** Ask for clarification
+2. **Check =docs/project-workflows/= for match**
+   - If exact match found: Read and guide through process
+
+3. **Fuzzy match across both directories:** Ask for clarification
    - Example: User says "empty inbox" but we have "inbox-zero.org"
    - Ask: "Did you mean the 'inbox zero' workflow, or create new 'empty inbox'?"
 
-3. **If no match at all:** Offer to create it
+4. **No match at all:** Offer to create it
    - Say: "I don't see '[workflow-name]' yet. Create it using create-workflow process?"
-   - If yes: Run create-workflow to define it, then use immediately (validates new workflow)
+   - If yes: Run create-workflow — new workflows go to =docs/project-workflows/= by default
 
 ** Long-Running Process Status Updates
 
@@ -313,7 +356,7 @@ When monitoring a long-running process (rsync, large downloads, builds, VM tests
 
 When Craig says any of these phrases (or variations), execute wrap-up workflow:
 
-1. **Write session notes** to NOTES.org (Session History section)
+1. **Write session notes** to notes.org (Session History section)
    - Key decisions made
    - Work completed
    - Context needed for next session
@@ -342,17 +385,17 @@ This ensures clean handoff between sessions and nothing gets lost.
 
 ** The docs/ Directory
 
-Claude needs to add information to NOTES.org. For large amounts of information:
+Claude needs to add information to notes.org. For large amounts of information:
 
 - Create separate document in docs/ directory
-- Link it in NOTES.org with explanation of document's purpose
+- Link it in notes.org with explanation of document's purpose
 - **Project-specific decision:** Should docs/ be committed to git or added to .gitignore?
   - Ask Craig on first session if not specified
   - Some projects keep docs/ private, others commit it
 - Unless specified otherwise, all Claude-generated documents go in docs/ folder
 
 **When to break out documents:**
-- If NOTES.org gets very large (> 1500 lines)
+- If notes.org gets very large (> 1500 lines)
 - If information isn't all relevant anymore
 - Example: Keep only last 3-4 months of session history here, move rest to separate file
 
@@ -448,20 +491,4 @@ mv documents/2025-10-15-invoice.pdf documents/2025-10-15-vendor-invoice.pdf
 
 * Session Start - AUTOMATIC
 
-**IMPORTANT: At the start of EVERY session, Claude MUST:**
-
-1. **Read this file (protocols.org)** - You're doing this now
-2. **Read NOTES.org** - For project-specific context, reminders, and history
-3. **Execute the session-start workflow** - Defined in [[file:workflows/session-start.org][docs/workflows/session-start.org]]
-
-**Do NOT ask** if Craig wants to run the session-start workflow. Just do it automatically and report the results.
-
-The session-start workflow includes:
-- Checking for interrupted previous sessions
-- Syncing with templates
-- Scanning available workflows
-- Processing inbox
-- Surfacing active reminders
-- Asking about priorities
-
-See [[file:workflows/session-start.org][session-start.org]] for full details.
+At the start of EVERY session, run [[file:workflows/startup.org][docs/workflows/startup.org]]. Do NOT ask — just do it automatically.

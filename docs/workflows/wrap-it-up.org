@@ -43,7 +43,7 @@ Without a structured wrap-up process, sessions can end poorly:
 The wrap-up is complete when:
 
 1. **Session history is documented:**
-   - Key decisions made are recorded in NOTES.org
+   - Key decisions made are recorded in notes.org
    - Work completed is summarized clearly
    - Context needed for next session is captured
    - Pending issues or blockers are noted
@@ -64,7 +64,7 @@ The wrap-up is complete when:
 *Measurable validation:*
 - =git status= shows "working tree clean"
 - =git log -1= shows today's session commit
-- Session History section in NOTES.org has new entry
+- Session History section in notes.org has new entry
 - User has clear sense of what was accomplished and what's next
 
 * When to Use This Workflow
@@ -86,11 +86,11 @@ If this is the first time using this workflow in a project, perform this one-tim
 
 ** Clean Up Old "Wrap It Up" Documentation
 
-Before using this workflow, check if NOTES.org contains old/redundant "wrap it up" instructions:
+Before using this workflow, check if notes.org contains old/redundant "wrap it up" instructions:
 
-1. **Search NOTES.org for duplicate content:**
+1. **Search notes.org for duplicate content:**
    #+begin_src bash
-   grep -n "Wrap it up\|wrap-up" docs/NOTES.org
+   grep -n "Wrap it up\|wrap-up" docs/notes.org
    #+end_src
 
 2. **Look for sections that duplicate this workflow:**
@@ -101,14 +101,14 @@ Before using this workflow, check if NOTES.org contains old/redundant "wrap it u
 
 3. **Replace with link to this workflow:**
    - Remove the detailed inline instructions
-   - Replace with: "See [[file:docs/workflows/session-wrap-up.org][Session Wrap-Up Workflow]]"
+   - Replace with: "See [[file:docs/workflows/wrap-it-up.org][Session Wrap-Up Workflow]]"
    - Keep brief summary if helpful for quick reference
 
 4. **Why this matters:**
    - Prevents conflicting instructions (e.g., different git commit formats)
    - Single source of truth for wrap-up process
    - Easier to maintain and update in one place
-   - Reduces NOTES.org file size
+   - Reduces notes.org file size
 
 **Example cleanup:**
 
@@ -125,7 +125,7 @@ When Craig says this:
 After:
 #+begin_example
 *** "Wrap it up"
-Execute the wrap-up workflow defined in [[file:docs/workflows/session-wrap-up.org][session-wrap-up.org]].
+Execute the wrap-up workflow defined in [[file:docs/workflows/wrap-it-up.org][wrap-it-up.org]].
 
 Brief summary: Write session notes, git commit/push (no Claude attribution), valediction.
 #+end_example
@@ -134,9 +134,9 @@ This cleanup should only be done ONCE when first adopting this workflow.
 
 * The Workflow
 
-** Step 1: Write Session Notes to NOTES.org
+** Step 1: Write Session Notes to notes.org
 
-Add new entry to Session History section in =docs/NOTES.org=
+Add new entry to Session History section in =docs/notes.org=
 
 *** Format for Session Entry
 
@@ -199,7 +199,7 @@ Brief summary of where things stand after this session.
 
 *** Where to Add Session Notes
 
-- Open =docs/NOTES.org=
+- Open =docs/notes.org=
 - Navigate to "Session History" section (near end of file)
 - Add new =** Session:= entry at the TOP of the session list (most recent first)
 - Use today's date in format: "Month Day, Year"
@@ -210,11 +210,11 @@ Brief summary of where things stand after this session.
 After adding the current session notes, check if there are more than 5 sessions in the Session History section and move older ones to the archive:
 
 1. **Count sessions in Session History:**
-   - Count the number of =** Session:= entries in NOTES.org Session History section
+   - Count the number of =** Session:= entries in notes.org Session History section
    - If 5 or fewer sessions exist, skip to next step (nothing to archive)
 
 2. **Identify sessions to archive:**
-   - Keep the 5 most recent sessions in NOTES.org
+   - Keep the 5 most recent sessions in notes.org
    - Mark all older sessions (6th and beyond) for archiving
 
 3. **Move old sessions to archive:**
@@ -226,11 +226,11 @@ After adding the current session notes, check if there are more than 5 sessions 
 
        * Archived Sessions
 
-       This file contains archived session history from NOTES.org.
+       This file contains archived session history from notes.org.
        Sessions are in reverse chronological order (most recent first).
        #+end_example
    - Open =docs/previous-session-history.org=
-   - Cut old session entries from NOTES.org (6th session and beyond)
+   - Cut old session entries from notes.org (6th session and beyond)
    - Paste them at the TOP of "Archived Sessions" section in previous-session-history.org
    - Keep reverse chronological order (most recent archived session first)
    - Save both files
@@ -239,7 +239,7 @@ After adding the current session notes, check if there are more than 5 sessions 
    - If there are 5 or fewer sessions in Session History
    - Just continue to next step
 
-This keeps NOTES.org focused on recent work while preserving full history.
+This keeps notes.org focused on recent work while preserving full history.
 
 ** Step 2: Git Commit and Push
 
@@ -498,7 +498,7 @@ Do NOT:
 
 Before considering wrap-up complete, verify:
 
-- [ ] Session History entry added to NOTES.org with today's date
+- [ ] Session History entry added to notes.org with today's date
 - [ ] Work completed is clearly documented
 - [ ] Context for next session is captured
 - [ ] Key decisions and rationale are recorded

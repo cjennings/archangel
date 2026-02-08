@@ -11,6 +11,10 @@ Run after:
 
 * The Process
 
+** 0. Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss. 
+
 ** 1. Trigger the Retrospective
 
 Either party can say: "Let's do a retrospective" or "Retrospective time"
