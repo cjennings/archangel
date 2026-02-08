@@ -202,7 +202,7 @@ Goal: Update all docs for dual-filesystem support.
 
 ** 6.3 New docs
 - [ ] Create BTRFS.org with btrfs-specific details
-- [ ] Update NOTES.org project context
+- [ ] Update notes.org project context
 
 * Schedule (Suggested Order)
 

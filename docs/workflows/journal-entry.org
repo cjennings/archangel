@@ -34,7 +34,7 @@ Without regular journal entries, several problems emerge:
 
 We know a journal entry is complete when:
 
-1. **Draft has been created** - Claude writes initial first-person draft based on NOTES.org session data
+1. **Draft has been created** - Claude writes initial first-person draft based on notes.org session data
 2. **Revisions are complete** - Craig provides corrections and context until satisfied
 3. **Entry is added to journal file** - Text is added to the org-roam daily journal at ~/sync/org/roam/journal/YYYY-MM-DD.org
 4. **Craig approves** - Craig explicitly approves or indicates no more revisions needed
@@ -57,10 +57,13 @@ Trigger this workflow when:
 This is typically done at the end of the day to capture that day's activities.
 
 * Approach: How We Work Together
+** Step 0: Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss. 
 
 ** Step 1: Review the Day's Work
 
-Check the project's NOTES.org file for today's session entries. This is your primary source for:
+Check the project's notes.org file for today's session entries. This is your primary source for:
 - Accomplishments achieved
 - Decisions made
 - Meetings or calls attended
@@ -126,7 +129,9 @@ Once approved:
 
 ** Step 6: Wrap Up
 
-After adding the journal entry, ask Craig: "Are we done for the evening, or is there anything else that needs to be done?"
+Update the session context file. 
+
+After updating the session context file, ask Craig: "Are we done for the evening, or is there anything else that needs to be done?"
 
 Since journal entries typically happen at end of day, this provides a natural session close.
 
@@ -161,7 +166,7 @@ Since journal entries typically happen at end of day, this provides a natural se
 - Save insights for future reference
 
 ** Use Session Data
-- Start from NOTES.org session entries for the day
+- Start from notes.org session entries for the day
 - Don't rely on memory - check the documented record
 - Include key decisions, accomplishments, and next steps
 
@@ -178,7 +183,7 @@ Every journal entry is an opportunity to improve this workflow.
 
 * Example Journal Entry
 
-Here's an example from 2025-11-07 (JR-Estate project):
+Here's an example of the tone, narrative flow, and level of detail to aim for:
 
 #+begin_quote
 Big day. We sold Gogo's condo.

@@ -75,6 +75,9 @@ Examples:
 - "Let's design a workflow for weekly planning"
 
 * Approach: How We Work Together
+** Phase 0: Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. This might be a long process. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss. 
 
 ** Phase 1: Question and Answer Discovery
 
@@ -222,7 +225,7 @@ Write the workflow file at =docs/workflows/[name].org= using this structure:
 
 ** Phase 5: Update Project State
 
-Update =NOTES.org=:
+Update =notes.org=:
 1. Add new workflow to "Available Workflows" section
 2. Include brief description and reference to file
 3. Note creation date
@@ -239,7 +242,10 @@ Workflow for processing inbox to zero:
 Created: 2025-11-01
 #+end_src
 
-** Phase 6: Validate by Execution
+** Phase 6: Cleanup
+Write out the session context file before proceeding any further
+
+** Phase 7: Validate by Execution
 
 *Critical step:* Use the workflow soon after creating it.
 
@@ -333,7 +339,7 @@ This very document was created using the process it describes (recursive!).
 ** The Q&A
 - *Problem:* Time waste, errors, missed learning from informal processes
 - *Exit criteria:* Logical arrangement, mutual understanding, agreement on effectiveness, actionable tasks
-- *Approach:* Four-question Q&A, assess completeness, name it, document it, update NOTES.org, validate by use
+- *Approach:* Four-question Q&A, assess completeness, name it, document it, update notes.org, validate by use
 - *Principles:* Collaboration through discussion, review the whole, concrete over abstract, actionable tasks, validate early, decision frameworks, question assumptions
 
 ** The Result

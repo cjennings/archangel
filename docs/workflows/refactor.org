@@ -14,6 +14,10 @@ This document describes a comprehensive test-driven quality engineering workflow
 4. Demonstrate refactoring patterns for testability
 5. Document the decision-making process for test vs production code issues
 
+* Phase 0: Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss. 
+
 * Phase 1: Feature Addition with Testability in Mind
 
 ** The Feature Request

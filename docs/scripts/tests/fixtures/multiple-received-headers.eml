@@ -1,0 +1,12 @@
+From: Jonathan Smith <jsmith@example.com>
+To: Craig Jennings <craig@example.com>
+Subject: Multiple Received Headers Test
+Date: Thu, 05 Feb 2026 11:36:00 -0600
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+Received: by internal.example.com with SMTP; Thu, 05 Feb 2026 11:36:10 -0600
+Received: from mail-sender.example.com by mx.receiver.example.com with ESMTP; Thu, 05 Feb 2026 11:36:05 -0600
+Received: from originator.example.com by relay.example.com with SMTP; Thu, 05 Feb 2026 11:35:58 -0600
+
+Test body with multiple received headers.
