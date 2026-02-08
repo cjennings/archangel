@@ -1,0 +1,116 @@
+#+TITLE: Extract Email Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-06
+
+* Overview
+
+Extract email content and attachments from an EML file, rename with a consistent naming convention, and refile to =assets/=.
+
+* When to Use This Workflow
+
+When Craig says:
+- "extract the email"
+- "get the attachment from [email]"
+- "pull the info from [email]"
+- "process the email in inbox"
+
+* Sources
+
+The EML file may come from two places:
+
+** Already in =inbox/=
+
+Emails dropped into the project's =inbox/= directory via Syncthing, manual copy, or other means. These are ready for extraction immediately.
+
+** From =~/.mail/=
+
+Emails in the local maildir managed by mbsync/mu. Use the [[file:find-email.org][find-email workflow]] to locate the message, then copy (don't move) it into =inbox/= before proceeding. Never modify =~/.mail/= directly.
+
+* The Workflow
+
+** Step 0: Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. If there are a lot of emails, this will be a long process. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss.
+
+** Step 1: Run Extraction Script
+
+Run the extraction script with =--output-dir= to perform the full pipeline (create temp dir, parse, auto-rename, extract attachments, refile, clean up):
+
+#+begin_src bash
+python3 docs/scripts/eml-view-and-extract-attachments.py inbox/message.eml --output-dir assets/
+#+end_src
+
+The script automatically:
+- Parses email headers, body, and attachments
+- Generates filenames using the naming convention (see below)
+- Creates =.eml= (renamed copy), =.txt= (body text), and attachment files
+- Checks for filename collisions in the output directory
+- Moves all files to =assets/=
+- Cleans up its temp directory
+- Prints a summary of created files
+
+** Step 2: Review Summary Output
+
+Review the script's summary output and verify:
+- Filenames look correct (rename manually if needed)
+- Delete junk attachments (e.g., signature logos, tracking pixels)
+- Delete source EML from inbox after confirming results
+
+** Step 3: Report Results
+
+Report to Craig:
+- Summary of email content
+- What files were extracted and their final names
+- Where files were saved
+
+* Naming Convention
+
+Pattern: =YYYY-MM-DD-HHMM-Sender-TYPE-Description.ext=
+
+| Component   | Source                                                                    |
+|-------------+---------------------------------------------------------------------------|
+| YYYY-MM-DD  | From the email's Date header (server time)                                |
+| HHMM        | Hours and minutes from the Date header                                    |
+| Sender      | First name of the sender                                                  |
+| TYPE        | =EMAIL= for the email body (.eml and .txt), =ATTACH= for attachments          |
+| Description | Shortened subject line for EMAIL files; original filename for ATTACH files |
+
+** Example
+
+For an email from Jonathan Smith, subject "Re: Fw: 4319 Danneel Street", sent 2026-02-05 at 11:36, with a PDF attachment "Ltr Carrollton.pdf":
+
+#+begin_src
+2026-02-05-1136-Jonathan-EMAIL-Re-Fw-4319-Danneel-Street.eml
+2026-02-05-1136-Jonathan-EMAIL-Re-Fw-4319-Danneel-Street.txt
+2026-02-05-1136-Jonathan-ATTACH-Ltr-Carrollton.pdf
+#+end_src
+
+* Backwards-Compatible Mode
+
+Without =--output-dir=, the script behaves as before: prints metadata and body to stdout, extracts attachments alongside the EML file. This is useful for quick inspection without filing.
+
+#+begin_src bash
+python3 docs/scripts/eml-view-and-extract-attachments.py inbox/message.eml
+#+end_src
+
+* Batch Processing
+
+When processing multiple emails, complete all steps for one email before starting the next. Do not parallelize across emails.
+
+* Principles
+
+- *Never modify =~/.mail/=* — always copy first, work on the copy
+- *EML is authoritative* — always keep it alongside extracted files
+- *Use email Date header for timestamps* — not extraction time
+- *Refer to find-email for maildir searches* — don't duplicate those instructions
+- *Script checks for collisions* — won't overwrite existing files in output dir
+- *One email at a time* — complete the full cycle before starting the next
+- *Source EML stays untouched* — the script copies, never moves the source; Claude deletes after verifying results
+
+* Tools Reference
+
+| Tool                                | Purpose                         |
+|-------------------------------------+---------------------------------|
+| eml-view-and-extract-attachments.py | Extract content and attachments |
+
+Script location: =docs/scripts/eml-view-and-extract-attachments.py=

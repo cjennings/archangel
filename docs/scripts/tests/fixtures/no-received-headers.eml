@@ -1,0 +1,9 @@
+From: Jonathan Smith <jsmith@example.com>
+To: Craig Jennings <craig@example.com>
+Subject: No Received Headers
+Date: Thu, 05 Feb 2026 11:36:00 -0600
+MIME-Version: 1.0
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Test body with no received headers at all.
