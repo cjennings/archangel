@@ -1,0 +1,183 @@
+#+TITLE: Email Assembly Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-01-29
+
+* Overview
+
+This workflow assembles documents for an email that will be sent via Craig's email client (Proton Mail). It creates a temporary workspace, gathers relevant documents, drafts the email, and cleans up after sending.
+
+Use this workflow when Craig needs to send an email with multiple attachments that require gathering from various locations in the project.
+
+* When to Use This Workflow
+
+When Craig says:
+- "assemble an email" or "email assembly workflow"
+- "gather documents for an email"
+- "I need to send [person] some documents"
+
+* The Workflow
+
+** Step 0: Context Window Hygiene
+- Write out the session context file.
+- Inform the user that you've written out the session context file and ask if they want to compact the context now before beginning. 
+
+** Step 1: Create Temporary Workspace
+
+Create a temporary folder at the project root:
+
+#+begin_src bash
+mkdir -p ./tmp
+#+end_src
+
+This folder will hold:
+- Copies of all attachments
+- The draft email text
+
+** Step 2: Identify Required Documents
+
+Discuss with Craig what documents are needed. Common categories:
+- Legal documents (deeds, certificates, agreements)
+- Financial documents (statements, invoices)
+- Correspondence (prior emails, letters)
+- Identity documents (death certificates, ID copies)
+
+For each document:
+1. Locate it in the project
+2. Confirm with Craig it's the right one
+3. Open it in zathura for Craig to verify if needed
+
+** Step 3: Copy Documents to Workspace
+
+**IMPORTANT: Always COPY, never MOVE documents.**
+
+#+begin_src bash
+cp /path/to/original/document.pdf ./tmp/
+#+end_src
+
+After copying, list the workspace contents to confirm:
+
+#+begin_src bash
+ls -lh ./tmp/
+#+end_src
+
+** Step 4: Draft the Email
+
+Create a draft email file in the workspace:
+
+#+begin_src bash
+./tmp/email-draft.txt
+#+end_src
+
+Include:
+- To: (recipient email)
+- Subject: (clear, descriptive subject line)
+- Body: (context, list of attachments, contact info)
+
+The body should:
+- Provide context for why documents are being sent
+- List all attachments with brief descriptions
+- Include Craig's contact information
+
+** Step 5: Open Draft in Emacs
+
+Open the draft for Craig to review and edit:
+
+#+begin_src bash
+emacsclient -n ./tmp/email-draft.txt
+#+end_src
+
+Wait for Craig to finish editing before proceeding.
+
+** Step 6: Craig Sends Email
+
+Craig will:
+1. Open his email client (Proton Mail)
+2. Create a new email using the draft text
+3. Attach documents from the tmp folder
+4. Send the email
+
+** Step 7: Process Sent Email
+
+Once Craig confirms the email was sent:
+
+1. Craig saves the sent email to the project inbox
+2. Use the **extract-email workflow** to process it:
+   - Create extraction directory
+   - Copy email to extraction directory
+   - Run extraction script
+   - Rename with server timestamp: =YYYY-MM-DD_HHMMSS_description.ext=
+   - Refile to appropriate location
+   - Clean up extraction directory
+
+See [[file:extract-email.org][extract-email workflow]] for full details.
+
+** Step 8: Clean Up Workspace 
+
+Delete the temporary folder:
+
+#+begin_src bash
+rm -rf ./tmp/
+#+end_src
+
+** Step 9: Update Context Window 
+Update the session context file before exiting this workflow. 
+
+* Best Practices
+
+** Document Verification
+
+Before copying documents:
+- Open each one in zathura for Craig to verify
+- Confirm it's the correct version
+- Check that sensitive information is appropriate to send
+
+** Email Draft Structure
+
+A good email draft includes:
+
+#+begin_example
+To: recipient@example.com
+Subject: [Clear Topic] - [Property/Case Reference]
+
+Hi [Name],
+
+[Opening - context for why you're sending this]
+
+[Middle - explanation of what's attached and why]
+
+Attached are the following documents:
+
+1. [Document name] - [brief description]
+2. [Document name] - [brief description]
+3. [Document name] - [brief description]
+
+[Closing - next steps, request for confirmation, offer to provide more]
+
+Thank you,
+
+Craig Jennings
+510-316-9357
+c@cjennings.net
+#+end_example
+
+** Filing Conventions
+
+When refiling sent emails:
+- Use format: =YYYY-MM-DD_HHMMSS_description.ext= (server timestamp)
+- File in the most relevant project folder (check project's notes.org for conventions)
+- Clean up extraction directory after refiling
+
+* Example Usage
+
+Craig: "I need to send Seabreeze the documents for the HOA refund"
+
+Claude:
+1. Creates ./tmp/ folder
+2. Discusses needed documents (death certificate, closing docs, purchase agreement)
+3. Locates and opens each document for verification
+4. Copies verified documents to ./tmp/
+5. Drafts email and opens in emacsclient
+6. Craig edits, then sends via Proton Mail
+7. Craig saves sent email to inbox
+8. Claude extracts, reads, renames, and refiles email
+9. Claude deletes ./tmp/ folder

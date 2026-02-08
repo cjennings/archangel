@@ -1,0 +1,108 @@
+#+TITLE: Sync Email Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-01
+
+* Overview
+
+This workflow syncs local maildir with remote email servers (Gmail and cmail/Proton) and updates the mu index for local searching.
+
+* Problem We're Solving
+
+Email lives on remote servers. To search or read emails locally, the local maildir needs to be updated from the servers. Without syncing, local tools (mu4e, mu find) only see stale data.
+
+* Exit Criteria
+
+Sync is complete when:
+1. mbsync finishes successfully (exit code 0)
+2. mu index completes successfully
+3. Sync summary is reported (new messages, any errors)
+
+* When to Use This Workflow
+
+When Craig says:
+- "sync email" or "sync mail"
+- "pull new mail"
+- "check for new email"
+- Before any workflow that needs to search or read local email
+
+* The Workflow
+
+** Step 1: Sync All Accounts
+
+Run mbsync to pull mail from all configured accounts:
+
+#+begin_src bash
+mbsync -a
+#+end_src
+
+This syncs both gmail and cmail accounts as configured in ~/.mbsyncrc.
+
+** Step 2: Index Mail
+
+Update the mu database to make new mail searchable:
+
+#+begin_src bash
+mu index
+#+end_src
+
+mu index is incremental by default - it only indexes new/changed messages.
+
+** Step 3: Report Results
+
+Report to Craig:
+- Number of new messages pulled (if visible in mbsync output)
+- Any errors encountered
+- Confirmation that sync and index completed
+
+** Handling Errors
+
+If errors occur, diagnose at that step. Common issues:
+
+*** UIDVALIDITY Errors
+
+UIDVALIDITY errors occur when UIDs change on the server (Proton Bridge resets) or when mu4e moves files without renaming them.
+
+*Prevention (mu4e users):* Add to Emacs config:
+#+begin_src elisp
+(setq mu4e-change-filenames-when-moving t)
+#+end_src
+
+*If errors occur:*
+1. First, try running mbsync again - [[https://isync.sourceforge.io/mbsync.html][official docs]] say it "will recover just fine if the change is unfounded"
+2. If errors persist, reset sync state (only if mail is safe on server):
+#+begin_src bash
+find ~/.mail/cmail -name ".uidvalidity" -delete
+find ~/.mail/cmail -name ".mbsyncstate" -delete
+mbsync cmail
+#+end_src
+
+*References:*
+- [[https://isync.sourceforge.io/mbsync.html][mbsync official documentation]]
+- [[https://pragmaticemacs.wordpress.com/2016/03/22/fixing-duplicate-uid-errors-when-using-mbsync-and-mu4e/][Fixing duplicate UID errors with mbsync and mu4e]]
+- [[https://www.julioloayzam.com/guides/recovering-from-a-mbsync-uidvalidity-change/][Recovering from mbsync UIDVALIDITY change]]
+
+*** Connection Errors
+- Gmail: Check network, may need app password refresh
+- cmail: Ensure Proton Bridge is running (check port 1143)
+
+#+begin_src bash
+ss -tlnp | grep 1143
+#+end_src
+
+* Mail Configuration Reference
+
+| Account | Local Path    | IMAP Server        |
+|---------+---------------+--------------------|
+| gmail   | ~/.mail/gmail | imap.gmail.com     |
+| cmail   | ~/.mail/cmail | 127.0.0.1:1143     |
+
+* Principles
+
+- **Sync all accounts by default** - Unless Craig specifies a single account
+- **No pre-checks** - Don't verify connectivity before running; diagnose if errors occur
+- **Trust the tools** - mbsync and mu are robust; don't add unnecessary validation
+- **Never modify ~/.mail/ directly** - Read-only operations only; mbsync manages the maildir
+
+* Living Document
+
+Update this workflow as we discover new patterns or issues with email syncing.

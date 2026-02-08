@@ -1,0 +1,165 @@
+#+TITLE: Set Alarm Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-01-31
+#+UPDATED: 2026-02-02
+
+* Overview
+
+This workflow enables Claude to set timers and alarms that reliably notify Craig, even if the terminal session ends or is accidentally closed. Notifications are distinctive (audible + visual with alarm icon) and persist until manually dismissed.
+
+Uses the =notify= command (alarm type) for consistent notifications across all AI workflows.
+
+* Problem We're Solving
+
+Notifications from AI sessions have several issues:
+
+1. *Too easy to miss* - Among many dunst notifications, AI alerts blend in
+2. *Not audible* - Dunst notifications are visual-only by default
+3. *Lost on terminal close* - If the terminal is accidentally closed, scheduled notifications never fire
+
+*Impact:* Missed notifications lead to lost time and reduced productivity. Tasks that depend on timely reminders get forgotten or delayed.
+
+* Exit Criteria
+
+The workflow is successful when:
+
+1. AI-set alarms are never missed
+2. Notifications are immediately noticeable, even when away from desk (audible)
+3. Notifications persist until manually dismissed (no auto-fade)
+4. Alarms fire regardless of whether the Claude session has ended or terminal was closed
+
+* When to Use This Workflow
+
+Use this workflow when:
+
+- Craig asks you to remind him about something at a specific time
+- A long-running task needs a check-in notification
+- Craig needs to leave the desk but wants to be alerted when to return
+- Any situation requiring a timed notification that must not be missed
+
+Examples:
+- "Set an alarm for 5pm to wrap up"
+- "Remind me in 30 minutes to check the build"
+- "Set a timer for 1 hour - time to take a break"
+
+* Approach: How We Work Together
+
+** Step 1: Craig Requests an Alarm
+
+Craig tells Claude when and why:
+- "Set a timer for 45 minutes - meeting starts"
+- "Alarm at 3:30pm to call the dentist"
+
+** Step 2: Claude Sets the Alarm
+
+Claude schedules the alarm using the =at= daemon with =notify=:
+
+#+begin_src bash
+echo "notify alarm 'Alarm' 'Time to call the dentist' --persist" | at 3:30pm
+echo "notify alarm 'Alarm' 'Meeting starts' --persist" | at now + 45 minutes
+#+end_src
+
+The =at= daemon:
+1. Schedules the notification (survives terminal close)
+2. Confirms the alarm was set with the scheduled time
+
+** Step 3: Alarm Fires
+
+When the scheduled time arrives:
+1. Distinctive sound plays (alarm.ogg)
+2. Dunst notification appears with:
+   - Alarm icon
+   - The custom message provided
+   - Normal urgency (not critical - doesn't imply emergency)
+   - No timeout (persists until dismissed)
+
+** Step 4: Craig Responds
+
+Craig dismisses the notification and acts on it.
+
+* Implementation
+
+** Setting Alarms
+
+Use the =at= daemon to schedule a =notify alarm= command:
+
+#+begin_src bash
+# Schedule alarm for specific time
+echo "notify alarm 'Alarm' 'Meeting starts' --persist" | at 3:30pm
+
+# Schedule alarm for relative time
+echo "notify alarm 'Alarm' 'Check the build' --persist" | at now + 30 minutes
+
+# Schedule alarm for tomorrow
+echo "notify alarm 'Alarm' 'Call the dentist' --persist" | at 3:30pm tomorrow
+#+end_src
+
+** Notification System
+
+Uses the =notify= command with the =alarm= type. The =notify= command provides 8 notification types with matching icons and sounds.
+
+#+begin_src bash
+# Immediate alarm notification (for testing)
+notify alarm "Alarm" "Your message here" --persist
+#+end_src
+
+The =--persist= flag keeps the notification on screen until manually dismissed.
+
+** Managing Alarms
+
+#+begin_src bash
+# List pending alarms
+atq
+
+# Cancel an alarm by job number
+atrm JOB_NUMBER
+#+end_src
+
+The =at= command accepts various time formats:
+- =now + 30 minutes= - relative time
+- =now + 1 hour= - relative time
+- =3:30pm= - specific time today
+- =3:30pm tomorrow= - specific time tomorrow
+- =noon= - 12:00pm today
+- =midnight= - 12:00am tonight
+* Principles to Follow
+
+** Reliability
+The alarm must fire. Use the =at= daemon which is designed for exactly this purpose and survives terminal closure and session changes.
+
+** Efficiency
+Simple invocation - Claude runs one command. No complex setup required per alarm.
+
+** Fail Audibly
+If the alarm fails to schedule, report the error clearly. Don't fail silently.
+
+** Testable
+The =notify alarm= command can be called directly to verify notifications work without waiting for a timer.
+
+** Non-Alarming
+Use normal urgency, not critical. The notification should be noticeable but not imply something has gone horribly wrong.
+
+* Limitations (Current Version)
+
+- *Does not survive logout/reboot* - Alarms scheduled via =at= are lost on logout/reboot
+- *No alarm management UI* - Use =atq= to list and =atrm= to remove alarms manually
+
+Future versions may add:
+- Reboot persistence via systemd timers or alarm state file
+
+* Living Document
+
+Update this workflow as we learn what works:
+- Sound choices that are distinctive but not jarring
+- Icon that clearly indicates alarm origin
+- Any edge cases discovered in use
+
+** Sound Resources
+
+For future notification sounds:
+- Local collection: =~/documents/sounds/= (various notification tones)
+- https://notificationsounds.com - good selection of clean notification tones
+- https://mixkit.co/free-sound-effects/notification/ - royalty-free sounds
+
+See =notify= package for the unified notification system used across all AI workflows.
+

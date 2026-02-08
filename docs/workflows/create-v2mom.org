@@ -88,9 +88,13 @@ Trigger this V2MOM creation workflow when:
 
 * Approach: How We Work Together
 
+** Phase 0: Context Hygiene
+
+Before starting, write out the session context file and check with Craig whether we could compact the context. This might be a long process. If the context window collapses, we may forget important details. Writing out the session context prevents this data loss. 
+
 ** Phase 1: Understand the V2MOM Framework
 
-Before starting, ensure both parties understand what each section means:
+Ensure both parties understand what each section means:
 
 - *Vision:* What you want to achieve (aspirational, clear picture of success)
 - *Values:* Principles that guide decisions (2-4 values, defined concretely)
@@ -215,6 +219,8 @@ Software Package V2MOM:
 *Method Ordering is Flexible:* After defining all methods, you may realize the ordering is wrong. For example, security (Method 5) might be more important than tool modernization (Method 4). Methods can be swapped - the order represents priority, so getting it right matters more than preserving the initial order.
 
 *Time estimate:* 45-90 minutes (longest section)
+
+Note: It would be a good to write out the session context file after each method. This helps prevent loss of data if the context auto-compacts. 
 
 ** Phase 5.6: Brainstorm Additional Tasks for Each Method
 
@@ -446,6 +452,8 @@ Once the V2MOM feels complete:
 4. **Schedule first review** (1 week out: is this working?)
 
 *Why use immediately:* Validates the V2MOM is practical, not theoretical. Execution reveals gaps that discussion misses.
+
+Note: As before, write out the session context file to prevent any details from getting lost. 
 
 * Principles to Follow
 

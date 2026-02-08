@@ -175,7 +175,7 @@ Workflow:
 2. Assess completeness
 3. Name the workflow
 4. Document it
-5. Update NOTES.org
+5. Update notes.org
 6. Validate by execution
 
 Created: [Date when workflow was created]
@@ -201,8 +201,8 @@ Applicable to: Any project (health, finance, software, personal infrastructure, 
 
 Created: 2025-11-05
 
-** session-start
-File: [[file:workflows/session-start.org][docs/workflows/session-start.org]]
+** startup
+File: [[file:workflows/startup.org][docs/workflows/startup.org]]
 
 Workflow for beginning a Claude Code session with proper context and priorities.
 
@@ -210,9 +210,9 @@ Triggered by: **Automatically at the start of EVERY session**
 
 Workflow:
 1. Add session start timestamp (check for interrupted sessions)
-2. Sync with templates (exclude NOTES.org and previous-session-history.org)
+2. Sync with templates (exclude notes.org and previous-session-history.org)
 3. Scan workflows directory for available workflows
-4. Read key NOTES.org sections (NOT entire file)
+4. Read key notes.org sections (NOT entire file)
 5. Process inbox (mandatory)
 6. Ask about priorities (urgent work vs what's-next workflow)
 
@@ -220,15 +220,15 @@ Ensures: Full context, current templates, processed inbox, clear session directi
 
 Created: 2025-11-14
 
-** session-wrap-up
-File: [[file:workflows/session-wrap-up.org][docs/workflows/session-wrap-up.org]]
+** wrap-it-up
+File: [[file:workflows/wrap-it-up.org][docs/workflows/wrap-it-up.org]]
 
 Workflow for ending a Claude Code session cleanly with proper documentation and version control.
 
 Triggered by: "wrap it up," "that's a wrap," "let's call it a wrap," or similar phrases
 
 Workflow:
-1. Write session notes to NOTES.org Session History section
+1. Write session notes to notes.org Session History section
 2. Archive sessions older than 5 sessions to previous-session-history.org
 3. Git commit and push all changes (NO Claude attribution)
 4. Provide brief valediction with accomplishments and next steps
@@ -326,6 +326,33 @@ Each entry should use this format:
 - Link to files using org-mode =file:= links
 
 ** Session Entries
+
+*** 2026-02-07 Sat @ 21:36 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Synced templates from claude-templates (protocols.org, workflows, scripts updated)
+- Executed announcements:
+  1. Deleted old renamed workflows (session-wrap-up.org, retrospective-workflow.org, session-start.org) - replaced by wrap-it-up.org, retrospective.org, startup.org
+  2. Confirmed no docs/templates/ cache to remove
+  3. Renamed NOTES.org to notes.org, updated all internal references
+- Updated workflow catalog in notes.org to reflect renamed workflows
+
+*Files Modified:*
+- [[file:notes.org][docs/notes.org]] - Renamed from NOTES.org, updated references and workflow catalog
+- [[file:protocols.org][docs/protocols.org]] - Synced from template
+- [[file:previous-session-history.org][docs/previous-session-history.org]] - Updated NOTES.org references
+- [[file:PLAN-archangel-btrfs.org][docs/PLAN-archangel-btrfs.org]] - Updated NOTES.org reference
+
+*Files Deleted:*
+- docs/workflows/session-wrap-up.org (replaced by wrap-it-up.org)
+- docs/workflows/retrospective-workflow.org (replaced by retrospective.org)
+- docs/workflows/session-start.org (replaced by startup.org)
+
+*Files Added (from template):*
+- New workflows: wrap-it-up.org, retrospective.org, startup.org, set-alarm.org, status-check.org, send-email.org, find-email.org, extract-email.org, sync-email.org, email-assembly.org
+- docs/scripts/ updates
 
 *** 2026-01-25 Sun @ 00:15-08:34 -0600
 
