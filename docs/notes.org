@@ -287,7 +287,7 @@ Implementation is ready - just need Craig's preference.
 
 ** Current Reminders
 
-(None currently - will be added as needed)
+- [2026-02-12] Verify TrueNAS ISO hash matches local: =d17351445e4110ed2cf7190c25dc5fa91ec7325bb34644bbca1515fcd876d251=. TrueNAS was unreachable at end of session. Push hash file to truenas isos directory after verifying.
 
 ** Instructions for This Section
 
@@ -326,6 +326,43 @@ Each entry should use this format:
 - Link to files using org-mode =file:= links
 
 ** Session Entries
+
+*** 2026-02-12 Thu @ 08:23-16:08 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Rebuilt archangel ISO for linux-lts 6.12.70-1 kernel
+- ISO: archangel-vmlinuz-6.12.70-lts-2026-02-12-x86_64.iso (2.3G)
+- All tests passed: sanity (26/26), single-disk, mirror, raidz1
+- Fixed archzfs GPG key prompt hanging unattended installs (SigLevel → Never)
+- Fixed pgrep false positive in full-test.sh (avahi matched hostname pattern)
+- Bumped INSTALL_TIMEOUT from 900s to 1800s for DKMS builds
+- Added local distribution to build-release (~/downloads/isos + archsetup inbox notification)
+- Distributed ISO to ~/downloads/isos and truenas.local:/mnt/vault/isos
+- Audited codebase for open-source readiness, added todo.org task with full checklist
+- Dropped SSH access info and test VM rebuild notice in archsetup inbox
+
+*Key Decisions:*
+- archzfs SigLevel changed to Never (HTTPS provides transport security; GPG key management kept breaking unattended installs)
+- USB drives removed as distribution target
+- build-release now handles ~/downloads/isos and archsetup inbox automatically
+
+*Bugs Found and Fixed:*
+1. archzfs GPG key prompt: pacstrap -K creates empty keyring, pacman-key -r silently fails, pacman prompts interactively → changed SigLevel to Never in custom/archangel (2 locations)
+2. Test pgrep false positive: pgrep -f 'archangel' matched avahi-daemon's "running [archangel.local]" → changed to pgrep -f '/usr/local/bin/archangel'
+3. Install timeout: 15 min too short for DKMS compile in VM → bumped to 30 min
+
+*Files Modified:*
+- [[file:../custom/archangel][custom/archangel]] — SigLevel fix (install_base + configure_system)
+- [[file:../scripts/full-test.sh][scripts/full-test.sh]] — pgrep fix, timeout bump
+- [[file:../scripts/build-release][scripts/build-release]] — local distribution + archsetup inbox
+- [[file:../todo.org][todo.org]] — open-sourcing prep task
+
+*Next Steps:*
+- Verify TrueNAS ISO hash (was unreachable at session end)
+- Fix TrueNAS connectivity issues
+- Continue with open-sourcing prep or other todo.org items
 
 *** 2026-02-07 Sat @ 21:36 -0600
 
@@ -520,122 +557,4 @@ Each entry should use this format:
 - Rebuild initramfs from live ISO
 - Verify fixes active after reboot
 
-*** 2026-01-22 Thu @ 15:02 -0600
-
-*Status:* COMPLETE
-
-*What We Completed:*
-- Diagnosed and fixed ratio (Framework Desktop, AMD Strix Halo) boot failures
-- Root cause: missing linux-firmware 20260110 caused amdgpu to freeze at boot
-- Installed linux-firmware 20260110-1, fixed ZFS mountpoints, fixed hostid mismatch
-- Configured kernel 6.15.2 as default (pinned), created clean GRUB menu
-- Created retrospective workflow for continuous improvement
-- Added PRINCIPLES.org with behavioral lessons learned
-- Documented full troubleshooting session
-
-*Key Decisions:*
-- linux-firmware version is critical for AMD Strix Halo (20260110+ required)
-- ZFS rollback with separate /boot partition is dangerous - recommend ZFSBootMenu
-- Established retrospective workflow for major problem-solving sessions
-- Behavioral lessons go in PRINCIPLES.org, technical facts in session docs
-
-*Files Modified:*
-- [[file:../custom/archangel][custom/install-archzfs]] - Fixed mkinitcpio configuration
-- [[file:../todo.org][todo.org]] - Added ZFS rollback + /boot issue, ZFSBootMenu task
-- [[file:PRINCIPLES.org][docs/PRINCIPLES.org]] - New file with behavioral lessons
-- [[file:protocols.org][docs/protocols.org]] - Added PRINCIPLES.org to session startup
-- [[file:retrospectives/2026-01-22-ratio-boot-fix.org][docs/retrospectives/]] - Retrospective for this session
-- [[file:2026-01-22-ratio-boot-fix-session.org][docs/2026-01-22-ratio-boot-fix-session.org]] - Full technical session doc
-
-*Commits Made:*
-- c46191c: Fix ratio boot issues: firmware, mkinitcpio, and document ZFS rollback dangers
-- 9100517: Update ratio session doc: kernel 6.15.2 now default with clean GRUB menu
-- e5aedfa: Add retrospective workflow and PRINCIPLES.org for continuous improvement
-
-*Next Steps:*
-- Implement ZFSBootMenu on ratio to solve /boot rollback issue
-- Consider adding ZFSBootMenu to install-archzfs as alternative to GRUB
-
-*** 2026-01-18 Sat @ 16:30 -0600
-
-*Status:* COMPLETE
-
-*What We Completed:*
-- Completed RESCUE-GUIDE.txt with all 8 sections fully documented
-- Added final round of utility packages to ISO:
-  - Disk tools: ncdu, tree
-  - Hardware diagnostics: iotop
-  - Network: speedtest-cli, mosh, aria2, tmate, sshuttle
-  - Security: pass (password manager)
-- Removed AUR-only packages that broke build: safecopy, ms-sys, dislocker, nwipe
-- Successfully rebuilt ISO (5.1GB)
-- Copied ISO to truenas.local:/mnt/vault/isos and ~/downloads/isos
-- Wrote ISO to USB drives (/dev/sda 1TB, /dev/sdb 240GB)
-- Ran all tests:
-  - zfs-snap-prune unit tests: 22/22 PASSED
-  - VM install test (single-disk): PASSED
-  - VM install test (mirror): PASSED
-  - VM install test (raidz1): PASSED
-- Marked "Add common recovery tools" TODO as DONE
-
-*Commits Made:*
-- 36aa130: Add utility tools and rescue guide documentation
-- 6f4fd68: Remove AUR-only packages from ISO build
-
-*Files Modified:*
-- [[file:../build.sh][build.sh]] - Added utility packages, removed AUR-only packages
-- [[file:../custom/RESCUE-GUIDE.txt][custom/RESCUE-GUIDE.txt]] - Completed all 8 sections
-- [[file:../TODO.org][TODO.org]] - Marked recovery tools task as DONE
-- [[file:session-context.org][docs/session-context.org]] - Updated session state
-
-*Key Technical Notes:*
-- AUR packages cannot be included in mkarchiso builds without custom AUR handling
-- Documented AUR tools (safecopy, ms-sys, dislocker, nwipe) in RESCUE-GUIDE with install instructions
-- ISO now doubles as a comprehensive rescue/recovery disk
-
-*Next Steps:*
-- Test booting from physical USB drive on real hardware
-- Consider CI/CD pipeline for automated ISO builds
-- Consider adding ISO to GRUB boot menu for on-disk recovery
-
-*** 2026-01-17 Sat @ 17:10 -0600
-
-*Status:* IN PROGRESS
-
-*What We Completed:*
-- Fixed ZFS kernel module mismatch by switching to linux-lts + zfs-dkms
-- Fixed bootloader to use linux-lts kernel (was defaulting to regular linux)
-- Fixed broadcom-wl dependency (switched to broadcom-wl-dkms)
-- Updated mkinitcpio preset for linux-lts with archiso config
-- Fixed install-archzfs bugs:
-  - =[[ ]] && error= pattern causing early exit with =set -e= (changed to if/then)
-  - 50G reservation on 50G disk (now dynamic: 20% of pool, capped 5-20G)
-  - sanoid not in official repos (moved to archsetup)
-  - grub-mkfont needs freetype2 package (added to pacstrap)
-- Removed sanoid/syncoid from install-archzfs (archsetup will handle)
-- Created inbox item for archsetup with full sanoid/syncoid config
-- ISO now 4.8G (was 5.4G) - only linux-lts kernel
-
-*Key Technical Insights:*
-- =broadcom-wl= depends on =linux= kernel specifically - use =broadcom-wl-dkms= instead
-- archiso releng profile has linux.preset in airootfs that needs renaming to linux-lts.preset
-- With =set -e=, =[[ test ]] && command= returns exit code 1 if test is false, causing script exit
-- =grub-mkfont= requires =freetype2= package (not installed by default with grub)
-
-*Files Modified:*
-- [[file:../build.sh][build.sh]] - major updates for linux-lts, bootloader configs, mkinitcpio preset
-- [[file:../custom/archangel][custom/install-archzfs]] - multiple bug fixes, removed sanoid/syncoid
-- [[file:~/code/archsetup/inbox/zfs-sanoid-detection.txt][archsetup inbox]] - sanoid/syncoid config for archsetup to implement
-
-*Current State:*
-- ISO builds successfully with linux-lts + zfs-dkms
-- ZFS module loads correctly in live environment
-- install-archzfs runs through most steps
-- Last error: grub-mkfont missing freetype2 (now fixed, needs rebuild/test)
-
-*Next Steps:*
-- Rebuild ISO with freetype2 fix
-- Complete full install-archzfs test in VM
-- Test booting the installed system
-- Git commit all changes
 
