@@ -913,17 +913,15 @@ install_base() {
     pacman-key --init
     pacman-key --populate archlinux
 
-    # Add archzfs key
-    pacman-key -r DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
-    pacman-key --lsign-key DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
-
     # Add archzfs repo to pacman.conf for pacstrap
+    # SigLevel=Never: pacstrap -K creates empty keyring where key import fails;
+    # repo is explicitly added and served over HTTPS, GPG adds no real value here
     if ! grep -q "\[archzfs\]" /etc/pacman.conf; then
         cat >> /etc/pacman.conf << 'EOF'
 
 [archzfs]
 Server = https://archzfs.com/$repo/$arch
-SigLevel = Optional TrustAll
+SigLevel = Never
 EOF
     fi
 
@@ -1026,18 +1024,14 @@ configure_system() {
 127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
 EOF
 
-    # Add archzfs repo
+    # Add archzfs repo (SigLevel=Never — same rationale as install_base)
     info "Adding archzfs repository..."
     cat >> /mnt/etc/pacman.conf << 'EOF'
 
 [archzfs]
 Server = https://archzfs.com/$repo/$arch
-SigLevel = Optional TrustAll
+SigLevel = Never
 EOF
-
-    # Import archzfs key
-    arch-chroot /mnt pacman-key -r DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
-    arch-chroot /mnt pacman-key --lsign-key DDF7DB817396A49B2A2723F7403BD972F75D9D76 2>/dev/null || true
 
     # Configure journald for ZFS
     # Problem: journald starts before ZFS mounts /var/log, so journal files

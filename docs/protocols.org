@@ -169,7 +169,9 @@ Execute the wrap-up workflow (details in Session Protocols section below):
 * User Information
 
 ** Calendar Location
-Craig's calendar is available at: =/home/cjennings/sync/org/gcal.org=
+Craig's calendars are at: =~/.emacs.d/data/*cal.org= (gcal.org, dcal.org, pcal.org)
+
+These files are **READ-ONLY** — NEVER add anything to them.
 
 Use this to:
 - Check meeting times and schedules
@@ -327,12 +329,11 @@ When monitoring a long-running process (rsync, large downloads, builds, VM tests
 #+end_example
 
 ***At Completion:***
-1. Play notification sound three times:
+1. Send notification via notify script:
    #+begin_src bash
-   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
-   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
-   paplay /usr/share/sounds/freedesktop/stereo/complete.oga
+   notify success "Task Complete" "Description of what finished"
    #+end_src
+   Use =fail= type instead of =success= if the task failed.
 2. Provide summary of success or failure
 
 #+begin_example

@@ -47,7 +47,7 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLeve
 
 # Timeouts
 SSH_TIMEOUT=180       # Wait for SSH on live ISO
-INSTALL_TIMEOUT=900   # 15 minutes for installation
+INSTALL_TIMEOUT=1800  # 30 minutes for installation (DKMS builds ZFS from source)
 BOOT_TIMEOUT=120      # Wait for installed system to boot
 
 # Colors
@@ -354,7 +354,9 @@ CONF"
         ((elapsed += check_interval))
 
         # Check if install process is still running
-        if ! ssh_cmd "pgrep -f 'archangel' > /dev/null" 2>/dev/null; then
+        # Match full path to avoid false positive from avahi-daemon's
+        # "running [archangel.local]" status string
+        if ! ssh_cmd "pgrep -f '/usr/local/bin/archangel' > /dev/null" 2>/dev/null; then
             # Process finished - check result by looking for success indicators
             local exit_check=$(ssh_cmd "tail -30 /tmp/install.log" 2>/dev/null)
             # Check for various success indicators
