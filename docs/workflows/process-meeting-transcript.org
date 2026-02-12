@@ -1,0 +1,301 @@
+#+TITLE: Process Meeting Transcript Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-03
+
+* Overview
+
+This workflow defines the process for processing meeting recordings from start to finish: finding recordings, extracting audio, transcribing via AssemblyAI, identifying speakers, correcting errors, and archiving files.
+
+* When to Use This Workflow
+
+Trigger this workflow when:
+- Craig says "process the transcript" or "process the recording" or similar
+- New recording files (.mkv) appear in ~/sync/recordings/ after meetings
+- Craig wants to process meeting recordings into labeled transcripts
+
+* Prerequisites
+
+- Recording file(s) exist in ~/sync/recordings/ (*.mkv)
+- Calendar files available at ~/.emacs.d/data/*cal.org for meeting titles
+- AssemblyAI transcription script at ~/.emacs.d/scripts/assemblyai-transcribe
+- AssemblyAI API key stored in ~/.authinfo.gpg (machine api.assemblyai.com)
+- ffmpeg available for audio extraction
+
+* The Workflow
+
+** Step 1: Identify Engagement and Write Session Context
+
+Before starting transcript processing:
+
+1. *Identify which engagement this meeting belongs to:*
+   - DeepSat (default for current work)
+   - Vineti (historical)
+   - Salesforce (historical)
+   - If unclear, ask Craig
+
+2. *Set destination paths based on engagement:*
+   - Assets: ~{engagement}/assets/~ (e.g., ~deepsat/assets/~)
+   - Meetings: ~{engagement}/meetings/~ (e.g., ~deepsat/meetings/~)
+   - Knowledge: ~{engagement}/knowledge.org~ for reference
+
+3. Update docs/session-context.org with current status:
+   - Note that we're about to process a meeting transcript
+   - Get meeting name by checking ~/.emacs.d/data/*cal.org (match date/time to transcript timestamp)
+   - If meeting not found in calendar, ask Craig for the meeting title
+
+4. Ask Craig if he wants to compact the conversation context:
+   - Transcript processing can use significant context
+   - Compacting now preserves the session context file for recovery
+
+** Step 2: Find Recording Files
+
+Find and match recording files with calendar events:
+
+1. **List recordings:** Find all .mkv files in ~/sync/recordings/
+   #+begin_src bash
+   ls -la ~/sync/recordings/*.mkv
+   #+end_src
+
+2. **Extract timestamps:** Parse date/time from each filename (format: YYYY-MM-DD_HH-MM-SS.mkv)
+
+3. **Match with calendar:** Check ~/.emacs.d/data/*cal.org for meetings at those times
+   #+begin_src bash
+   cat ~/.emacs.d/data/dcal.org | grep -A2 "YYYY-MM-DD"
+   #+end_src
+
+4. **Present selection table to Craig:**
+   | Filename                    | Meeting / Date-Time            |
+   |-----------------------------+--------------------------------|
+   | 2026-02-03_10-00-00.mkv     | DeepSat Standup (from calendar)|
+   | 2026-02-03_14-30-00.mkv     | 2026-02-03 14:30 (no match)    |
+
+5. **Craig selects files:** One, several, or all files to process
+
+6. **Queue for processing:** Selected files ordered oldest → newest for serial processing
+
+** Step 3: Extract Audio
+
+For each selected recording file, extract audio for transcription:
+
+#+begin_src bash
+ffmpeg -i ~/sync/recordings/FILENAME.mkv -vn -ac 1 -c:a aac -b:a 96k /tmp/FILENAME.m4a
+#+end_src
+
+Settings:
+- =-vn= : no video (audio only)
+- =-ac 1= : mono channel (sufficient for speech, smaller file)
+- =-c:a aac= : AAC codec
+- =-b:a 96k= : 96kbps bitrate (sufficient for speech transcription)
+
+Output: /tmp/FILENAME.m4a (temporary, deleted after transcription)
+
+** Step 4: Transcribe with AssemblyAI
+
+1. **Run transcription:**
+   #+begin_src bash
+   ~/.emacs.d/scripts/assemblyai-transcribe /tmp/FILENAME.m4a > ~/sync/recordings/FILENAME.txt
+   #+end_src
+
+2. **Clean up:** Delete intermediate .m4a file after successful transcription
+   #+begin_src bash
+   rm /tmp/FILENAME.m4a
+   #+end_src
+
+3. **Output format:** The script produces speaker-diarized output:
+   #+begin_example
+   Speaker A: First speaker's text here.
+   Speaker B: Second speaker's response.
+   Speaker A: First speaker continues.
+   #+end_example
+
+4. Continue to speaker identification workflow below.
+
+** Step 5: Locate Files
+
+Confirm the transcript and recording files are ready:
+
+1. **Verify transcript exists:**
+   #+begin_src bash
+   ls -la ~/sync/recordings/FILENAME.txt
+   #+end_src
+
+2. **Verify recording exists:**
+   #+begin_src bash
+   ls -la ~/sync/recordings/FILENAME.mkv
+   #+end_src
+
+3. **Get meeting title:** If not already known from Step 2, check calendar
+   - Calendar location: ~/.emacs.d/data/*cal.org
+   - Match the meeting time to the transcript timestamp
+
+** Step 6: Read and Analyze Transcript
+
+1. Read the full transcript file
+
+2. Identify speakers by analyzing context clues:
+   - Names mentioned in conversation ("Thanks, Ryan")
+   - Role references ("as the developer", "on the IT side")
+   - Project-specific knowledge (who works on what)
+   - Previous meeting context (known attendees)
+   - Speaking order patterns
+
+3. Build a speaker identification table:
+   | Speaker | Person | Evidence |
+   |---------|--------|----------|
+   | A       | Name   | Clues... |
+
+** Step 7: Confirm Speaker Identifications
+
+Present the speaker identification table to Craig for confirmation:
+- List each speaker label and proposed name
+- Include the evidence/reasoning
+- Ask about any uncertain identifications
+- Note any new people to add to notes.org contacts
+
+** Step 8: Create Labeled Transcript
+
+1. Replace all speaker labels with actual names
+
+2. Correct transcription errors:
+   - Common mishearings (names, technical terms, company names)
+   - Known substitutions from this project:
+     - "Vanetti" → "Vineti"
+     - "Fresh" → "Vrezh"
+     - "Clean4" / "clone" → "CLIN 4"
+     - "Vascan" → "Vazgan"
+     - "Hike" / "Ike" → "Hayk"
+     - "High Tech" → "HyeTech"
+     - "Java software" → "JAMA software"
+     - "JSON" (person) → "Jason"
+     - "their S" / "ress" → "Nerses"
+   - Technical terms specific to DeepSat (GovCloud, AFRL, SOUTHCOM, etc.)
+
+3. Save to engagement assets folder:
+   - Location: ~{engagement}/assets/~ (e.g., ~deepsat/assets/~)
+   - Filename: YYYY-MM-DD-meeting-name.txt
+   - Example: deepsat/assets/2026-02-03-standup-ipm-grooming.txt
+
+** Step 9: Copy Recording to Meetings Folder
+
+1. Ensure engagement meetings folder exists and pattern is in .gitignore (~*/meetings/*.mkv~)
+
+2. Copy the .mkv file with descriptive name:
+   #+begin_src bash
+   cp ~/sync/recordings/YYYY-MM-DD_HH-MM-SS.mkv {engagement}/meetings/YYYY-MM-DD_HH-MM-meeting-name.mkv
+   #+end_src
+   Example: ~deepsat/meetings/2026-02-03_11-02-standup-ipm-grooming.mkv~
+
+3. Verify the copy succeeded
+
+** Step 10: Update Session Context with Meeting Summary
+
+Add a meeting summary section to docs/session-context.org including:
+
+1. **Attendees** - List all participants
+
+2. **Key Decisions** - Important choices made
+
+3. **Action Items** - Tasks assigned, especially for Craig
+
+4. **New Information** - Things learned that should be noted
+
+5. **New Contacts** - People to add to notes.org
+
+** Step 11: Write Session Context File
+
+Update docs/session-context.org with:
+- Files created this session (transcript, recording)
+- Summary of what was processed
+- Next steps (file to assets, update notes.org, etc.)
+
+*** Context Management (for multiple files)
+
+When processing multiple recordings in a queue:
+
+1. **After completing each file's workflow**, update docs/session-context.org with:
+   - Files processed so far
+   - Current position in queue
+   - Summary of meeting just processed
+
+2. **Ask Craig if compact is needed** before starting next file:
+   - Transcript processing uses significant context
+   - Compacting preserves session context for recovery
+
+3. **If autocompact occurs**, reread session-context.org to:
+   - Resume at correct position in queue
+   - Avoid reprocessing already-completed files
+
+** Step 12: Clean Up Source Files
+
+After successful completion of all previous steps, delete the source files from ~/sync/recordings/:
+
+1. **Delete the original recording:**
+   #+begin_src bash
+   rm ~/sync/recordings/FILENAME.mkv
+   #+end_src
+
+2. **Delete the raw transcript** (if generated):
+   #+begin_src bash
+   rm ~/sync/recordings/FILENAME.txt
+   #+end_src
+
+This step happens last to ensure all files are safely copied/processed before deletion. If anything goes wrong earlier in the workflow, the source files remain intact for retry.
+
+* Output Files
+
+| File               | Location                                              | Purpose                            |
+|--------------------+-------------------------------------------------------+------------------------------------|
+| Labeled transcript | {engagement}/assets/YYYY-MM-DD-meeting-name.txt       | Corrected transcript for reference |
+| Meeting recording  | {engagement}/meetings/YYYY-MM-DD_HH-MM-meeting-name.mkv | Video for review (gitignored)      |
+| Session context    | docs/session-context.org                              | Crash recovery, meeting summary    |
+| Knowledge base     | {engagement}/knowledge.org                            | Team, infrastructure, corrections  |
+
+* Common Transcription Errors
+
+Keep this list updated as new patterns emerge:
+
+| Heard As      | Correct       | Context                                        |
+|---------------+---------------+------------------------------------------------|
+| Vanetti       | Vineti        | Company where Craig, Nerses, Eric, Ryan worked |
+| Fresh         | Vrezh         | Developer name                                 |
+| Clean4, clone | CLIN 4        | Contract milestone                             |
+| Vascan        | Vazgan        | MagicalLabs AI team member                     |
+| Hike, Ike     | Hayk          | CTO name                                       |
+| High Tech     | HyeTech       | Armenian tech community org                    |
+| Java software | JAMA software | Requirements traceability tool                 |
+| JSON (person) | Jason         | DevSecOps or advisor                           |
+| their S, ress | Nerses        | CEO name                                       |
+| sir Keith     | Sarkis        | BD/investor relations                          |
+| Fastgas       | MagicalLabs   | Armenian AI contractor                         |
+| Sitelix       | Cytellix      | CMMC security/compliance partner               |
+
+* Tips
+
+1. **Read the whole transcript first** - Context from later in the meeting often helps identify speakers from earlier
+
+2. **Use the calendar** - Meeting names help set expectations for who attended
+
+3. **Check engagement knowledge.org** - Team roster and transcription corrections specific to this engagement
+
+4. **Ask about unknowns** - If a new person appears, ask Craig for context
+
+5. **Note new learnings** - Update engagement knowledge.org with new contacts, corrections, or context after processing
+
+* Validation Checklist
+
+- [ ] Engagement identified and destination paths set
+- [ ] Session context written before starting
+- [ ] Recording files listed and matched with calendar
+- [ ] Craig selected files to process
+- [ ] Audio extracted to .m4a (mono, 96k AAC)
+- [ ] AssemblyAI transcription completed
+- [ ] Intermediate .m4a file deleted
+- [ ] Transcript file verified
+- [ ] All speakers identified
+- [ ] Speaker identifications confirmed with Craig
+- [ ] Transcript corrected and saved to {engagement}/assets/
+- [ ] Recording copied to {engagement}/meetings/ with proper name
+- [ ] Session context updated with meeting summary
+- [ ] New contacts/info flagged for {engagement}/knowledge.org update
+- [ ] (If multiple files) Queue position tracked in session context
+- [ ] Source files deleted from ~/sync/recordings/

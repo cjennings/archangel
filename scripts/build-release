@@ -8,6 +8,8 @@
 #   ./scripts/build-release --skip-test  # Skip all testing
 #
 # Distribution targets:
+#   - ~/downloads/isos/
+#   - ~/code/archsetup/inbox/ (notification for test VM rebuild)
 #   - truenas.local:/mnt/vault/isos (if reachable)
 
 set -e
@@ -27,6 +29,8 @@ fi
 # Distribution targets
 TRUENAS_HOST="truenas.local"
 TRUENAS_PATH="/mnt/vault/isos"
+LOCAL_ISO_DIR="$REAL_HOME/downloads/isos"
+ARCHSETUP_INBOX="$REAL_HOME/code/archsetup/inbox"
 
 # Colors
 RED='\033[0;31m'
@@ -64,6 +68,7 @@ done
 
 # Distribution status tracking
 TRUENAS_SUCCESS=false
+LOCAL_SUCCESS=false
 
 # Check root for build
 check_root() {
@@ -143,16 +148,36 @@ distribute_truenas() {
     fi
 }
 
+# Distribute locally
+distribute_local() {
+    step "Distributing Locally"
+
+    mkdir -p "$LOCAL_ISO_DIR"
+    info "Copying to $LOCAL_ISO_DIR/"
+    cp "$ISO_FILE" "$LOCAL_ISO_DIR/"
+    info "Done: $LOCAL_ISO_DIR/$ISO_NAME"
+    LOCAL_SUCCESS=true
+
+    # Notify archsetup project that a new ISO is available
+    if [[ -d "$ARCHSETUP_INBOX" ]]; then
+        cat > "$ARCHSETUP_INBOX/rebuild-test-vm.txt" << EOF
+New archangel ISO available: $ISO_NAME
+Location: ~/downloads/isos/
+Rebuild the base test VM from this ISO to pick up the new kernel.
+EOF
+        info "Notified archsetup inbox"
+    fi
+}
+
 # Summary
 show_summary() {
     step "Distribution Complete"
     echo "ISO: $ISO_NAME"
     echo ""
-    if $TRUENAS_SUCCESS; then
-        echo "Distributed to: $TRUENAS_HOST:$TRUENAS_PATH/"
-    else
-        echo "TrueNAS not reachable - ISO only in out/"
-    fi
+    echo "Distributed to:"
+    $LOCAL_SUCCESS && echo "  - $LOCAL_ISO_DIR/"
+    $TRUENAS_SUCCESS && echo "  - $TRUENAS_HOST:$TRUENAS_PATH/"
+    $TRUENAS_SUCCESS || echo "  - TrueNAS ($TRUENAS_HOST) not reachable, skipped"
 }
 
 # Main
@@ -174,6 +199,7 @@ main() {
         step "Skipping Tests"
     fi
 
+    distribute_local
     distribute_truenas
 
     show_summary
