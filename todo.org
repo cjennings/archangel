@@ -211,6 +211,33 @@ Replace GRUB with ZFSBootMenu which is designed for ZFS boot environments.
 - https://wiki.archlinux.org/title/Install_Arch_Linux_on_ZFS
 - https://openzfs.github.io/openzfs-docs/Getting%20Started/Arch%20Linux/index.html
 
+** TODO [#A] Prep archangel for open sourcing
+Address all issues preventing the codebase from being publicly released.
+
+*** Critical — Must Fix
+- [ ] Remove phone number from docs/protocols.org (also in git history — consider BFG or filter-branch)
+- [ ] Remove or gitignore personal docs/ files (session history, personal workflows, protocols with personal info)
+- [ ] Create LICENSE file (GPL-3.0 — README already references it)
+- [ ] Change SigLevel from "Optional TrustAll" to "Never" in build.sh (already fixed in custom/archangel)
+
+*** Major — Should Fix
+- [ ] Remove hardcoded /home/cjennings/code/archsetup path in build.sh (make configurable or env var)
+- [ ] Remove hardcoded distribution paths in build-release (~/downloads/isos, ~/code/archsetup/inbox, truenas.local)
+- [ ] Add prominent warnings about SSH root login with known password on live ISO
+- [ ] Scrub personal email addresses (c@cjennings.net, craigmartinjennings@gmail.com) from scripts and docs
+
+*** Moderate — Code Quality
+- [ ] Fix ShellCheck SC2155 warnings in custom/lib/*.sh (declare and assign separately)
+- [ ] Don't echo root password in build.sh output (line 481)
+- [ ] Add set -u to scripts for undefined variable safety
+- [ ] Remove dead pacman-key import code (already removed from archangel, verify no remnants)
+
+*** Minor — Polish
+- [ ] Add CONTRIBUTING.md with development setup and contribution guidelines
+- [ ] Make OVMF firmware paths configurable in test-vm.sh (not portable across distros)
+- [ ] Clean up commented-out code in archangel.conf.example (or add explanations)
+- [ ] Standardize shebang lines across scripts (#!/usr/bin/env bash)
+
 ** TODO [#A] Update README.org with GRUB references amd ZFSBootMenu referemces
 
 Note: the information here is old. we have added btrfs to the filesystem choices since this task was written. this task still needs to be completed, just considering that we use both grub for btrfs and zfsbootmenu for zfs. 
