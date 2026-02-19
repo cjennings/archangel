@@ -1,0 +1,151 @@
+#+TITLE: List Open Tasks Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-12
+
+* Overview
+
+This workflow gathers, reconciles, and displays all open tasks across project sources. It ensures nothing falls through the cracks by syncing loose reminders into todo.org, flags tasks that may already be done, and presents a clean priority-grouped list for review.
+
+* When to Use This Workflow
+
+- Craig says "list open tasks" or "show me all tasks"
+- At the start of a planning or prioritization session
+- When deciding what to work on next (complements the what's-next workflow)
+- Periodically to audit and clean up stale tasks
+
+* The Workflow
+
+** Step 1: Write Session Context File
+
+Before anything else, update =docs/session-context.org= with current session state. Task review can surface decisions and status changes — capture context in case of crash.
+
+** Step 2: Gather Tasks from notes.org
+
+Read the following sections from =notes.org=:
+- *Active Reminders* — time-sensitive items, follow-ups
+- *Pending Decisions* — decisions that block work
+- *Last 2-3 Session History entries* — recent next-steps and in-progress items
+
+Extract anything that represents an open task or action item.
+
+** Step 3: Gather Tasks from todo.org
+
+Read the project's =todo.org= file (typically at project root).
+- Collect all entries under the open work header (named =* $Project Open Work=, e.g., =* Homelab Open Work=)
+- Note each task's priority ([#A], [#B], [#C]), deadline, scheduled date, and status
+- Skip anything under the resolved header (named =* $Project Resolved=)
+
+** Step 4: Reconcile — Sync Unique Tasks to todo.org
+
+Compare tasks found in notes.org (reminders, session history, pending decisions) against todo.org entries.
+
+For each task in notes.org that does NOT have a corresponding todo.org entry:
+1. Create a new =** TODO= entry in todo.org under the =* $Project Open Work= header
+2. Assign a priority based on context ([#A] if time-sensitive or blocking, [#B] if important, [#C] if low urgency)
+3. Include:
+   - =:CREATED:= property with today's date
+   - Brief description of what needs to be done
+   - Why it matters (context from the reminder or session notes)
+   - Recommended approach or next steps
+4. If a deadline exists (e.g., RMA expected date), add a =DEADLINE:= line
+
+*Do NOT remove the item from notes.org Active Reminders* — reminders serve a different purpose (surfaced at session start). The todo.org entry is for tracking and prioritization.
+
+*Judgment call:* Not every reminder needs a todo.org entry. Skip items that are:
+- Pure informational notes (e.g., "rsyncshot running with 600s timeout")
+- Waiting-for items with no action Craig can take (e.g., "package arriving Feb 25")
+- Already completed (handle in Step 5)
+
+** Step 5: Review for Completed Tasks
+
+Quickly review all open tasks and check if any appear to already be done, based on:
+- Recent session history mentioning completion
+- Context clues (e.g., "arriving Feb 7" and it's now Feb 12)
+- Work completed in previous sessions that wasn't marked done
+
+Build a list of *suspected completions* — do NOT mark them done yet. These will be confirmed with Craig in Step 7.
+
+** Step 6: Display All Open Tasks
+
+Present all open tasks grouped by priority. Format rules:
+
+- *Group by priority:* A (High), B (Medium), C (Low/Someday)
+- *Default priority:* Tasks without an explicit priority are treated as C
+- *No table structure* — use a flat bulleted list within each group
+- *Include deadlines:* If a task has a =DEADLINE:=, show it inline as =DEADLINE: <date>=
+- *Include scheduled dates:* If a task has a =SCHEDULED:=, show it inline
+- *Keep descriptions concise* — task name + one-line summary, not full details
+- *Note source* if task came from reminders only (not yet in todo.org) vs todo.org
+
+Example format:
+#+begin_example
+**Priority A (High)**
+
+- Complete Sara Essex email setup — add Google Workspace MX records, verify delivery
+- Set up Comet KVMs — remote console for TrueNAS and ratio
+- Complete UPS/TrueNAS integration — USB cable, configure shutdown threshold. DEADLINE: <2026-01-21>
+
+**Priority B (Medium)**
+
+- Design Zettelkasten architecture — resume at Question 4 (Staleness)
+- Compare Ubiquiti UTR vs open source mesh router
+
+**Priority C (Low / Someday)**
+
+- Explore Whisper-to-Claude-Code voice integration
+- Get Keychron Q6 Pro carrying case. SCHEDULED: <2026-02-07>
+#+end_example
+
+** Step 7: Confirm Suspected Completions
+
+After displaying the list, present suspected completions:
+
+#+begin_example
+These tasks may already be completed — can you confirm?
+- "OBSBOT Tiny 3 webcam arriving" — it's past the expected delivery date
+- "Sweetwater order arriving" — expected Feb 7, now Feb 12
+#+end_example
+
+For each task Craig confirms as done:
+1. Add =CLOSED: [YYYY-MM-DD Day]= timestamp (use =date= command for accuracy)
+2. Change status from =TODO= to =DONE=
+3. Add a brief completion note (when/how it was resolved)
+4. Move the entry from =* $Project Open Work= to =* $Project Resolved= in todo.org
+5. If the task also exists in Active Reminders in notes.org, remove it from there
+
+For tasks Craig says are NOT done, leave them as-is.
+
+* Resolving a Task — Format
+
+When moving a task to Resolved, it should look like this:
+
+#+begin_example
+** DONE [#A] Set up Comet KVMs
+CLOSED: [2026-02-12 Thu]
+:PROPERTIES:
+:CREATED: [2026-01-19 Mon]
+:END:
+
+Comet KVMs set up for TrueNAS and ratio. Remote BIOS/console access working.
+
+*Resolution:* Completed during Feb 12 session. Both KVMs connected and tested.
+#+end_example
+
+Key elements:
+- =DONE= replaces =TODO=
+- =CLOSED:= line with completion date
+- Original =:PROPERTIES:= block preserved
+- Brief resolution note explaining when/how
+
+* Common Mistakes
+
+1. *Marking tasks done without confirmation* — always ask Craig first
+2. *Removing reminders from notes.org when adding to todo.org* — they serve different purposes
+3. *Creating todo.org entries for pure informational reminders* — use judgment
+4. *Forgetting to update session context file* — do it in Step 1, before the review starts
+5. *Using a table for the task list* — Craig prefers flat bulleted lists for this
+6. *Not running =date=* — always check current date before evaluating deadlines or completion dates
+
+* Living Document
+
+Update this workflow as task management patterns evolve. If new task sources are added (e.g., external issue trackers, shared task lists), add them to Steps 2-3.
