@@ -1,4 +1,4 @@
-* Open Work
+* Archangel Open Work
 ** TODO [#A] Rename ISO to (project)-(YYYY-MM-DD)-vmlinuz-(version).iso
 Current format: archangel-vmlinuz-6.12.66-lts-2026-01-24-x86_64.iso
 New format: archangel-2026-01-24-vmlinuz-6.12.66-lts-x86_64.iso
@@ -787,7 +787,7 @@ Very low priority. We're focused on robustness and compatibility first, bleeding
 The linux-lts + DKMS combination provides maximum stability and hardware compatibility.
 Only consider this if there's clear user demand for bleeding-edge kernel support.
 
-* Resolved
+* Archangel Resolved
 
 ** DONE [#B] Add zfsrollback and zfssnapshot scripts to ISO
 CLOSED: [2026-01-19 Sun]
