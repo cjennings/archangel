@@ -1,0 +1,10 @@
+The inbox/ directory was disappearing between sessions because git doesn't track
+empty directories. A .gitkeep file has been added to fix this.
+
+Action: If your project has an inbox/ directory, ensure it contains a .gitkeep file:
+
+  touch inbox/.gitkeep
+
+If your project doesn't have an inbox/ directory yet, create one with .gitkeep:
+
+  mkdir -p inbox && touch inbox/.gitkeep

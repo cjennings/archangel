@@ -1,0 +1,255 @@
+#+TITLE: Edit Calendar Event Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-01
+
+* Overview
+
+Workflow for editing existing calendar events via gcalcli.
+
+*Note:* gcalcli's edit command is interactive. This workflow uses a delete-and-recreate approach for non-interactive editing.
+
+* Triggers
+
+- "edit the meeting"
+- "change my appointment"
+- "reschedule"
+- "update the event"
+- "move my appointment"
+
+* Prerequisites
+
+- gcalcli installed and authenticated
+- Event must exist on calendar
+
+* CRITICAL: Check All Calendars Before Rescheduling
+
+When rescheduling an event, ALWAYS check for conflicts at the new time across ALL calendars:
+
+#+begin_src bash
+grep "TARGET_DATE" ~/.emacs.d/data/gcal.org   # Google calendar
+grep "TARGET_DATE" ~/.emacs.d/data/dcal.org   # DeepSat work calendar
+grep "TARGET_DATE" ~/.emacs.d/data/pcal.org   # Proton calendar
+#+end_src
+
+gcalcli only sees Google calendars — verify the new time is free across all three files before rescheduling.
+
+* Workflow Steps
+
+** 1. Parse User Request
+
+Extract:
+- Which event (title, partial match, or date hint)
+- What to change (if mentioned)
+
+Examples:
+- "Edit the dentist appointment" → search for "dentist"
+- "Reschedule tomorrow's meeting" → search tomorrow's events
+- "Change the 3pm call to 4pm" → search by time
+
+** 2. Search for Event
+
+#+begin_src bash
+# Search by title
+gcalcli --calendar "Calendar Name" search "event title"
+
+# Or list events for a date
+gcalcli --calendar "Calendar Name" agenda "date" "date 11:59pm"
+#+end_src
+
+** 3. Handle Multiple Matches
+
+If search returns multiple events:
+
+#+begin_example
+Found 3 events matching "meeting":
+
+1. Team Meeting - Feb 3, 2026 at 9:00 AM
+2. Project Meeting - Feb 4, 2026 at 2:00 PM
+3. Client Meeting - Feb 5, 2026 at 10:00 AM
+
+Which event do you want to edit? (1-3)
+#+end_example
+
+** 4. Display Full Event Details
+
+Show the current event state:
+
+#+begin_example
+Event: Team Meeting
+When: Monday, Feb 3, 2026 at 9:00 AM
+Duration: 1 hour
+Location: Conference Room A
+Description: Weekly sync
+Reminders: 5 min, 0 min
+Calendar: Craig
+#+end_example
+
+** 5. Ask What to Change
+
+Options:
+- Title
+- Date/Time
+- Duration
+- Location
+- Description
+- Reminders
+
+Can change one or multiple fields.
+
+** 6. Show Updated Summary
+
+Before applying changes:
+
+#+begin_example
+Updated Event:
+Event: Team Standup (was: Team Meeting)
+When: Monday, Feb 3, 2026 at 9:30 AM (was: 9:00 AM)
+Duration: 30 minutes (was: 1 hour)
+Location: Conference Room A
+Description: Weekly sync
+Reminders: 5 min, 0 min
+Calendar: Craig
+
+Apply these changes? (yes/no)
+#+end_example
+
+** 7. Explicit Confirmation
+
+*Do NOT apply changes until user confirms.*
+
+** 8. Execute Edit (Delete + Recreate)
+
+Since gcalcli edit is interactive, use delete + add:
+
+#+begin_src bash
+# Delete original
+gcalcli --calendar "Calendar Name" delete "Event Title" --iamaexpert
+
+# Recreate with updated fields
+gcalcli --calendar "Calendar Name" add \
+  --title "Updated Title" \
+  --when "new date/time" \
+  --duration NEW_MINUTES \
+  --where "Location" \
+  --description "Description" \
+  --reminder 5 \
+  --reminder 0 \
+  --noprompt
+#+end_src
+
+** 9. Verify
+
+Confirm the updated event exists:
+
+#+begin_src bash
+gcalcli --calendar "Calendar Name" search "Updated Title"
+#+end_src
+
+Report success or failure.
+
+* Common Edit Scenarios
+
+** Reschedule (Change Time)
+
+#+begin_example
+User: "Move my dentist appointment to 3pm"
+
+1. Search for "dentist"
+2. Show current time
+3. Confirm new time: 3pm
+4. Delete + recreate at new time
+#+end_example
+
+** Change Duration
+
+#+begin_example
+User: "Make the meeting 2 hours instead of 1"
+
+1. Find the meeting
+2. Show current duration
+3. Confirm new duration: 2 hours
+4. Delete + recreate with new duration
+#+end_example
+
+** Update Location
+
+#+begin_example
+User: "Change the meeting location to Room B"
+
+1. Find the meeting
+2. Show current location
+3. Confirm new location
+4. Delete + recreate with new location
+#+end_example
+
+** Move to Different Day
+
+#+begin_example
+User: "Move Friday's review to Monday"
+
+1. Find event on Friday
+2. Show full details
+3. Confirm new date (Monday) and time
+4. Delete + recreate on new day
+#+end_example
+
+* gcalcli Command Reference
+
+** Search
+
+#+begin_src bash
+gcalcli search "event title"
+gcalcli --calendar "Craig" search "meeting"
+#+end_src
+
+** Delete (for edit workflow)
+
+#+begin_src bash
+gcalcli --calendar "Calendar" delete "Event Title" --iamaexpert
+#+end_src
+
+** Add (recreate with edits)
+
+#+begin_src bash
+gcalcli --calendar "Calendar" add \
+  --title "Title" \
+  --when "date time" \
+  --duration MINUTES \
+  --where "Location" \
+  --description "Notes" \
+  --reminder 5 \
+  --reminder 0 \
+  --noprompt
+#+end_src
+
+* Handling Recurring Events
+
+*Warning:* The delete+recreate approach deletes ALL instances of a recurring event.
+
+For recurring events:
+1. Warn the user this will affect all instances
+2. Consider using gcalcli's interactive edit mode
+3. Or create a new single event and delete the series
+
+* Error Handling
+
+** Event Not Found
+- Verify spelling
+- Try partial match
+- Check date range
+
+** Multiple Matches
+- Show all matches
+- Ask user to select one
+- Use more specific search terms
+
+** Delete Failed
+- Event may already be deleted
+- Check calendar permissions
+
+* Related
+
+- [[file:add-calendar-event.org][Add Calendar Event]] - create events
+- [[file:read-calendar-events.org][Read Calendar Events]] - view events
+- [[file:delete-calendar-event.org][Delete Calendar Event]] - remove events
+- [[file:../calendar-api-research.org][Calendar API Research]] - gcalcli reference

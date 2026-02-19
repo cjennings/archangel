@@ -1,0 +1,208 @@
+#+TITLE: Add Calendar Event Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-01
+
+* Overview
+
+Workflow for creating calendar events via gcalcli with natural language input.
+
+* Triggers
+
+- "create an event"
+- "add appointment"
+- "schedule a meeting"
+- "add to my calendar"
+- "calendar event for..."
+
+* Prerequisites
+
+- gcalcli installed and authenticated
+- Google Calendar API credentials configured
+- Test with =gcalcli list= to verify authentication
+
+* CRITICAL: Check All Calendars Before Scheduling
+
+Before creating any event, ALWAYS check for conflicts across ALL calendars by querying the emacs org calendar files:
+
+#+begin_src bash
+grep "2026-02-18" ~/.emacs.d/data/gcal.org   # Google calendar
+grep "2026-02-18" ~/.emacs.d/data/dcal.org   # DeepSat work calendar
+grep "2026-02-18" ~/.emacs.d/data/pcal.org   # Proton calendar
+#+end_src
+
+| File     | Calendar                  |
+|----------+---------------------------|
+| gcal.org | Craig (Google)            |
+| dcal.org | Craig DeepSat (work)      |
+| pcal.org | Craig Proton              |
+
+gcalcli only sees Google calendars — it will miss work and Proton events. Always verify the time slot is free across all three before creating.
+
+To *create* events, use gcalcli with =--calendar "Craig"= (Google).
+
+* Workflow Steps
+
+** 1. Parse Natural Language Input
+
+Interpret the user's request to extract:
+- Event title
+- Date/time (natural language like "tomorrow 3pm", "next Tuesday at 2")
+- Any mentioned location
+- Any mentioned description
+
+Examples:
+- "Create an event tomorrow at 5pm called Grocery Shopping"
+- "Add a meeting with Bob on Friday at 10am"
+- "Schedule dentist appointment next Wednesday at 2pm at Downtown Dental"
+
+** 2. Apply Defaults
+
+| Field      | Default Value                    |
+|------------+----------------------------------|
+| Calendar   | Craig (default Google Calendar)   |
+| Reminders  | 5 minutes before, at event time  |
+| Duration   | NONE - always ask user           |
+| Location   | None (optional)                  |
+
+** 3. Gather Missing Information
+
+*Always ask for:*
+- Duration (required, no default)
+
+*Ask if relevant:*
+- Location (if not provided and seems like an in-person event)
+
+*Never assume:*
+- Duration - this must always be explicitly confirmed
+
+** 4. Show Event Summary
+
+Present the event in plain English (NOT the gcalcli command):
+
+#+begin_example
+Event: Grocery Shopping
+When: Tomorrow (Feb 2) at 5:00 PM
+Duration: 1 hour
+Location: (none)
+Reminders: 5 min before, at event time
+Calendar: Personal
+#+end_example
+
+** 5. Explicit Confirmation
+
+Ask: "Create this event? (yes/no)"
+
+*Do NOT create the event until user confirms.*
+
+** 6. Execute
+
+Once confirmed, run:
+
+#+begin_src bash
+gcalcli --calendar "Calendar Name" add \
+  --title "Event Title" \
+  --when "date and time" \
+  --duration MINUTES \
+  --where "Location" \
+  --description "Description" \
+  --reminder 5 \
+  --reminder 0 \
+  --noprompt
+#+end_src
+
+** 7. Verify
+
+Confirm the event was created by searching:
+
+#+begin_src bash
+gcalcli --calendar "Calendar Name" search "Event Title"
+#+end_src
+
+Report success or failure to user.
+
+* Calendars
+
+| Calendar                  | Access | Notes                          |
+|---------------------------+--------+--------------------------------|
+| Craig                     | owner  | Default — use for most events  |
+| Christine                 | owner  | Christine's calendar           |
+| Todoist                   | owner  | Todoist integration            |
+| Craig Jennings (TripIt)   | reader | View only, no create           |
+| Holidays in United States | reader | View only                      |
+| Craig Proton              | reader | View only (no API access)      |
+
+Use =--calendar "Craig"= to specify (default for adding events).
+
+* gcalcli Command Reference
+
+** Add Event
+
+#+begin_src bash
+gcalcli add \
+  --calendar "My Calendar" \
+  --title "Event Title" \
+  --when "tomorrow 3pm" \
+  --duration 60 \
+  --where "123 Main St" \
+  --description "Notes" \
+  --reminder 5 \
+  --reminder 0 \
+  --noprompt
+#+end_src
+
+** Quick Add (Natural Language)
+
+#+begin_src bash
+gcalcli --calendar "My Calendar" quick "Dinner with Eric 7pm tomorrow"
+#+end_src
+
+** Key Options
+
+| Option        | Description                         |
+|---------------+-------------------------------------|
+| --calendar    | Calendar name or ID                 |
+| --title       | Event title                         |
+| --when        | Date/time (natural language OK)     |
+| --duration    | Length in minutes                   |
+| --where       | Location                            |
+| --description | Event notes                         |
+| --reminder    | Minutes before (can use multiple)   |
+| --allday      | Create all-day event                |
+| --noprompt    | Skip interactive confirmation       |
+
+* Time Formats
+
+gcalcli accepts natural language times:
+- "tomorrow 3pm"
+- "next Tuesday at 2"
+- "2026-02-15 14:00"
+- "Feb 15 2pm"
+- "today 5pm"
+
+* Duration Shortcuts
+
+| Input  | Minutes |
+|--------+---------|
+| 30m    | 30      |
+| 1h     | 60      |
+| 1.5h   | 90      |
+| 2h     | 120     |
+| 90     | 90      |
+
+* Error Handling
+
+** Authentication Error
+Run =gcalcli init= to re-authenticate.
+
+** Calendar Not Found
+Check available calendars with =gcalcli list=.
+
+** Invalid Time Format
+Use explicit date format: =YYYY-MM-DD HH:MM=
+
+* Related
+
+- [[file:read-calendar-events.org][Read Calendar Events]] - view events
+- [[file:edit-calendar-event.org][Edit Calendar Event]] - modify events
+- [[file:delete-calendar-event.org][Delete Calendar Event]] - remove events
+- [[file:../calendar-api-research.org][Calendar API Research]] - gcalcli reference
