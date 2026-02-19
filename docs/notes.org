@@ -327,6 +327,32 @@ Each entry should use this format:
 
 ** Session Entries
 
+*** 2026-02-19 Thu @ 16:11-16:14 -0600
+
+*Status:* COMPLETE
+
+*What We Completed:*
+- Template sync from claude-templates (protocols, workflows, scripts, announcements)
+- Processed 4 announcements:
+  1. Calendar workflows updated with cross-calendar visibility
+  2. gcalcli now available for Google Calendar CLI access
+  3. New open-tasks workflow — updated todo.org headers to project-named convention (Archangel Open Work / Archangel Resolved)
+  4. New summarize-emails workflow added
+- New workflows synced: add-calendar-event, delete-calendar-event, edit-calendar-event, read-calendar-events, open-tasks, summarize-emails
+- New script synced: maildir-flag-manager.py
+
+*Files Modified:*
+- [[file:../todo.org][todo.org]] — renamed headers to project-named convention
+
+*Files Added (from template):*
+- docs/workflows/{add,delete,edit,read}-calendar-event.org
+- docs/workflows/open-tasks.org, summarize-emails.org
+- docs/scripts/maildir-flag-manager.py
+- docs/announcements/inbox-gitkeep.txt
+
+*Outstanding Reminder:*
+- [2026-02-12] Verify TrueNAS ISO hash — still pending
+
 *** 2026-02-12 Thu @ 08:23-16:08 -0600
 
 *Status:* COMPLETE

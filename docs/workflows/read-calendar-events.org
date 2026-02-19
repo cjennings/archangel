@@ -1,0 +1,214 @@
+#+TITLE: Read Calendar Events Workflow
+#+AUTHOR: Craig Jennings & Claude
+#+DATE: 2026-02-01
+
+* Overview
+
+Workflow for viewing and querying calendar events via gcalcli.
+
+* Triggers
+
+- "what's on my calendar"
+- "show me appointments"
+- "summarize my schedule"
+- "what do I have today"
+- "calendar for this week"
+- "any meetings tomorrow"
+
+* Prerequisites
+
+- gcalcli installed and authenticated
+- Test with =gcalcli list= to verify authentication
+
+* CRITICAL: Cross-Calendar Visibility
+
+gcalcli only sees Google calendars. To see ALL of Craig's calendars (Google, DeepSat work, Proton), you MUST query the emacs org calendar files:
+
+#+begin_src bash
+grep "2026-02-18" ~/.emacs.d/data/gcal.org   # Google calendar
+grep "2026-02-18" ~/.emacs.d/data/dcal.org   # DeepSat work calendar
+grep "2026-02-18" ~/.emacs.d/data/pcal.org   # Proton calendar
+#+end_src
+
+| File     | Calendar                  |
+|----------+---------------------------|
+| gcal.org | Craig (Google)            |
+| dcal.org | Craig DeepSat (work)      |
+| pcal.org | Craig Proton              |
+
+*ALWAYS check all three files* when checking availability or showing the schedule. gcalcli alone will miss work and Proton events, causing an incomplete picture.
+
+To *create* events, use gcalcli with =--calendar "Craig"= (Google). The org files are read-only views.
+
+* Workflow Steps
+
+** 1. Parse Time Range
+
+Interpret the user's request to determine date range:
+
+| Request            | Interpretation                |
+|--------------------+-------------------------------|
+| "today"            | Today only                    |
+| "tomorrow"         | Tomorrow only                 |
+| "this week"        | Next 7 days                   |
+| "next week"        | 7-14 days from now            |
+| "this month"       | Rest of current month         |
+| "April 2026"       | That entire month             |
+| "next Tuesday"     | That specific day             |
+| "the 15th"         | The 15th of current month     |
+
+*No fixed default* - interpret from context. If unclear, ask.
+
+** 2. Determine Calendar Scope
+
+Options:
+- All calendars (default)
+- Specific calendar: use =--calendar "Name"=
+
+** 3. Query Calendar
+
+#+begin_src bash
+# Agenda view (list format)
+gcalcli agenda "start_date" "end_date"
+
+# Weekly calendar view
+gcalcli calw
+
+# Monthly calendar view
+gcalcli calm
+#+end_src
+
+** 4. Format Results
+
+Present events in a readable format:
+
+#+begin_example
+=== Tuesday, February 4, 2026 ===
+
+9:00 AM - 10:00 AM  Team Standup
+                    Location: Conference Room A
+
+2:00 PM - 3:00 PM   Dentist Appointment
+                    Location: Downtown Dental
+
+=== Wednesday, February 5, 2026 ===
+
+(No events)
+
+=== Thursday, February 6, 2026 ===
+
+10:00 AM - 11:30 AM Project Review
+                    Location: Zoom
+#+end_example
+
+** 5. Summarize
+
+Provide a brief summary:
+- Total number of events
+- Busy days vs free days
+- Any all-day events
+- Conflicts (if any)
+
+* gcalcli Command Reference
+
+** Agenda View
+
+#+begin_src bash
+# Default agenda (next few days)
+gcalcli agenda
+
+# Today only
+gcalcli agenda "today" "today 11:59pm"
+
+# This week
+gcalcli agenda "today" "+7 days"
+
+# Specific date range
+gcalcli agenda "2026-03-01" "2026-03-31"
+
+# Specific calendar
+gcalcli --calendar "Work" agenda "today" "+7 days"
+#+end_src
+
+** Calendar Views
+
+#+begin_src bash
+# Weekly calendar (visual)
+gcalcli calw
+
+# Monthly calendar (visual)
+gcalcli calm
+
+# Multiple weeks
+gcalcli calw 2  # Next 2 weeks
+#+end_src
+
+** Search
+
+#+begin_src bash
+# Search by title
+gcalcli search "meeting"
+
+# Search specific calendar
+gcalcli --calendar "Work" search "standup"
+#+end_src
+
+* Output Formats
+
+gcalcli supports different output formats:
+
+| Option           | Description                    |
+|------------------+--------------------------------|
+| (default)        | Colored terminal output        |
+| --nocolor        | Plain text                     |
+| --tsv            | Tab-separated values           |
+
+* Time Range Examples
+
+| User Says              | gcalcli Command                              |
+|------------------------+----------------------------------------------|
+| "today"                | agenda "today" "today 11:59pm"               |
+| "tomorrow"             | agenda "tomorrow" "tomorrow 11:59pm"         |
+| "this week"            | agenda "today" "+7 days"                     |
+| "next week"            | agenda "+7 days" "+14 days"                  |
+| "February"             | agenda "2026-02-01" "2026-02-28"             |
+| "next 3 days"          | agenda "today" "+3 days"                     |
+| "rest of the month"    | agenda "today" "2026-02-28"                  |
+
+* Calendars
+
+| Calendar                  | Access | Notes                          |
+|---------------------------+--------+--------------------------------|
+| Craig                     | owner  | Default personal calendar      |
+| Christine                 | owner  | Christine's calendar           |
+| Todoist                   | owner  | Todoist integration            |
+| Craig Jennings (TripIt)   | reader | View only                      |
+| Holidays in United States | reader | View only                      |
+| Craig Proton              | reader | View only (no API access)      |
+
+* Handling No Events
+
+If the date range has no events:
+- Confirm the range was correct
+- Mention the calendar is free
+- Offer to check a different range
+
+Example: "No events found for tomorrow (Feb 3). Your calendar is free that day."
+
+* Error Handling
+
+** No Events Found
+Not an error - calendar may simply be free.
+
+** Authentication Error
+Run =gcalcli init= to re-authenticate.
+
+** Invalid Date Range
+Use explicit dates: =YYYY-MM-DD=
+
+* Related
+
+- [[file:add-calendar-event.org][Add Calendar Event]] - create events
+- [[file:edit-calendar-event.org][Edit Calendar Event]] - modify events
+- [[file:delete-calendar-event.org][Delete Calendar Event]] - remove events
+- [[file:../calendar-api-research.org][Calendar API Research]] - gcalcli reference
