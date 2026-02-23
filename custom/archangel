@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # archangel - Arch Linux Installer with Snapshot-Based Recovery
 # Craig Jennings <c@cjennings.net>
 #
