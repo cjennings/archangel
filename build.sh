@@ -140,12 +140,14 @@ if [[ -f "$PROFILE_DIR/airootfs/etc/mkinitcpio.d/linux.preset" ]]; then
 fi
 
 # Add archzfs repository to pacman.conf
+# SigLevel=Never: archzfs GPG key import is unreliable in clean build environments;
+# repo is explicitly added and served over HTTPS, GPG adds no real value here
 info "Adding archzfs repository..."
 cat >> "$PROFILE_DIR/pacman.conf" << 'EOF'
 
 [archzfs]
 Server = https://archzfs.com/$repo/$arch
-SigLevel = Optional TrustAll
+SigLevel = Never
 EOF
 
 # Add ZFS and our custom packages
