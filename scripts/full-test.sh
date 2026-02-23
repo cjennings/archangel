@@ -33,9 +33,9 @@ VM_DISK_SIZE="20G"
 VM_RAM="4096"
 VM_CPUS="4"
 
-# UEFI firmware
-OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
-OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
+# UEFI firmware (override via environment for non-Arch distros)
+OVMF_CODE="${OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}"
+OVMF_VARS_ORIG="${OVMF_VARS_ORIG:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}"
 
 # SSH settings
 SSH_PORT=2224  # Different port to avoid conflicts
