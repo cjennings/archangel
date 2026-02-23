@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Craig Jennings <c@cjennings.net>
+# Craig Jennings (github.com/cjennings)
 # Create a ZFS snapshot across all datasets with a dated, descriptive name.
 
 set -euo pipefail

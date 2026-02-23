@@ -289,10 +289,10 @@ run_sanity_tests() {
         "uname -r" \
         "lts"
 
-    # Test 10: archsetup directory present
-    run_test "archsetup directory present" \
-        "test -d /code/archsetup && echo 'exists'" \
-        "exists"
+    # Test 10: archsetup directory present (optional - only if ARCHSETUP_DIR was set during build)
+    run_test "archsetup directory (optional)" \
+        "test -d /code/archsetup && echo 'present' || echo 'not included'" \
+        ""
 
     # Test 11: Btrfs tools installed (dual filesystem support)
     run_test "Btrfs tools installed" \
