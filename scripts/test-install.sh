@@ -173,14 +173,24 @@ start_vm() {
 }
 
 # Start VM from installed disk (no ISO)
+# Pass "luks" as $3 to add a QEMU monitor socket (needed for GRUB passphrase entry via sendkey)
 start_vm_from_disk() {
     local test_name="$1"
     local disk_count="$2"
+    local luks_mode="${3:-}"
     local disk_args
     disk_args=$(get_disk_args "$disk_count" "$test_name")
 
     # Reuse existing OVMF vars (preserves EFI boot entries from install)
     local ovmf_vars="$VM_DIR/OVMF_VARS_${test_name}.fd"
+
+    # For LUKS: add monitor socket for sendkey (to type GRUB passphrase)
+    local monitor_args=""
+    if [[ "$luks_mode" == "luks" ]]; then
+        local monitor_sock="$VM_DIR/monitor-${test_name}.sock"
+        rm -f "$monitor_sock"
+        monitor_args="-monitor unix:$monitor_sock,server,nowait"
+    fi
 
     # Start VM without ISO, boot from disk
     qemu-system-x86_64 \
@@ -196,6 +206,7 @@ start_vm_from_disk() {
         -netdev user,id=net0,hostfwd=tcp::"$SSH_PORT"-:22 \
         -device virtio-net-pci,netdev=net0 \
         -serial file:"$SERIAL_LOG" \
+        $monitor_args \
         -display none \
         -daemonize \
         -pidfile "$VM_DIR/qemu-${test_name}.pid" \
@@ -226,6 +237,9 @@ stop_vm() {
     if [[ "$keep_vars" != "true" ]]; then
         rm -f "$VM_DIR/OVMF_VARS_${test_name}.fd"
     fi
+
+    # Clean up monitor socket
+    rm -f "$VM_DIR/monitor-${test_name}.sock"
 }
 
 # Wait for SSH to be available
@@ -270,6 +284,83 @@ wait_for_boot_console() {
 
         sleep 5
     done
+}
+
+# Send a string as QEMU monitor sendkey commands
+# Converts each character to a QEMU key name and sends via monitor socket
+monitor_sendkeys() {
+    local monitor_sock="$1"
+    local text="$2"
+
+    for ((ci=0; ci<${#text}; ci++)); do
+        local char="${text:$ci:1}"
+        local key=""
+        case "$char" in
+            [a-z]) key="$char" ;;
+            [A-Z]) key="shift-$(echo "$char" | tr '[:upper:]' '[:lower:]')" ;;
+            [0-9]) key="$char" ;;
+            ' ')   key="spc" ;;
+            '-')   key="minus" ;;
+            '=')   key="equal" ;;
+            '.')   key="dot" ;;
+            ',')   key="comma" ;;
+            '/')   key="slash" ;;
+            '\\')  key="backslash" ;;
+            ';')   key="semicolon" ;;
+            "'")   key="apostrophe" ;;
+            '[')   key="bracket_left" ;;
+            ']')   key="bracket_right" ;;
+            '!')   key="shift-1" ;;
+            '@')   key="shift-2" ;;
+            '#')   key="shift-3" ;;
+            '$')   key="shift-4" ;;
+            *)     key="$char" ;;
+        esac
+        echo "sendkey $key" | socat - UNIX-CONNECT:"$monitor_sock" >/dev/null 2>&1
+        sleep 0.05  # Small delay between keystrokes
+    done
+    # Send Enter
+    echo "sendkey ret" | socat - UNIX-CONNECT:"$monitor_sock" >/dev/null 2>&1
+}
+
+# Send GRUB passphrase via QEMU monitor sendkey
+# The initramfs passphrase is handled by the cryptkey=rootfs: parameter
+# For multi-disk LUKS (mirror), GRUB prompts for each disk separately
+send_luks_passphrase() {
+    local test_name="$1"
+    local passphrase="$2"
+    local disk_count="${3:-1}"
+    local monitor_sock="$VM_DIR/monitor-${test_name}.sock"
+
+    step "Waiting for GRUB passphrase prompt..."
+
+    # Wait for first GRUB passphrase prompt
+    local waited=0
+    while ! grep -q "Enter passphrase for" "$SERIAL_LOG" 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+        if [[ $waited -ge 30 ]]; then
+            error "Timed out waiting for GRUB passphrase prompt"
+            return 1
+        fi
+    done
+    info "GRUB passphrase prompt detected after ${waited}s"
+
+    # Send passphrase for each LUKS disk (GRUB prompts once per encrypted disk)
+    for ((i=1; i<=disk_count; i++)); do
+        sleep 1  # Ensure GRUB is ready for input
+        step "Sending GRUB passphrase ($i/$disk_count) via monitor sendkey..."
+        monitor_sendkeys "$monitor_sock" "$passphrase"
+
+        # Wait between passphrases for GRUB to decrypt and show next prompt
+        if [[ $i -lt $disk_count ]]; then
+            info "Waiting for next GRUB passphrase prompt..."
+            sleep 8
+        fi
+    done
+
+    info "All GRUB passphrases sent"
+    return 0
 }
 
 # Run SSH command (uses SSH_PASSWORD by default, or INSTALLED_PASSWORD if set)
@@ -580,8 +671,19 @@ run_test() {
     # Boot from installed disk (no ISO)
     step "Booting from installed disk..."
     : > "$SERIAL_LOG"  # Clear serial log
+
+    # Determine if this is a LUKS config (needs monitor for GRUB passphrase)
+    local luks_passphrase
+    luks_passphrase=$(grep '^LUKS_PASSPHRASE=' "$config" | cut -d= -f2)
+    local no_encrypt
+    no_encrypt=$(grep '^NO_ENCRYPT=' "$config" | cut -d= -f2)
+    local luks_flag=""
+    if [[ -n "$luks_passphrase" && "$no_encrypt" != "yes" ]]; then
+        luks_flag="luks"
+    fi
+
     local vm_pid2
-    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count")
+    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count" "$luks_flag")
 
     if [[ -z "$vm_pid2" ]]; then
         error "Failed to start VM from disk"
@@ -591,6 +693,19 @@ run_test() {
         return 1
     fi
     info "VM started from disk (PID: $vm_pid2)"
+
+    # If LUKS is enabled, send GRUB passphrase via monitor sendkey
+    if [[ -n "$luks_flag" ]]; then
+        if ! send_luks_passphrase "$config_name" "$luks_passphrase" "$disk_count"; then
+            error "Failed to send LUKS passphrase"
+            stop_vm "$config_name"
+            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
+        fi
+    fi
 
     # Check if SSH is enabled in the config
     local enable_ssh
@@ -687,6 +802,7 @@ main() {
     # Check dependencies
     command -v qemu-system-x86_64 >/dev/null 2>&1 || { error "qemu not found"; exit 1; }
     command -v sshpass >/dev/null 2>&1 || { error "sshpass not found"; exit 1; }
+    command -v socat >/dev/null 2>&1 || { error "socat not found (needed for LUKS tests)"; exit 1; }
     [[ -f "$OVMF_CODE" ]] || { error "OVMF not found: $OVMF_CODE"; exit 1; }
 
     # Find ISO
