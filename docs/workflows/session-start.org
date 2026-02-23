@@ -1,3 +1,0 @@
-This workflow has been renamed to startup.org. Run docs/workflows/startup.org instead.
-
-Delete this file (session-start.org) when finished.
