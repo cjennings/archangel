@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Craig Jennings <c@cjennings.net>
+# Craig Jennings (github.com/cjennings)
 # Roll back ZFS datasets to a selected snapshot using fzf.
 
 set -euo pipefail

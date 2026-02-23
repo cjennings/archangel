@@ -7,10 +7,10 @@
 #   ./scripts/build-release --skip-build # Skip build, just distribute existing ISO
 #   ./scripts/build-release --skip-test  # Skip all testing
 #
-# Distribution targets:
-#   - ~/downloads/isos/
-#   - ~/code/archsetup/inbox/ (notification for test VM rebuild)
-#   - truenas.local:/mnt/vault/isos (if reachable)
+# Distribution targets (configurable via environment variables):
+#   - $LOCAL_ISO_DIR (default: ~/archangel-isos)
+#   - $ARCHSETUP_INBOX (notification for test VM rebuild, if set)
+#   - $DIST_REMOTE_HOST:$DIST_REMOTE_PATH (if set and reachable)
 
 set -e
 
@@ -26,11 +26,11 @@ else
     REAL_HOME="$HOME"
 fi
 
-# Distribution targets
-TRUENAS_HOST="truenas.local"
-TRUENAS_PATH="/mnt/vault/isos"
-LOCAL_ISO_DIR="$REAL_HOME/downloads/isos"
-ARCHSETUP_INBOX="$REAL_HOME/code/archsetup/inbox"
+# Distribution targets (override via environment variables)
+DIST_REMOTE_HOST="${DIST_REMOTE_HOST:-}"
+DIST_REMOTE_PATH="${DIST_REMOTE_PATH:-/mnt/isos}"
+LOCAL_ISO_DIR="${LOCAL_ISO_DIR:-$REAL_HOME/archangel-isos}"
+ARCHSETUP_INBOX="${ARCHSETUP_INBOX:-}"
 
 # Colors
 RED='\033[0;31m'
@@ -67,7 +67,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Distribution status tracking
-TRUENAS_SUCCESS=false
+DIST_REMOTE_SUCCESS=false
 LOCAL_SUCCESS=false
 
 # Check root for build
@@ -120,17 +120,23 @@ full_test() {
     info "All installation tests passed!"
 }
 
-# Distribute to TrueNAS
-distribute_truenas() {
-    step "Distributing to TrueNAS"
+# Distribute to remote host via SCP
+distribute_remote() {
+    step "Distributing to Remote Host"
 
-    # Check if reachable
-    if ! ping -c 1 -W 2 "$TRUENAS_HOST" &>/dev/null; then
-        warn "TrueNAS ($TRUENAS_HOST) not reachable, skipping"
+    # Skip if no host configured
+    if [[ -z "$DIST_REMOTE_HOST" ]]; then
+        info "DIST_REMOTE_HOST not set, skipping"
         return 0
     fi
 
-    info "TrueNAS is reachable"
+    # Check if reachable
+    if ! ping -c 1 -W 2 "$DIST_REMOTE_HOST" &>/dev/null; then
+        warn "Remote host ($DIST_REMOTE_HOST) not reachable, skipping"
+        return 0
+    fi
+
+    info "Remote host is reachable"
 
     # Run SCP as the real user (not root) to use their SSH keys
     local scp_cmd="scp"
@@ -138,12 +144,12 @@ distribute_truenas() {
         scp_cmd="sudo -u $SUDO_USER scp"
     fi
 
-    info "Copying to $TRUENAS_HOST:$TRUENAS_PATH/"
-    if $scp_cmd "$ISO_FILE" "$REAL_USER@$TRUENAS_HOST:$TRUENAS_PATH/"; then
-        info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
-        TRUENAS_SUCCESS=true
+    info "Copying to $DIST_REMOTE_HOST:$DIST_REMOTE_PATH/"
+    if $scp_cmd "$ISO_FILE" "$REAL_USER@$DIST_REMOTE_HOST:$DIST_REMOTE_PATH/"; then
+        info "Done: $DIST_REMOTE_HOST:$DIST_REMOTE_PATH/$ISO_NAME"
+        DIST_REMOTE_SUCCESS=true
     else
-        warn "Failed to copy to TrueNAS (SSH key issue?), skipping"
+        warn "Failed to copy to remote host (SSH key issue?), skipping"
         return 0
     fi
 }
@@ -159,10 +165,10 @@ distribute_local() {
     LOCAL_SUCCESS=true
 
     # Notify archsetup project that a new ISO is available
-    if [[ -d "$ARCHSETUP_INBOX" ]]; then
+    if [[ -n "$ARCHSETUP_INBOX" && -d "$ARCHSETUP_INBOX" ]]; then
         cat > "$ARCHSETUP_INBOX/rebuild-test-vm.txt" << EOF
 New archangel ISO available: $ISO_NAME
-Location: ~/downloads/isos/
+Location: $LOCAL_ISO_DIR/
 Rebuild the base test VM from this ISO to pick up the new kernel.
 EOF
         info "Notified archsetup inbox"
@@ -176,8 +182,8 @@ show_summary() {
     echo ""
     echo "Distributed to:"
     $LOCAL_SUCCESS && echo "  - $LOCAL_ISO_DIR/"
-    $TRUENAS_SUCCESS && echo "  - $TRUENAS_HOST:$TRUENAS_PATH/"
-    $TRUENAS_SUCCESS || echo "  - TrueNAS ($TRUENAS_HOST) not reachable, skipped"
+    $DIST_REMOTE_SUCCESS && echo "  - $DIST_REMOTE_HOST:$DIST_REMOTE_PATH/"
+    $DIST_REMOTE_SUCCESS || [[ -z "$DIST_REMOTE_HOST" ]] || echo "  - Remote ($DIST_REMOTE_HOST) not reachable, skipped"
 }
 
 # Main
@@ -200,7 +206,7 @@ main() {
     fi
 
     distribute_local
-    distribute_truenas
+    distribute_remote
 
     show_summary
 }
