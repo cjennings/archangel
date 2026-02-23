@@ -4,7 +4,7 @@
 
 * Overview
 
-archangel is a custom Arch Linux ISO build system that creates a live environment
+Archangel is a custom Arch Linux ISO build system that creates a live environment
 optimized for installing Arch Linux on ZFS or Btrfs root filesystems. It provides an
 interactive installer with support for encrypted filesystems, multi-disk RAID
 configurations, and automatic snapshot management.
@@ -15,26 +15,26 @@ manual module loading or package installation during the install process.
 * Features
 
 - *Dual Filesystem Support* - Choose ZFS or Btrfs during installation
+- *SSH Ready* - Optional SSH with root login for headless servers
 - *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
 - *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
+- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for booting snapshots
 - *EFI Boot Redundancy* - Bootloader installed on all disks for resilience
 - *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi selection
-- *Genesis Snapshot* - Automatic pristine-state snapshot after installation
-- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for booting snapshots
 - *NetworkManager* - WiFi configuration copied to installed system
-- *SSH Ready* - Optional SSH with root login for headless servers
+- *Genesis Snapshot* - Automatic pristine-state snapshot after installation
 - *LTS Kernel* - Uses linux-lts for stability
 
 ** Filesystem Comparison
 
-| Feature | ZFS | Btrfs |
-|---------+-----+-------|
-| Bootloader | ZFSBootMenu | GRUB + grub-btrfs |
-| Encryption | Native ZFS encryption | LUKS2 |
-| Snapshots | zfs snapshot | snapper |
-| Snapshot boot | Built into ZFSBootMenu | grub-btrfs menu |
-| RAID support | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
-| EFI size | 512MB | 1GB |
+| Feature       | ZFS                                  | Btrfs                |
+|---------------+--------------------------------------+----------------------|
+| Bootloader    | ZFSBootMenu                          | GRUB + grub-btrfs    |
+| Encryption    | Native ZFS encryption                | LUKS2                |
+| Snapshots     | cj: internal tool with custom script | snapper              |
+| Snapshot boot | Built into ZFSBootMenu               | grub-btrfs menu      |
+| RAID support  | mirror, raidz1/2/3, stripe           | RAID0, RAID1, RAID10 |
+| EFI size      | 512MB                                | 1GB                  |
 
 * Quick Start
 
