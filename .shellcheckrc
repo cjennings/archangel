@@ -16,5 +16,6 @@
 # SC2059 - Variables in printf format (intentional for hex conversion)
 # SC2143 - Use grep -q (stylistic)
 # SC2207 - Prefer mapfile (arrays from command output)
+# SC1003 - False positive on escaped single quotes in case patterns
 
-disable=SC2034,SC2086,SC2162,SC2016,SC2317,SC2012,SC1091,SC2329,SC2011,SC2010,SC2129,SC2001,SC2059,SC2143,SC2207
+disable=SC2034,SC2086,SC2162,SC2016,SC2317,SC2012,SC1091,SC2329,SC2011,SC2010,SC2129,SC2001,SC2059,SC2143,SC2207,SC1003
