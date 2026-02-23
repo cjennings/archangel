@@ -139,7 +139,7 @@ distribute_truenas() {
     fi
 
     info "Copying to $TRUENAS_HOST:$TRUENAS_PATH/"
-    if $scp_cmd "$ISO_FILE" "cjennings@$TRUENAS_HOST:$TRUENAS_PATH/"; then
+    if $scp_cmd "$ISO_FILE" "$REAL_USER@$TRUENAS_HOST:$TRUENAS_PATH/"; then
         info "Done: $TRUENAS_HOST:$TRUENAS_PATH/$ISO_NAME"
         TRUENAS_SUCCESS=true
     else
