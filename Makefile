@@ -1,7 +1,6 @@
 # Makefile for archangel ISO build and testing
 #
 # Usage:
-#   make              - Run lint and build
 #   make test         - Run lint
 #   make test-install - Run install tests in VM (slow)
 #   make build        - Build the ISO
@@ -11,10 +10,7 @@
 #
 # Test configurations are in scripts/test-configs/
 
-.PHONY: all test test-install build release clean lint
-
-# Default target
-all: lint build
+.PHONY: test test-install build release clean lint
 
 # Lint all bash scripts
 lint:
