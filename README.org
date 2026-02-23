@@ -5,7 +5,11 @@ Arch Linux ISO and installer with ZFS and Btrfs support.
 
 * Overview
 
-Archangel is a custom Arch Linux ISO build system. ~make build~ will begin generating a live ISO with OpenZFS kernel modules and an installer that supports Arch Linux on ZFS root along with Btrfs, encrypted filesystems, multi-disk RAID configurations. The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair, hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts automatically making remote connections dead easy. 
+Archangel is a custom Arch Linux ISO build system.
+
+~make build~ will begin generating a live ISO with OpenZFS kernel modules and an installer that supports Arch Linux on ZFS root along with Btrfs, encrypted filesystems, and multi-disk RAID configurations.
+
+The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair, hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts automatically making remote connections dead easy.
 
 * Features
 
