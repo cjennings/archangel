@@ -111,7 +111,8 @@ format_efi_partitions() {
     local first=true
 
     for disk in "${disks[@]}"; do
-        local efi=$(get_efi_partition "$disk")
+        local efi
+        efi=$(get_efi_partition "$disk")
         if $first; then
             format_efi "$efi" "EFI"
             first=false
@@ -162,7 +163,8 @@ select_disks() {
     # Extract just the device paths (remove size/model info)
     SELECTED_DISKS=()
     while IFS= read -r line; do
-        local disk=$(echo "$line" | cut -d' ' -f1)
+        local disk
+        disk=$(echo "$line" | cut -d' ' -f1)
         SELECTED_DISKS+=("$disk")
     done <<< "$selected"
 

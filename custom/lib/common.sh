@@ -31,7 +31,8 @@ prompt() { echo -e "${BLUE}$1${NC}"; }
 
 # Log to file if LOG_FILE is set
 log() {
-    local msg="[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    local msg
+    msg="[$(date +'%Y-%m-%d %H:%M:%S')] $1"
     if [[ -n "$LOG_FILE" ]]; then
         echo "$msg" >> "$LOG_FILE"
     fi
@@ -162,8 +163,10 @@ list_available_disks() {
     for disk in /dev/nvme[0-9]n[0-9] /dev/sd[a-z] /dev/vd[a-z]; do
         [[ -b "$disk" ]] || continue
         disk_in_use "$disk" && continue
-        local size=$(get_disk_size "$disk")
-        local model=$(get_disk_model "$disk")
+        local size
+        size=$(get_disk_size "$disk")
+        local model
+        model=$(get_disk_model "$disk")
         disks+=("$disk ($size, $model)")
     done
     printf '%s\n' "${disks[@]}"

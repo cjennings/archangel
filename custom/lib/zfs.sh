@@ -104,7 +104,8 @@ create_zfs_datasets() {
     zfs create -o mountpoint=none -o canmount=off "$POOL_NAME/ROOT"
 
     # Calculate reservation (20% of pool, capped 5-20G)
-    local pool_size_bytes=$(zpool get -Hp size "$POOL_NAME" | awk '{print $3}')
+    local pool_size_bytes
+    pool_size_bytes=$(zpool get -Hp size "$POOL_NAME" | awk '{print $3}')
     local pool_size_gb=$((pool_size_bytes / 1024 / 1024 / 1024))
     local reserve_gb=$((pool_size_gb / 5))
     [[ $reserve_gb -gt 20 ]] && reserve_gb=20
@@ -152,7 +153,8 @@ configure_zfsbootmenu() {
     if [[ ! -f /etc/hostid ]]; then
         zgenhostid
     fi
-    local host_id=$(hostid)
+    local host_id
+    host_id=$(hostid)
 
     # Copy hostid to installed system
     cp /etc/hostid /mnt/etc/hostid
@@ -205,9 +207,11 @@ configure_zfsbootmenu() {
     done
 
     # Set as primary boot option
-    local bootnum=$(efibootmgr | grep "ZFSBootMenu" | head -1 | grep -oP 'Boot\K[0-9A-F]+')
+    local bootnum
+    bootnum=$(efibootmgr | grep "ZFSBootMenu" | head -1 | grep -oP 'Boot\K[0-9A-F]+')
     if [[ -n "$bootnum" ]]; then
-        local current_order=$(efibootmgr | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
+        local current_order
+        current_order=$(efibootmgr | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
         efibootmgr --bootorder "$bootnum,$current_order" --quiet
         info "ZFSBootMenu set as primary boot option"
     fi
