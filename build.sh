@@ -5,7 +5,7 @@
 # Uses linux-lts kernel with zfs-dkms from archzfs.com repository.
 # DKMS builds ZFS from source, ensuring it always matches the kernel version.
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="$SCRIPT_DIR/profile"
@@ -459,7 +459,7 @@ mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR"
 
 # Restore ownership to the user who invoked sudo
 # mkarchiso runs as root and creates root-owned files
-if [[ -n "$SUDO_USER" ]]; then
+if [[ -n "${SUDO_USER:-}" ]]; then
     info "Restoring ownership to $SUDO_USER..."
     chown -R "$SUDO_USER:$SUDO_USER" "$OUT_DIR" "$WORK_DIR" "$PROFILE_DIR" 2>/dev/null || true
 fi
