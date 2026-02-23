@@ -1,5 +1,5 @@
 #+TITLE: archangel - Arch Linux ZFS/Btrfs Installation ISO
-#+AUTHOR:
+#+AUTHOR: Craig Jennings
 #+OPTIONS: toc:3
 
 * Overview
@@ -99,6 +99,7 @@ sudo ./build.sh
 #+BEGIN_EXAMPLE
 archangel/
 ├── build.sh                       # Main ISO build script
+├── Makefile                       # Build, lint, test, and release targets
 ├── custom/
 │   ├── archangel                  # Interactive installation script
 │   ├── archangel.conf.example     # Example config for unattended install
@@ -109,16 +110,19 @@ archangel/
 │   │   ├── zfs.sh                 # ZFS-specific functions
 │   │   └── btrfs.sh               # Btrfs-specific functions
 │   ├── zfssnapshot                # ZFS snapshot utility
-│   └── zfsrollback                # ZFS rollback utility
+│   ├── zfsrollback                # ZFS rollback utility
+│   └── RESCUE-GUIDE.txt           # Recovery tools documentation
 ├── scripts/
 │   ├── test-vm.sh                 # QEMU test VM launcher
 │   ├── test-install.sh            # Automated install tests
+│   ├── test-configs/              # Test configuration files
+│   ├── full-test.sh               # Comprehensive test suite
 │   ├── sanity-test.sh             # Quick ISO verification
+│   ├── boot-vm.sh                 # Boot VM from disk or ISO
 │   └── build-release              # Build and distribute ISO
 ├── vm/                            # VM disk images (created by test-vm.sh)
 ├── work/                          # Build working directory
-├── out/                           # Built ISO output
-└── docs/                          # Documentation
+└── out/                           # Built ISO output
 #+END_EXAMPLE
 
 ** Script Descriptions
@@ -150,6 +154,10 @@ This creates a 50GB virtual disk and boots the ISO.
 #+END_SRC
 
 ** SSH Access to VM
+
+*Security Warning*: The live ISO has SSH root login enabled with the password
+~archangel~. This is intended for testing and headless installations only.
+Do not expose the live environment to untrusted networks.
 
 #+BEGIN_SRC bash
 # Password: archangel
