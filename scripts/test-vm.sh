@@ -7,7 +7,7 @@
 #   ./test-vm.sh --boot-disk        # Boot from existing virtual disk (after install)
 #   ./test-vm.sh --clean            # Remove VM disks and start fresh
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

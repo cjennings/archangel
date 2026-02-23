@@ -9,7 +9,7 @@
 #   ./test-install.sh single-disk     # Run specific config
 #   ./test-install.sh --list          # List available configs
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
