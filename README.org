@@ -1,4 +1,5 @@
-#+TITLE: archangel - Arch Linux ZFS/Btrfs Installation ISO
+#+TITLE: Archangel
+#+SUBTITLE: Arch Linux ZFS/Btrfs Installation ISO
 #+AUTHOR: Craig Jennings
 #+OPTIONS: toc:3
 
@@ -12,29 +13,35 @@ configurations, and automatic snapshot management.
 The ISO includes all necessary tools pre-loaded, eliminating the need for
 manual module loading or package installation during the install process.
 
+The ISO also doubles as a [[*Rescue Disk][rescue disk]] with data recovery, boot repair,
+hardware diagnostics, and other tools pre-installed. An [[*SSH Server][SSH server]] starts
+automatically for remote access.
+
 * Features
 
-- *Dual Filesystem Support* - Choose ZFS or Btrfs during installation
-- *SSH Ready* - Optional SSH with root login for headless servers
+- *Dual Filesystem Support* - Choose ZFS or Btrfs during installation ([[*Filesystem Comparison][comparison]])
 - *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
 - *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
-- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for booting snapshots
+- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[*Post-Installation][booting snapshots]]
+- *[[*SSH Server][SSH Ready]]* - Optional SSH with root login for headless servers
 - *EFI Boot Redundancy* - Bootloader installed on all disks for resilience
-- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi selection
+- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi ([[*Installation Walkthrough][walkthrough]])
 - *NetworkManager* - WiFi configuration copied to installed system
-- *Genesis Snapshot* - Automatic pristine-state snapshot after installation
+- *[[*Unattended Installation][Unattended Install]]* - Headless installation via plaintext config file
+- *[[*Genesis Snapshot][Genesis Snapshot]]* - Automatic pristine-state snapshot after installation. Convenient for testing machines. 
+- *[[*Rescue Disk][Rescue Disk]]* - Data recovery, boot repair, hardware diagnostics, and more
 - *LTS Kernel* - Uses linux-lts for stability
 
 ** Filesystem Comparison
 
-| Feature       | ZFS                                  | Btrfs                |
-|---------------+--------------------------------------+----------------------|
-| Bootloader    | ZFSBootMenu                          | GRUB + grub-btrfs    |
-| Encryption    | Native ZFS encryption                | LUKS2                |
-| Snapshots     | cj: internal tool with custom script | snapper              |
-| Snapshot boot | Built into ZFSBootMenu               | grub-btrfs menu      |
-| RAID support  | mirror, raidz1/2/3, stripe           | RAID0, RAID1, RAID10 |
-| EFI size      | 512MB                                | 1GB                  |
+| Feature          | ZFS                        | Btrfs                |
+|------------------+----------------------------+----------------------|
+| Bootloader       | ZFSBootMenu                | GRUB + grub-btrfs    |
+| Encryption       | Native ZFS encryption      | LUKS2                |
+| Snapshot utility | zfssnapshot helper scripts | snapper              |
+| Snapshot boot    | Built into ZFSBootMenu     | grub-btrfs menu      |
+| RAID support     | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
+| EFI size         | 512MB                      | 1GB                  |
 
 * Quick Start
 
@@ -56,7 +63,7 @@ Boot the ISO and run ~archangel~ to start the installation.
 ** Build Host Requirements
 - Arch Linux (or Arch-based distribution)
 - Root/sudo access
-- ~archiso~ package installed (~pacman -S archiso~)
+- ~archiso~ package (~pacman -S archiso~) — auto-installed if missing
 - ~10GB free disk space for build
 
 ** Runtime Dependencies (included in ISO)
@@ -85,7 +92,7 @@ The build script will:
 
 - ISO location: ~out/archangel-vmlinuz-{version}-lts-YYYY-MM-DD-x86_64.iso~
 - Example: ~archangel-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso~
-- Build logs: visible in terminal output
+- Build logs: visible in terminal output (not saved to disk)
 
 ** Clean Rebuild
 
@@ -127,13 +134,18 @@ archangel/
 
 ** Script Descriptions
 
-| Script | Description |
-|--------+-------------|
-| ~build.sh~ | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso |
+| Script              | Description                                                                                                  |
+|---------------------+--------------------------------------------------------------------------------------------------------------|
+| ~build.sh~            | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso                      |
 | ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
-| ~scripts/test-vm.sh~ | Launches QEMU VM for testing. Supports single and multi-disk configurations |
+| ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                                  |
 
 * Testing with VMs
+
+The test suite launches QEMU VMs to validate that the ISO boots correctly and
+that installations complete successfully across all supported configurations
+(ZFS/Btrfs, single/multi-disk, encrypted/unencrypted). Run these tests after
+modifying the installer or build scripts to catch regressions.
 
 ** Basic VM Test
 
@@ -155,9 +167,7 @@ This creates a 50GB virtual disk and boots the ISO.
 
 ** SSH Access to VM
 
-*Security Warning*: The live ISO has SSH root login enabled with the password
-~archangel~. This is intended for testing and headless installations only.
-Do not expose the live environment to untrusted networks.
+*Security Warning*: The live ISO has SSH root login enabled with the password ~archangel~. This is intended for testing, headless installations, and rescue operations only. Do not expose the live environment to untrusted networks.
 
 #+BEGIN_SRC bash
 # Password: archangel
@@ -181,8 +191,7 @@ sshpass -p archangel ssh -p 2222 root@localhost
 
 * Installation Walkthrough
 
-The ~archangel~ script provides a guided installation with fzf-based
-selection interfaces.
+The ~archangel~ script provides a guided installation with fzf-based selection interfaces with helpful information displayed about the choices. 
 
 ** Phase 1: Configuration Gathering
 
@@ -210,14 +219,14 @@ After configuration, the installation runs without intervention:
 
 * Unattended Installation
 
-For automated or headless installations, use a config file.
+For automated or headless installations, you can specify a simple plain text config file containing the choices. 
 
 ** Using a Config File
 
 #+BEGIN_SRC bash
 # Copy and edit the example config
 cp /root/archangel.conf.example /root/my-install.conf
-vim /root/my-install.conf
+$EDITOR /root/my-install.conf
 
 # Run with config file
 archangel --config-file /root/my-install.conf
@@ -227,21 +236,53 @@ archangel --config-file /root/my-install.conf
 ~--config-file~. The installer will never automatically read a config file
 to prevent accidental disk destruction.
 
+** Example Config File
+
+#+BEGIN_SRC bash
+# archangel.conf - Unattended Installation Configuration
+#
+# Copy this file and edit values.
+# Usage: archangel --config-file /path/to/your-config.conf
+#
+# Required fields: HOSTNAME, TIMEZONE, DISKS, ROOT_PASSWORD
+# For ZFS: also need ZFS_PASSPHRASE or NO_ENCRYPT=yes
+# For Btrfs: also need LUKS_PASSPHRASE or NO_ENCRYPT=yes
+# All other fields have sensible defaults.
+
+FILESYSTEM=zfs
+HOSTNAME=archangel
+TIMEZONE=America/Los_Angeles
+LOCALE=en_US.UTF-8
+KEYMAP=us
+
+DISKS=/dev/vda
+RAID_LEVEL=
+
+ZFS_PASSPHRASE=changeme
+#LUKS_PASSPHRASE=changeme
+#NO_ENCRYPT=no
+
+ROOT_PASSWORD=changeme
+ENABLE_SSH=yes
+#+END_SRC
+
+A complete example with all options is available at ~installer/archangel.conf.example~.
+
 ** Config File Reference
 
-| Field | Required | Default | Description |
-|-------+----------+---------+-------------|
-| ~FILESYSTEM~ | No | zfs | Filesystem type (zfs or btrfs) |
-| ~HOSTNAME~ | Yes | - | System hostname |
-| ~TIMEZONE~ | Yes | - | Timezone (Region/City format) |
-| ~DISKS~ | Yes | - | Comma-separated disk paths |
-| ~ZFS_PASSPHRASE~ | Yes* | - | Encryption passphrase (*if not NO_ENCRYPT) |
-| ~ROOT_PASSWORD~ | Yes | - | Root user password |
-| ~LOCALE~ | No | en_US.UTF-8 | System locale |
-| ~KEYMAP~ | No | us | Console keyboard layout |
-| ~RAID_LEVEL~ | No | mirror | RAID type for multi-disk |
-| ~ENABLE_SSH~ | No | yes | Enable SSH server |
-| ~NO_ENCRYPT~ | No | no | Skip encryption (testing only) |
+| Field          | Required | Default     | Description                                |
+|----------------+----------+-------------+--------------------------------------------|
+| ~FILESYSTEM~     | No       | zfs         | Filesystem type (zfs or btrfs)             |
+| ~HOSTNAME~       | Yes      | -           | System hostname                            |
+| ~TIMEZONE~       | Yes      | -           | Timezone (Region/City format)              |
+| ~DISKS~          | Yes      | -           | Comma-separated disk paths                 |
+| ~ZFS_PASSPHRASE~ | Yes*     | -           | Encryption passphrase (*if not NO_ENCRYPT) |
+| ~ROOT_PASSWORD~  | Yes      | -           | Root user password                         |
+| ~LOCALE~         | No       | en_US.UTF-8 | System locale                              |
+| ~KEYMAP~         | No       | us          | Console keyboard layout                    |
+| ~RAID_LEVEL~     | No       | mirror      | RAID type for multi-disk                   |
+| ~ENABLE_SSH~     | No       | yes         | Enable SSH server                          |
+| ~NO_ENCRYPT~     | No       | no          | Skip encryption (testing only)             |
 
 * Bare Metal Installation
 
@@ -254,20 +295,24 @@ sudo dd if=out/archangel-vmlinuz-*.iso of=/dev/sdX bs=4M status=progress oflag=s
 
 ** Booting
 
-1. Boot from USB (may need to disable Secure Boot)
+1. Boot from USB — Secure Boot must be disabled since ZFS kernel modules are
+   unsigned. Check your BIOS/UEFI firmware documentation for how to disable it.
 2. Wait for live environment to load
 3. Run ~archangel~
+
+*Note*: Archangel performs a minimal Arch Linux installation with root login
+only. No additional user accounts are created — configure those after first boot.
 
 ** Post-Reboot
 
 *** ZFS Systems
-1. Enter ZFS encryption passphrase at ZFSBootMenu prompt
+1. If encryption is enabled, enter ZFS passphrase at ZFSBootMenu prompt
 2. Select boot environment (or wait for default)
 3. Log in as root
 
 *** Btrfs Systems
 1. GRUB menu appears
-2. Enter LUKS passphrase when prompted
+2. If encryption is enabled, enter LUKS passphrase when prompted
 3. Log in as root
 
 * Post-Installation
@@ -310,6 +355,47 @@ zfs list -t snapshot | grep genesis
 # Btrfs: View genesis snapshot
 snapper -c root list | grep genesis
 #+END_SRC
+
+** SSH on the Installed System
+
+When ~ENABLE_SSH~ is ~yes~ (the default), the installer enables ~sshd~ on the
+installed system and configures ~PermitRootLogin yes~. You are prompted during
+installation and can decline, or set ~ENABLE_SSH=no~ in a config file.
+
+*Important*: Harden SSH after installation — switch to key-based authentication
+and consider installing ~fail2ban~.
+
+* Rescue Disk
+
+The ISO serves as a general-purpose rescue disk with a comprehensive set of
+recovery and diagnostic tools pre-installed:
+
+- *Data Recovery* - ~ddrescue~, ~testdisk~, ~photorec~, ~foremost~
+- *Boot Repair* - ~grub-install~, ~efibootmgr~, ~arch-chroot~, ~mkinitcpio~, ~syslinux~
+- *Windows Recovery* - ~chntpw~ (password reset), ~ntfs-3g~, ~hivex~ (registry editing)
+- *Hardware Diagnostics* - ~smartctl~, ~memtester~, ~stress-ng~, ~lm_sensors~, ~hdparm~, ~iotop~
+- *Disk Operations* - ~partclone~, ~fsarchiver~, ~nwipe~ (secure erase), ~ncdu~
+- *Network Diagnostics* - ~nmap~, ~tcpdump~, ~wireshark-cli~ (tshark), ~mtr~, ~iperf3~, ~iftop~, ~nethogs~
+- *Encryption* - ~cryptsetup~ (LUKS), ~gpg~, ~dislocker~ (BitLocker)
+- *System Tracing* - ~bpftrace~, ~bcc-tools~, ~perf~
+
+A detailed rescue guide is included on the ISO at ~/root/RESCUE-GUIDE.txt~.
+
+* SSH Server
+
+The live environment automatically starts an SSH server, allowing remote access
+for headless installations, rescue operations, or VM testing. Connect from
+another machine on the same network:
+
+#+BEGIN_SRC bash
+ssh root@archangel.local     # via mDNS (avahi)
+#+END_SRC
+
+The default root password is set in ~build.sh~ (variable ~LIVE_ROOT_PASSWORD~).
+
+*Security Warning*: The live ISO has SSH root login enabled with the password
+~archangel~. This is intended for testing, headless installations, and rescue
+operations only. Do not expose the live environment to untrusted networks.
 
 * Troubleshooting
 
@@ -355,5 +441,9 @@ The ISO includes DKMS-built ZFS modules. If modules fail to load:
 * License
 
 This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
-
 See [[file:LICENSE][LICENSE]] file for the full license text.
+
+Note: [[https://github.com/openzfs/zfs][OpenZFS]] is licensed separately under the
+[[https://github.com/openzfs/zfs/blob/master/LICENSE][CDDL license]]. ZFS packages
+are provided by the [[https://archzfs.com][archzfs]] third-party repository and are
+not part of this project.
