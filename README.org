@@ -1,5 +1,5 @@
 #+TITLE: Archangel
-#+SUBTITLE: Arch Linux ZFS/Btrfs Installation ISO
+Arch Linux ISO and installer with ZFS and Btrfs support.
 #+AUTHOR: Craig Jennings
 #+OPTIONS: toc:3
 
