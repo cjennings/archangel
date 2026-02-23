@@ -43,9 +43,9 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 step()  { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-# UEFI firmware
-OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
-OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
+# UEFI firmware (override via environment for non-Arch distros)
+OVMF_CODE="${OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}"
+OVMF_VARS_ORIG="${OVMF_VARS_ORIG:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}"
 
 # Track test results
 TESTS_RUN=0

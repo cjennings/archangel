@@ -24,9 +24,9 @@ VM_RAM="2048"
 VM_CPUS="2"
 VM_NAME="archangel-sanity"
 
-# UEFI firmware
-OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
-OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
+# UEFI firmware (override via environment for non-Arch distros)
+OVMF_CODE="${OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}"
+OVMF_VARS_ORIG="${OVMF_VARS_ORIG:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}"
 OVMF_VARS="$VM_DIR/sanity-test-OVMF_VARS.fd"
 
 # SSH settings
