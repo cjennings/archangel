@@ -24,9 +24,9 @@ VM_CPUS="4"
 MULTI_DISK=false
 NUM_DISKS=1
 
-# UEFI firmware (adjust path for your system)
-OVMF_CODE="/usr/share/edk2/x64/OVMF_CODE.4m.fd"
-OVMF_VARS_ORIG="/usr/share/edk2/x64/OVMF_VARS.4m.fd"
+# UEFI firmware (override via environment for non-Arch distros)
+OVMF_CODE="${OVMF_CODE:-/usr/share/edk2/x64/OVMF_CODE.4m.fd}"
+OVMF_VARS_ORIG="${OVMF_VARS_ORIG:-/usr/share/edk2/x64/OVMF_VARS.4m.fd}"
 OVMF_VARS="$VM_DIR/OVMF_VARS.fd"
 
 # QEMU monitor socket for automation
