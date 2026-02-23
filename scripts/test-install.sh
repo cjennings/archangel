@@ -378,9 +378,9 @@ run_install() {
 
     # Copy latest archangel script and lib/ to VM (in case ISO is outdated)
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -P "$SSH_PORT" "$PROJECT_DIR/custom/archangel" root@localhost:/usr/local/bin/archangel 2>/dev/null
+        -P "$SSH_PORT" "$PROJECT_DIR/installer/archangel" root@localhost:/usr/local/bin/archangel 2>/dev/null
     sshpass -p "$SSH_PASSWORD" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -P "$SSH_PORT" "$PROJECT_DIR/custom/lib" root@localhost:/usr/local/bin/ 2>/dev/null
+        -P "$SSH_PORT" "$PROJECT_DIR/installer/lib" root@localhost:/usr/local/bin/ 2>/dev/null
 
     # Copy config file to VM
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
