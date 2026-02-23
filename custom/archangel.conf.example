@@ -5,6 +5,7 @@
 #
 # Required fields: HOSTNAME, TIMEZONE, DISKS, ROOT_PASSWORD
 # For ZFS: also need ZFS_PASSPHRASE or NO_ENCRYPT=yes
+# For Btrfs: also need LUKS_PASSPHRASE or NO_ENCRYPT=yes
 # All other fields have sensible defaults.
 
 #############################
@@ -13,7 +14,6 @@
 
 # Filesystem type (optional, default: zfs)
 # Options: zfs, btrfs
-# Note: btrfs support coming soon
 FILESYSTEM=zfs
 
 #############################
@@ -52,16 +52,16 @@ RAID_LEVEL=
 # Security
 #############################
 
-# ZFS encryption passphrase (required unless NO_ENCRYPT=yes)
+# ZFS encryption passphrase (required for ZFS unless NO_ENCRYPT=yes)
 # This will be required at every boot to unlock the pool
 ZFS_PASSPHRASE=changeme
 
-# Skip ZFS encryption (optional, default: no)
-# Set to "yes" to create an unencrypted pool
-# Use cases:
-#   - VMs or test environments
-#   - Systems with hardware encryption (SED drives)
-#   - Data that doesn't require encryption
+# LUKS encryption passphrase (required for Btrfs unless NO_ENCRYPT=yes)
+# This will be required at every boot to unlock the disk
+#LUKS_PASSPHRASE=changeme
+
+# Skip encryption (optional, default: no)
+# Set to "yes" to skip ZFS native encryption or LUKS
 # WARNING: Without encryption, anyone with physical access can read your data
 #NO_ENCRYPT=no
 
