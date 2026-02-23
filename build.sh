@@ -372,8 +372,6 @@ info "Copying custom scripts..."
 cp "$CUSTOM_DIR/archangel" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp -r "$CUSTOM_DIR/lib" "$PROFILE_DIR/airootfs/usr/local/bin/"
 cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
-cp "$CUSTOM_DIR/archsetup-zfs" "$PROFILE_DIR/airootfs/usr/local/bin/"
-
 # Copy zfssnapshot and zfsrollback for ZFS management
 info "Copying zfssnapshot and zfsrollback..."
 cp "$CUSTOM_DIR/zfssnapshot" "$PROFILE_DIR/airootfs/usr/local/bin/"
@@ -395,9 +393,6 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/install-claude"]="0:0:755"
-    }' "$PROFILE_DIR/profiledef.sh"
-    sed -i '/^file_permissions=(/,/)/ {
-        /)/ i\  ["/usr/local/bin/archsetup-zfs"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/usr/local/bin/zfssnapshot"]="0:0:755"
