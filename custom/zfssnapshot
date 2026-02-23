@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 # Craig Jennings <c@cjennings.net>
 # Create a ZFS snapshot across all datasets with a dated, descriptive name.
 
