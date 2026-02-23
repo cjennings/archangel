@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="$SCRIPT_DIR/profile"
 WORK_DIR="$SCRIPT_DIR/work"
 OUT_DIR="$SCRIPT_DIR/out"
-CUSTOM_DIR="$SCRIPT_DIR/custom"
+INSTALLER_DIR="$SCRIPT_DIR/installer"
 
 # Live ISO root password (for SSH access during testing/emergencies)
 LIVE_ROOT_PASSWORD="archangel"
@@ -371,21 +371,21 @@ EOF
 
 # Copy our custom scripts
 info "Copying custom scripts..."
-cp "$CUSTOM_DIR/archangel" "$PROFILE_DIR/airootfs/usr/local/bin/"
-cp -r "$CUSTOM_DIR/lib" "$PROFILE_DIR/airootfs/usr/local/bin/"
-cp "$CUSTOM_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$INSTALLER_DIR/archangel" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp -r "$INSTALLER_DIR/lib" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$INSTALLER_DIR/install-claude" "$PROFILE_DIR/airootfs/usr/local/bin/"
 # Copy zfssnapshot and zfsrollback for ZFS management
 info "Copying zfssnapshot and zfsrollback..."
-cp "$CUSTOM_DIR/zfssnapshot" "$PROFILE_DIR/airootfs/usr/local/bin/"
-cp "$CUSTOM_DIR/zfsrollback" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$INSTALLER_DIR/zfssnapshot" "$PROFILE_DIR/airootfs/usr/local/bin/"
+cp "$INSTALLER_DIR/zfsrollback" "$PROFILE_DIR/airootfs/usr/local/bin/"
 
 # Copy example config for unattended installs
 mkdir -p "$PROFILE_DIR/airootfs/root"
-cp "$CUSTOM_DIR/archangel.conf.example" "$PROFILE_DIR/airootfs/root/"
+cp "$INSTALLER_DIR/archangel.conf.example" "$PROFILE_DIR/airootfs/root/"
 
 # Copy rescue guide
 info "Copying rescue guide..."
-cp "$CUSTOM_DIR/RESCUE-GUIDE.txt" "$PROFILE_DIR/airootfs/root/"
+cp "$INSTALLER_DIR/RESCUE-GUIDE.txt" "$PROFILE_DIR/airootfs/root/"
 
 # Set permissions in profiledef.sh
 info "Setting file permissions..."
