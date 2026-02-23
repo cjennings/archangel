@@ -19,7 +19,7 @@ all: lint build
 # Lint all bash scripts
 lint:
 	@echo "==> Running shellcheck..."
-	@shellcheck -x build.sh scripts/*.sh custom/archangel custom/archsetup-zfs custom/zfsrollback custom/zfssnapshot custom/lib/*.sh || true
+	@shellcheck -x build.sh scripts/*.sh custom/archangel custom/zfsrollback custom/zfssnapshot custom/lib/*.sh || true
 	@echo "==> Shellcheck complete"
 
 # Build the ISO (requires sudo)
