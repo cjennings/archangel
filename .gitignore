@@ -8,3 +8,6 @@ zfs-packages/
 vm/
 test-logs/
 reference-repos/
+
+# Personal session/workflow docs (not project documentation)
+docs/
