@@ -12,7 +12,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export PROJECT_DIR
 CONFIG_DIR="$SCRIPT_DIR/test-configs"
 LOG_DIR="$PROJECT_DIR/test-logs"
 VM_DIR="$PROJECT_DIR/vm"

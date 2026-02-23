@@ -273,7 +273,8 @@ generate_config() {
         [[ -n "$disks" ]] && disks+=","
         disks+="/dev/vda"
         # vda, vdb, vdc for virtio disks
-        local letter=$(printf "\\x$(printf '%02x' $((96 + i)))")
+        local letter
+        letter=$(printf "\\x$(printf '%02x' $((96 + i)))")
         disks="/dev/vd${letter}"
         if [[ $i -eq 1 ]]; then
             disks="/dev/vda"
@@ -334,14 +335,16 @@ run_install_test() {
 
     # Create config file on VM
     info "Creating install configuration..."
-    local config=$(generate_config "$num_disks" "$raid_level")
+    local config
+    config=$(generate_config "$num_disks" "$raid_level")
     ssh_cmd "cat > /tmp/install.conf << 'CONF'
 $config
 CONF"
 
     # Run installation
     info "Running archangel (this takes several minutes)..."
-    local install_start=$(date +%s)
+    local install_start
+    install_start=$(date +%s)
 
     # Run install in background and monitor
     ssh_cmd "nohup archangel --config-file /tmp/install.conf > /tmp/install.log 2>&1 &"
@@ -358,10 +361,12 @@ CONF"
         # "running [archangel.local]" status string
         if ! ssh_cmd "pgrep -f '/usr/local/bin/archangel' > /dev/null" 2>/dev/null; then
             # Process finished - check result by looking for success indicators
-            local exit_check=$(ssh_cmd "tail -30 /tmp/install.log" 2>/dev/null)
+            local exit_check
+            exit_check=$(ssh_cmd "tail -30 /tmp/install.log" 2>/dev/null)
             # Check for various success indicators
             if echo "$exit_check" | grep -qE "(Installation Complete|Pool status:|Genesis snapshot)"; then
-                local install_end=$(date +%s)
+                local install_end
+                install_end=$(date +%s)
                 local install_time=$((install_end - install_start))
                 info "Installation completed in ${install_time}s"
                 break
@@ -414,7 +419,8 @@ CONF"
     info "Verifying installation..."
 
     # Check ZFS pool status
-    local pool_status=$(ssh_cmd "zpool status -x zroot" 2>/dev/null)
+    local pool_status
+    pool_status=$(ssh_cmd "zpool status -x zroot" 2>/dev/null)
     if [[ "$pool_status" != *"healthy"* && "$pool_status" != *"all pools are healthy"* ]]; then
         warn "Pool status: $pool_status"
         fail "$test_name: ZFS pool not healthy"
@@ -424,7 +430,8 @@ CONF"
     $VERBOSE && info "ZFS pool is healthy"
 
     # Check pool configuration matches expected RAID
-    local pool_config=$(ssh_cmd "zpool status zroot" 2>/dev/null)
+    local pool_config
+    pool_config=$(ssh_cmd "zpool status zroot" 2>/dev/null)
     if [[ -n "$raid_level" ]]; then
         if ! echo "$pool_config" | grep -q "$raid_level"; then
             warn "Expected RAID level '$raid_level' not found in pool config"
@@ -433,7 +440,8 @@ CONF"
     fi
 
     # Check root dataset is mounted
-    local root_mount=$(ssh_cmd "zfs get -H -o value mounted zroot/ROOT/default" 2>/dev/null)
+    local root_mount
+    root_mount=$(ssh_cmd "zfs get -H -o value mounted zroot/ROOT/default" 2>/dev/null)
     if [[ "$root_mount" != "yes" ]]; then
         fail "$test_name: Root dataset not mounted"
         cleanup
@@ -442,7 +450,8 @@ CONF"
     $VERBOSE && info "Root dataset mounted"
 
     # Check genesis snapshot exists
-    local genesis=$(ssh_cmd "zfs list -t snapshot zroot@genesis" 2>/dev/null)
+    local genesis
+    genesis=$(ssh_cmd "zfs list -t snapshot zroot@genesis" 2>/dev/null)
     if [[ -z "$genesis" ]]; then
         fail "$test_name: Genesis snapshot missing"
         cleanup
@@ -451,14 +460,16 @@ CONF"
     $VERBOSE && info "Genesis snapshot exists"
 
     # Check zfs-import-scan is enabled (our preferred import method - no cachefile needed)
-    local import_scan=$(ssh_cmd "systemctl is-enabled zfs-import-scan" 2>/dev/null)
+    local import_scan
+    import_scan=$(ssh_cmd "systemctl is-enabled zfs-import-scan" 2>/dev/null)
     if [[ "$import_scan" != "enabled" ]]; then
         warn "$test_name: zfs-import-scan not enabled (was: '$import_scan')"
     fi
     $VERBOSE && info "zfs-import-scan service: $import_scan"
 
     # Check kernel
-    local kernel=$(ssh_cmd "uname -r" 2>/dev/null)
+    local kernel
+    kernel=$(ssh_cmd "uname -r" 2>/dev/null)
     if [[ "$kernel" != *"lts"* ]]; then
         warn "Kernel is not LTS: $kernel"
     fi
@@ -470,7 +481,8 @@ CONF"
 
     # Wait for SSH to go down (system is rebooting)
     local down_timeout=30
-    local down_start=$(date +%s)
+    local down_start
+    down_start=$(date +%s)
     while ssh_cmd "echo up" &>/dev/null; do
         sleep 1
         local elapsed=$(($(date +%s) - down_start))
@@ -483,7 +495,8 @@ CONF"
 
     # Wait for SSH to come back up
     local reboot_timeout=120
-    local reboot_start=$(date +%s)
+    local reboot_start
+    reboot_start=$(date +%s)
     while ! ssh_cmd "echo up" &>/dev/null; do
         sleep 2
         local elapsed=$(($(date +%s) - reboot_start))
@@ -499,7 +512,8 @@ CONF"
     info "System rebooted successfully (${reboot_elapsed}s)"
 
     # Verify ZFS pool is healthy after reboot
-    local post_reboot_status=$(ssh_cmd "zpool status -x zroot" 2>/dev/null)
+    local post_reboot_status
+    post_reboot_status=$(ssh_cmd "zpool status -x zroot" 2>/dev/null)
     if [[ "$post_reboot_status" != *"healthy"* && "$post_reboot_status" != *"all pools are healthy"* ]]; then
         fail "$test_name: ZFS pool not healthy after reboot: $post_reboot_status"
         cleanup
