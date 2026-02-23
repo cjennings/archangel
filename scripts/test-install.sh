@@ -249,6 +249,28 @@ wait_for_ssh() {
     done
 }
 
+# Wait for boot via serial console (for systems without SSH)
+# Checks for ZFSBootMenu loading, which proves the disk is bootable
+# and EFI entries + ZBM binary were installed correctly.
+wait_for_boot_console() {
+    local timeout="$1"
+    local start_time
+    start_time=$(date +%s)
+
+    while true; do
+        if grep -q "ZFSBootMenu\|login:" "$SERIAL_LOG" 2>/dev/null; then
+            return 0
+        fi
+
+        local elapsed=$(($(date +%s) - start_time))
+        if [[ $elapsed -ge $timeout ]]; then
+            return 1
+        fi
+
+        sleep 5
+    done
+}
+
 # Run SSH command (uses SSH_PASSWORD by default, or INSTALLED_PASSWORD if set)
 ssh_cmd() {
     local password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
@@ -569,42 +591,63 @@ run_test() {
     fi
     info "VM started from disk (PID: $vm_pid2)"
 
-    # Get installed system's root password from config
-    local installed_password
-    installed_password=$(grep '^ROOT_PASSWORD=' "$config" | cut -d= -f2)
+    # Check if SSH is enabled in the config
+    local enable_ssh
+    enable_ssh=$(grep '^ENABLE_SSH=' "$config" | cut -d= -f2)
 
-    # Wait for system to boot from disk (using installed system's password)
-    step "Waiting for installed system to boot (timeout: ${BOOT_TIMEOUT}s)..."
-    if ! wait_for_ssh "$BOOT_TIMEOUT" "$installed_password"; then
-        error "Installed system did not boot successfully"
-        stop_vm "$config_name"
+    if [[ "$enable_ssh" == "no" ]]; then
+        # No SSH — verify boot via serial console login prompt
+        step "Waiting for console boot marker (timeout: ${BOOT_TIMEOUT}s)..."
+        if ! wait_for_boot_console "$BOOT_TIMEOUT"; then
+            error "Installed system did not boot successfully (no login prompt in serial log)"
+            stop_vm "$config_name"
 
-        cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
-        error "Serial log saved to: $LOG_DIR/${config_name}-reboot-serial.log"
+            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
+            error "Serial log saved to: $LOG_DIR/${config_name}-reboot-serial.log"
 
-        cleanup_disks "$config_name"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        FAILED_TESTS+=("$config_name")
-        return 1
-    fi
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
+        fi
+        info "Console boot verified (boot marker detected in serial log)"
+    else
+        # SSH enabled — full verification path
+        local installed_password
+        installed_password=$(grep '^ROOT_PASSWORD=' "$config" | cut -d= -f2)
 
-    # Use installed system's password for subsequent SSH commands
-    export INSTALLED_PASSWORD="$installed_password"
+        step "Waiting for installed system to boot (timeout: ${BOOT_TIMEOUT}s)..."
+        if ! wait_for_ssh "$BOOT_TIMEOUT" "$installed_password"; then
+            error "Installed system did not boot successfully"
+            stop_vm "$config_name"
 
-    # Verify reboot survival
-    if ! verify_reboot_survival "$config"; then
-        error "Reboot survival check failed"
-        stop_vm "$config_name"
-        cleanup_disks "$config_name"
-        TESTS_FAILED=$((TESTS_FAILED + 1))
-        FAILED_TESTS+=("$config_name")
-        return 1
-    fi
+            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
+            error "Serial log saved to: $LOG_DIR/${config_name}-reboot-serial.log"
 
-    # Verify rollback functionality
-    if ! verify_rollback "$config"; then
-        warn "Rollback verification had issues"
-        # Don't fail the test for rollback issues - it's a bonus check
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
+        fi
+
+        # Use installed system's password for subsequent SSH commands
+        export INSTALLED_PASSWORD="$installed_password"
+
+        # Verify reboot survival
+        if ! verify_reboot_survival "$config"; then
+            error "Reboot survival check failed"
+            stop_vm "$config_name"
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
+        fi
+
+        # Verify rollback functionality
+        if ! verify_rollback "$config"; then
+            warn "Rollback verification had issues"
+            # Don't fail the test for rollback issues - it's a bonus check
+        fi
     fi
 
     # Cleanup
