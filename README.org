@@ -100,7 +100,7 @@ sudo ./build.sh
 archangel/
 ├── build.sh                       # Main ISO build script
 ├── Makefile                       # Build, lint, test, and release targets
-├── custom/
+├── installer/
 │   ├── archangel                  # Interactive installation script
 │   ├── archangel.conf.example     # Example config for unattended install
 │   ├── lib/                       # Modular installer components
@@ -130,7 +130,7 @@ archangel/
 | Script | Description |
 |--------+-------------|
 | ~build.sh~ | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso |
-| ~custom/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
+| ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
 | ~scripts/test-vm.sh~ | Launches QEMU VM for testing. Supports single and multi-disk configurations |
 
 * Testing with VMs
