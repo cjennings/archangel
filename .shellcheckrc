@@ -1,0 +1,20 @@
+# shellcheck configuration for archangel
+#
+# Disabled checks:
+# SC2034 - Variables assigned but appear unused (false positives from sourced files)
+# SC2086 - Word splitting intended for command arguments ($pool_config, $SSH_OPTS)
+# SC2162 - read without -r in fzf preview subshells (backslash processing is fine)
+# SC2016 - Single quotes intentionally prevent expansion in echo'd scripts
+# SC2317 - Functions appear unreachable but are called dynamically
+# SC2012 - ls used for time-sorting (find alternative is more complex for no benefit)
+# SC1091 - Can't follow sourced files (sourced at runtime)
+# SC2329 - Functions not directly invoked (used by callers of sourced files)
+# SC2011 - Use find instead of ls (same rationale as SC2012)
+# SC2010 - Don't use ls | grep (intentional usage pattern)
+# SC2129 - Consider { } >> file (stylistic, not a bug)
+# SC2001 - Use ${var//} instead of sed (sed is clearer for complex patterns)
+# SC2059 - Variables in printf format (intentional for hex conversion)
+# SC2143 - Use grep -q (stylistic)
+# SC2207 - Prefer mapfile (arrays from command output)
+
+disable=SC2034,SC2086,SC2162,SC2016,SC2317,SC2012,SC1091,SC2329,SC2011,SC2010,SC2129,SC2001,SC2059,SC2143,SC2207
