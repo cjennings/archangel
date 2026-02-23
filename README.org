@@ -13,23 +13,23 @@ configurations, and automatic snapshot management.
 The ISO includes all necessary tools pre-loaded, eliminating the need for
 manual module loading or package installation during the install process.
 
-The ISO also doubles as a [[*Rescue Disk][rescue disk]] with data recovery, boot repair,
-hardware diagnostics, and other tools pre-installed. An [[*SSH Server][SSH server]] starts
+The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair,
+hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts
 automatically for remote access.
 
 * Features
 
-- *Dual Filesystem Support* - Choose ZFS or Btrfs during installation ([[*Filesystem Comparison][comparison]])
+- *Dual Filesystem Support* - Choose ZFS or Btrfs during installation ([[#filesystem-comparison][comparison]])
 - *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
 - *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
-- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[*Post-Installation][booting snapshots]]
-- *[[*SSH Server][SSH Ready]]* - Optional SSH with root login for headless servers
+- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[#post-installation][booting snapshots]]
+- *[[#ssh-server][SSH Ready]]* - Optional SSH with root login for headless servers
 - *EFI Boot Redundancy* - Bootloader installed on all disks for resilience
-- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi ([[*Installation Walkthrough][walkthrough]])
+- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi ([[#installation-walkthrough][walkthrough]])
 - *NetworkManager* - WiFi configuration copied to installed system
-- *[[*Unattended Installation][Unattended Install]]* - Headless installation via plaintext config file
-- *[[*Genesis Snapshot][Genesis Snapshot]]* - Automatic pristine-state snapshot after installation. Convenient for testing machines. 
-- *[[*Rescue Disk][Rescue Disk]]* - Data recovery, boot repair, hardware diagnostics, and more
+- *[[#unattended-installation][Unattended Install]]* - Headless installation via plaintext config file
+- *[[#genesis-snapshot][Genesis Snapshot]]* - Automatic pristine-state snapshot after installation. Convenient for testing machines.
+- *[[#rescue-disk][Rescue Disk]]* - Data recovery, boot repair, hardware diagnostics, and more
 - *LTS Kernel* - Uses linux-lts for stability
 
 ** Filesystem Comparison
