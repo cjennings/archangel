@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # sanity-test.sh - Automated sanity test for archangel ISO
 #
 # Boots the ISO in a headless QEMU VM, waits for SSH, runs verification
