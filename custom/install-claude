@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # install-claude - Install Claude Code CLI
 # Run this if you need AI assistance during installation
 

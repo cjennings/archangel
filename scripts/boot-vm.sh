@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # boot-vm.sh - Boot the VM from disk if installed, otherwise from ISO
 #
 # This is a simple wrapper that does the right thing:

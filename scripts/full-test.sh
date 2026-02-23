@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # full-test.sh - Comprehensive installation testing for archangel ISO
 #
 # Runs automated installation tests for all disk configurations:
