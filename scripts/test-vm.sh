@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # test-vm.sh - Test the archangel ISO in a QEMU virtual machine
 #
 # Usage:

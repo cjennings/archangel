@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # test-install.sh - Automated installation testing for archangel
 #
 # Runs unattended installs in VMs using test config files.
