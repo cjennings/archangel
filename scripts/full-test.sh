@@ -22,7 +22,7 @@
 #   1 - One or more tests failed
 #   2 - Setup/infrastructure error
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

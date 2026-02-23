@@ -12,13 +12,13 @@
 #   - $ARCHSETUP_INBOX (notification for test VM rebuild, if set)
 #   - $DIST_REMOTE_HOST:$DIST_REMOTE_PATH (if set and reachable)
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Get actual user (not root when running with sudo)
-if [[ -n "$SUDO_USER" ]]; then
+if [[ -n "${SUDO_USER:-}" ]]; then
     REAL_USER="$SUDO_USER"
     REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 else
@@ -140,7 +140,7 @@ distribute_remote() {
 
     # Run SCP as the real user (not root) to use their SSH keys
     local scp_cmd="scp"
-    if [[ -n "$SUDO_USER" ]]; then
+    if [[ -n "${SUDO_USER:-}" ]]; then
         scp_cmd="sudo -u $SUDO_USER scp"
     fi
 
