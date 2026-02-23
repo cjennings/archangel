@@ -5,29 +5,28 @@ Arch Linux ISO and installer with ZFS and Btrfs support.
 
 * Overview
 
-Archangel is a custom Arch Linux ISO build system. It generates a live ISO and installer Arch Linux on ZFS or Btrfs root filesystems. It provides an interactive installer with support for encrypted filesystems, multi-disk RAID configurations, and automatic snapshot management.
+Archangel is a custom Arch Linux ISO build system.
 
-The ISO includes all necessary tools pre-loaded, eliminating the need for
-manual module loading or package installation during the install process.
+#+begin_src bash
+make build
+#+end_src
 
-The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair,
-hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts
-automatically for remote access.
+will begin generating a live ISO with OpenZFS kernel modules and an installer that supports Arch Linux on ZFS root along with Btrfs, encrypted filesystems, multi-disk RAID configurations. The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair, hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts automatically making remote connections dead easy. 
 
 * Features
 
 - *Dual Filesystem Support* - Choose ZFS or Btrfs during installation ([[#filesystem-comparison][comparison]])
 - *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
 - *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
-- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[#post-installation][booting snapshots]]
+- *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[#post-installation][booting into snapshots]]
 - *[[#ssh-server][SSH Ready]]* - Optional SSH with root login for headless servers
-- *EFI Boot Redundancy* - Bootloader installed on all disks for resilience
-- *fzf-Based Interface* - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi ([[#installation-walkthrough][walkthrough]])
+- *EFI Boot Redundancy* - Bootloader installed on all disks for resilience.
+- *[[https://github.com/junegunn/fzf][fzf]]*-Based Interface - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi.
 - *NetworkManager* - WiFi configuration copied to installed system
-- *[[#unattended-installation][Unattended Install]]* - Headless installation via plaintext config file
-- *[[#genesis-snapshot][Genesis Snapshot]]* - Automatic pristine-state snapshot after installation. Convenient for testing machines.
+- *[[#unattended-installation][Unattended Install]]* - Headless installation via a single plain text config file
 - *[[#rescue-disk][Rescue Disk]]* - Data recovery, boot repair, hardware diagnostics, and more
-- *LTS Kernel* - Uses linux-lts for stability
+
+Archangel currently uses linux-lts for stability. Choosing linux and linux-zen kernel varieties coming shortly.
 
 ** Filesystem Comparison
 
