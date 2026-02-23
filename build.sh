@@ -423,7 +423,7 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
 fi
 
 # Copy archsetup into airootfs (exclude large/unnecessary directories)
-ARCHSETUP_DIR="${ARCHSETUP_DIR:-$HOME/code/archsetup}"
+ARCHSETUP_DIR="${ARCHSETUP_DIR:-}"
 if [[ -d "$ARCHSETUP_DIR" ]]; then
     info "Copying archsetup into ISO..."
     mkdir -p "$PROFILE_DIR/airootfs/code"
@@ -476,7 +476,7 @@ if [[ -f "$ISO_FILE" ]]; then
     echo ""
     info "After booting:"
     echo "  - ZFS is pre-loaded (no setup needed)"
-    echo "  - SSH is enabled (root password: $LIVE_ROOT_PASSWORD)"
+    echo "  - SSH is enabled (see LIVE_ROOT_PASSWORD in build.sh)"
     echo "  - Run 'archangel' to start installation"
     echo ""
     info "SSH access (from host):"

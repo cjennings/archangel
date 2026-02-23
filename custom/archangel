@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # archangel - Arch Linux Installer with Snapshot-Based Recovery
-# Craig Jennings <c@cjennings.net>
+# Craig Jennings (github.com/cjennings)
 #
 # Installs Arch Linux on ZFS or Btrfs root with snapshot support.
 # Choose your filesystem: ZFS (native encryption) or Btrfs (GRUB snapshots).
