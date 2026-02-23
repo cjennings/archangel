@@ -313,14 +313,16 @@ get_disks() {
     # Parse selected disks
     SELECTED_DISKS=()
     while IFS= read -r line; do
-        local disk=$(echo "$line" | awk '{print $1}')
+        local disk
+        disk=$(echo "$line" | awk '{print $1}')
         SELECTED_DISKS+=("$disk")
     done <<< "$selected"
 
     echo ""
     warn "Selected ${#SELECTED_DISKS[@]} disk(s):"
     for disk in "${SELECTED_DISKS[@]}"; do
-        local size=$(lsblk -d -n -o SIZE "$disk" | tr -d ' ')
+        local size
+        size=$(lsblk -d -n -o SIZE "$disk" | tr -d ' ')
         echo "  - $disk ($size)"
     done
     echo ""
@@ -349,7 +351,8 @@ get_raid_level() {
     local total_bytes=0
     local smallest_bytes=0
     for disk in "${SELECTED_DISKS[@]}"; do
-        local bytes=$(lsblk -b -d -n -o SIZE "$disk")
+        local bytes
+        bytes=$(lsblk -b -d -n -o SIZE "$disk")
         total_bytes=$((total_bytes + bytes))
         if [[ $smallest_bytes -eq 0 ]] || [[ $bytes -lt $smallest_bytes ]]; then
             smallest_bytes=$bytes
@@ -711,7 +714,8 @@ show_summary() {
     echo "  Keymap:       $KEYMAP"
     echo "  Disks:        ${#SELECTED_DISKS[@]} disk(s)"
     for disk in "${SELECTED_DISKS[@]}"; do
-        local size=$(lsblk -d -n -o SIZE "$disk" | tr -d ' ')
+        local size
+        size=$(lsblk -d -n -o SIZE "$disk" | tr -d ' ')
         echo "                - $disk ($size)"
     done
     echo "  RAID Level:   ${RAID_LEVEL:-single (no RAID)}"
@@ -861,7 +865,8 @@ create_datasets() {
 
     # Main root filesystem
     # Reserve 20% of pool or 20G max to prevent pool from filling completely
-    local pool_size_bytes=$(zpool get -Hp size "$POOL_NAME" | awk '{print $3}')
+    local pool_size_bytes
+    pool_size_bytes=$(zpool get -Hp size "$POOL_NAME" | awk '{print $3}')
     local pool_size_gb=$((pool_size_bytes / 1024 / 1024 / 1024))
     local reserve_gb=$((pool_size_gb / 5))  # 20%
     [[ $reserve_gb -gt 20 ]] && reserve_gb=20

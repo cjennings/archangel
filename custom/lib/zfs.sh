@@ -311,7 +311,6 @@ sync_zfs_efi_partitions() {
 
     step "Syncing EFI partitions for redundancy"
 
-    local primary="${efi_parts[0]}"
     for ((i=1; i<${#efi_parts[@]}; i++)); do
         local secondary="${efi_parts[$i]}"
         local tmp_mount="/tmp/efi_sync_$$"
