@@ -199,8 +199,8 @@ configure_luks_initramfs() {
     # Backup original
     cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
 
-    # Add encrypt hook before filesystems
-    # Hooks: base udev ... keyboard keymap ... encrypt filesystems ...
+    # Add encrypt hook before filesystems (configure_btrfs_initramfs overwrites
+    # this with the final hook list, using sd-encrypt for multi-disk setups)
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
         /mnt/etc/mkinitcpio.conf
 
@@ -212,6 +212,13 @@ configure_luks_initramfs() {
         if ! grep -q "^FILES=" /mnt/etc/mkinitcpio.conf; then
             echo "FILES=($LUKS_KEYFILE)" >> /mnt/etc/mkinitcpio.conf
         fi
+    fi
+
+    # Create crypttab.initramfs for sd-encrypt (used by multi-disk LUKS)
+    # sd-encrypt reads this file to open all LUKS devices during initramfs
+    if [[ -f /mnt/etc/crypttab ]]; then
+        cp /mnt/etc/crypttab /mnt/etc/crypttab.initramfs
+        info "Created crypttab.initramfs for sd-encrypt."
     fi
 
     info "Added encrypt hook to initramfs."
@@ -232,8 +239,8 @@ configure_luks_grub() {
     # For testing mode, also add cryptkey parameter for automated unlock
     local cryptkey_param=""
     if [[ "${TESTING:-}" == "yes" ]]; then
-        # cryptkey path is relative to initramfs root (no device prefix needed)
-        cryptkey_param="cryptkey=$LUKS_KEYFILE "
+        # rootfs: prefix tells encrypt hook the keyfile is in the initramfs
+        cryptkey_param="cryptkey=rootfs:$LUKS_KEYFILE "
         info "Testing mode: adding cryptkey parameter for automated unlock"
     fi
 
@@ -587,16 +594,28 @@ EOF
         echo "# LUKS encryption support" >> /mnt/etc/default/grub
         echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
 
-        # Get UUID of encrypted partition and add cryptdevice to cmdline
-        # Find the LUKS partition (partition 2 of the first disk)
-        local luks_part
-        luks_part=$(echo "$DISKS" | cut -d',' -f1)2
-        if [[ -b "$luks_part" ]]; then
-            local uuid
-            uuid=$(blkid -s UUID -o value "$luks_part")
-            sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards |" \
-                /mnt/etc/default/grub
-            info "Added cryptdevice parameter for LUKS partition."
+        # For multi-disk LUKS, sd-encrypt reads crypttab.initramfs — no cmdline params needed
+        # For single-disk LUKS, the encrypt hook needs cryptdevice= on the cmdline
+        local num_luks_disks
+        num_luks_disks=$(echo "$DISKS" | tr ',' '\n' | wc -l)
+
+        if [[ $num_luks_disks -eq 1 ]]; then
+            local luks_part
+            luks_part=$(echo "$DISKS" | cut -d',' -f1)2
+            if [[ -b "$luks_part" ]]; then
+                local uuid
+                uuid=$(blkid -s UUID -o value "$luks_part")
+                local cryptkey_param=""
+                if [[ "${TESTING:-}" == "yes" ]]; then
+                    cryptkey_param="cryptkey=rootfs:$LUKS_KEYFILE "
+                    info "Testing mode: adding cryptkey parameter for automated unlock"
+                fi
+                sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}|" \
+                    /mnt/etc/default/grub
+                info "Added cryptdevice parameter for LUKS partition."
+            fi
+        else
+            info "Multi-disk LUKS: sd-encrypt reads crypttab.initramfs (no cryptdevice cmdline needed)"
         fi
     fi
 
@@ -823,15 +842,24 @@ EOF
     # Configure hooks for btrfs
     # Include encrypt hook if LUKS is enabled, btrfs hook if multi-device
     local num_disks=${#SELECTED_DISKS[@]}
-    local encrypt_hook=""
-    [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]] && encrypt_hook="encrypt "
+    local luks_enabled="no"
+    [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]] && luks_enabled="yes"
 
-    if [[ $num_disks -gt 1 ]]; then
+    if [[ $num_disks -gt 1 && "$luks_enabled" == "yes" ]]; then
+        # Multi-disk LUKS: use sd-encrypt (reads crypttab.initramfs to open ALL devices)
+        # The traditional encrypt hook only supports a single cryptdevice
+        info "Multi-device LUKS: using sd-encrypt for multi-device LUKS unlock"
+        sed -i "s/^HOOKS=.*/HOOKS=(base systemd microcode modconf kms keyboard sd-vconsole block sd-encrypt btrfs filesystems fsck)/" \
+            /mnt/etc/mkinitcpio.conf
+    elif [[ $num_disks -gt 1 ]]; then
         info "Multi-device btrfs: adding btrfs hook for device assembly"
-        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block ${encrypt_hook}btrfs filesystems fsck)/" \
+        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block btrfs filesystems fsck)/" \
+            /mnt/etc/mkinitcpio.conf
+    elif [[ "$luks_enabled" == "yes" ]]; then
+        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/" \
             /mnt/etc/mkinitcpio.conf
     else
-        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block ${encrypt_hook}filesystems fsck)/" \
+        sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block filesystems fsck)/" \
             /mnt/etc/mkinitcpio.conf
     fi
 
