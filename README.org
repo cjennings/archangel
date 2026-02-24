@@ -9,7 +9,7 @@ Archangel is a custom Arch Linux ISO build system.
 
 ~make build~ will begin generating a live ISO with OpenZFS kernel modules and an installer that supports Arch Linux on ZFS root along with Btrfs, encrypted filesystems, and multi-disk RAID configurations.
 
-The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair, hardware diagnostics, and other tools pre-installed. An [[#ssh-server][SSH server]] starts automatically making remote connections dead easy.
+The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot repair, hardware diagnostics, and other tools pre-installed. An [[#ssh-access][SSH server]] starts automatically making remote connections dead easy.
 
 * Features
 
@@ -17,7 +17,7 @@ The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot
 - *Native Encryption* - ZFS encryption or LUKS2 for Btrfs
 - *Multi-Disk RAID* - Mirror, stripe, raidz1/2/3 (ZFS) or RAID0/1/10 (Btrfs)
 - *Snapshot Boot* - ZFSBootMenu (ZFS) or grub-btrfs (Btrfs) for [[#post-installation][booting into snapshots]]
-- *[[#ssh-server][SSH Ready]]* - Optional SSH with root login for headless servers
+- *[[#ssh-access][SSH Ready]]* - Optional SSH with root login for headless servers
 - *EFI Boot Redundancy* - Bootloader installed on all disks for resilience.
 - *[[https://github.com/junegunn/fzf][fzf]]*-Based Interface - Fuzzy search for timezone, locale, keymap, disk, RAID, and WiFi.
 - *NetworkManager* - WiFi configuration copied to installed system
@@ -36,25 +36,6 @@ Archangel currently uses linux-lts for stability. Choosing linux and linux-zen k
 | Snapshot boot    | Built into ZFSBootMenu     | grub-btrfs menu      |
 | RAID support     | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
 | EFI size         | 512MB                      | 1GB                  |
-
-* Quick Start
-
-#+BEGIN_SRC bash
-# Build the ISO (requires sudo)
-make build
-
-# Launch a VM for interactive testing
-make test-vm           # single disk
-make test-multi        # 2 disks (mirror/RAID)
-make test-multi3       # 3 disks (raidz1)
-make test-boot         # boot from installed disk
-make test-clean        # remove VM disks, start fresh
-
-# Run automated install tests (all configs)
-make test-install
-#+END_SRC
-
-Boot the ISO and run ~archangel~ to start the installation.
 
 * Prerequisites
 
@@ -76,6 +57,8 @@ The build script will report if you're missing any of these in a preflight check
 
 ** Basic Build
 
+The makefile is your primary entry point for building, [[#testing-with-vms][testing]], and cleaning the project ISO.
+
 #+BEGIN_SRC bash
 make build
 #+END_SRC
@@ -94,6 +77,14 @@ The build script will:
 - Example: ~archangel-2026-01-18-vmlinuz-6.12.65-lts-x86_64.iso~
 - Build logs: visible in terminal output (not saved to disk)
 
+** Writing to USB
+
+#+BEGIN_SRC bash
+sudo dd if=out/archangel-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+#+END_SRC
+
+Replace ~/dev/sdX~ with your USB drive (check with ~lsblk~).
+
 ** Clean Rebuild
 
 #+BEGIN_SRC bash
@@ -101,48 +92,63 @@ make clean
 make build
 #+END_SRC
 
-* Project Structure
+* Booting the ISO
 
-#+BEGIN_EXAMPLE
-archangel/
-├── build.sh                       # Main ISO build script
-├── Makefile                       # Build, lint, test, and release targets
-├── installer/
-│   ├── archangel                  # Interactive installation script
-│   ├── archangel.conf.example     # Example config for unattended install
-│   ├── lib/                       # Modular installer components
-│   │   ├── common.sh              # Shared utilities
-│   │   ├── config.sh              # Configuration handling
-│   │   ├── disk.sh                # Disk partitioning
-│   │   ├── zfs.sh                 # ZFS-specific functions
-│   │   └── btrfs.sh               # Btrfs-specific functions
-│   ├── zfssnapshot                # ZFS snapshot utility
-│   ├── zfsrollback                # ZFS rollback utility
-│   └── RESCUE-GUIDE.txt           # Recovery tools documentation
-├── scripts/
-│   ├── test-vm.sh                 # QEMU test VM launcher
-│   ├── test-install.sh            # Automated install tests
-│   ├── test-configs/              # Test configuration files
-│   ├── full-test.sh               # Comprehensive test suite
-│   ├── sanity-test.sh             # Quick ISO verification
-│   ├── boot-vm.sh                 # Boot VM from disk or ISO
-│   └── build-release              # Build and distribute ISO
-├── vm/                            # VM disk images (created by test-vm.sh)
-├── work/                          # Build working directory
-└── out/                           # Built ISO output
-#+END_EXAMPLE
+1. Secure Boot must be disabled — ZFS kernel modules are unsigned. Check your
+   BIOS/UEFI firmware documentation for how to disable it.
+2. Boot from USB and wait for the live environment to load.
 
-** Script Descriptions
+** SSH Access
 
-| Script              | Description                                                                                                  |
-|---------------------+--------------------------------------------------------------------------------------------------------------|
-| ~build.sh~            | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso                      |
-| ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
-| ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                                  |
+The live environment automatically starts an SSH server, allowing remote access
+for headless installations, rescue operations, or VM testing. Avahi is
+pre-configured so you can connect by hostname from any machine on the same
+network:
 
-* Installation Walkthrough
+#+BEGIN_SRC bash
+ssh root@archangel.local     # via mDNS (avahi)
+#+END_SRC
 
-The ~archangel~ script provides a guided installation with fzf-based selection interfaces with helpful information displayed about the choices. 
+The default root password is set in ~build.sh~ (variable ~LIVE_ROOT_PASSWORD~).
+
+*Security Warning*: The live ISO has SSH root login enabled with the password
+~archangel~. This is intended for testing, headless installations, and rescue
+operations only. Do not expose the live environment to untrusted networks.
+
+** Rescue Disk
+
+The ISO serves as a general-purpose rescue disk with a comprehensive set of
+recovery and diagnostic tools pre-installed:
+
+- *Data Recovery* - ~ddrescue~, ~testdisk~, ~photorec~, ~foremost~
+- *Boot Repair* - ~grub-install~, ~efibootmgr~, ~arch-chroot~, ~mkinitcpio~, ~syslinux~
+- *Windows Recovery* - ~chntpw~ (password reset), ~ntfs-3g~, ~hivex~ (registry editing)
+- *Hardware Diagnostics* - ~smartctl~, ~memtester~, ~stress-ng~, ~lm_sensors~, ~hdparm~, ~iotop~
+- *Disk Operations* - ~partclone~, ~fsarchiver~, ~nwipe~ (secure erase), ~ncdu~
+- *Network Diagnostics* - ~nmap~, ~tcpdump~, ~wireshark-cli~ (tshark), ~mtr~, ~iperf3~, ~iftop~, ~nethogs~
+- *Encryption* - ~cryptsetup~ (LUKS), ~gpg~, ~dislocker~ (BitLocker)
+- *System Tracing* - ~bpftrace~, ~bcc-tools~, ~perf~
+
+A detailed rescue guide is included on the ISO at ~/root/RESCUE-GUIDE.txt~.
+View it with ~less /root/RESCUE-GUIDE.txt~ or any text viewer.
+
+~tealdeer~ (tldr) is also pre-installed with an offline cache, providing concise
+command examples:
+
+#+BEGIN_SRC bash
+tldr zfs                     # quick ZFS command reference
+tldr cryptsetup              # LUKS operations
+tldr dd                      # disk imaging
+#+END_SRC
+
+* Installation
+
+Run ~archangel~ to start the installer. It provides a guided installation with
+fzf-based selection interfaces with helpful information displayed about the
+choices.
+
+*Note*: Archangel performs a minimal Arch Linux installation with root login
+only. No additional user accounts are created — configure those after first boot.
 
 ** Phase 1: Configuration Gathering
 
@@ -157,7 +163,7 @@ The ~archangel~ script provides a guided installation with fzf-based selection i
 9. *Root Password* - System root password
 10. *SSH* - Enable SSH with root login (default: yes)
 
-** Phase 2: Unattended Installation
+** Phase 2: Installation
 
 After configuration, the installation runs without intervention:
 - Disk partitioning (EFI + root on each disk)
@@ -168,11 +174,11 @@ After configuration, the installation runs without intervention:
 - Bootloader installation (ZFSBootMenu or GRUB)
 - Genesis snapshot creation
 
-* Unattended Installation
+** Unattended Installation
 
 For automated or headless installations, you can specify a simple plain text config file containing the choices. 
 
-** Using a Config File
+*** Using a Config File
 
 #+BEGIN_SRC bash
 # Copy and edit the example config
@@ -187,7 +193,7 @@ archangel --config-file /root/my-install.conf
 ~--config-file~. The installer will never automatically read a config file
 to prevent accidental disk destruction.
 
-** Example Config File
+*** Example Config File
 
 #+BEGIN_SRC bash
 # archangel.conf - Unattended Installation Configuration
@@ -219,7 +225,7 @@ ENABLE_SSH=yes
 
 A complete example with all options is available at ~installer/archangel.conf.example~.
 
-** Config File Reference
+*** Config File Reference
 
 | Field          | Required | Default     | Description                                |
 |----------------+----------+-------------+--------------------------------------------|
@@ -235,33 +241,14 @@ A complete example with all options is available at ~installer/archangel.conf.ex
 | ~ENABLE_SSH~     | No       | yes         | Enable SSH server                          |
 | ~NO_ENCRYPT~     | No       | no          | Skip encryption (testing only)             |
 
-* Bare Metal Installation
+* Post-Reboot
 
-** Preparing Installation Media
-
-#+BEGIN_SRC bash
-# Write ISO to USB drive (replace /dev/sdX)
-sudo dd if=out/archangel-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
-#+END_SRC
-
-** Booting
-
-1. Boot from USB — Secure Boot must be disabled since ZFS kernel modules are
-   unsigned. Check your BIOS/UEFI firmware documentation for how to disable it.
-2. Wait for live environment to load
-3. Run ~archangel~
-
-*Note*: Archangel performs a minimal Arch Linux installation with root login
-only. No additional user accounts are created — configure those after first boot.
-
-** Post-Reboot
-
-*** ZFS Systems
+** ZFS Systems
 1. If encryption is enabled, enter ZFS passphrase at ZFSBootMenu prompt
 2. Select boot environment (or wait for default)
 3. Log in as root
 
-*** Btrfs Systems
+** Btrfs Systems
 1. GRUB menu appears
 2. If encryption is enabled, enter LUKS passphrase when prompted
 3. Log in as root
@@ -316,88 +303,71 @@ installation and can decline, or set ~ENABLE_SSH=no~ in a config file.
 *Important*: Harden SSH after installation — switch to key-based authentication
 and consider installing ~fail2ban~.
 
-* Rescue Disk
-
-The ISO serves as a general-purpose rescue disk with a comprehensive set of
-recovery and diagnostic tools pre-installed:
-
-- *Data Recovery* - ~ddrescue~, ~testdisk~, ~photorec~, ~foremost~
-- *Boot Repair* - ~grub-install~, ~efibootmgr~, ~arch-chroot~, ~mkinitcpio~, ~syslinux~
-- *Windows Recovery* - ~chntpw~ (password reset), ~ntfs-3g~, ~hivex~ (registry editing)
-- *Hardware Diagnostics* - ~smartctl~, ~memtester~, ~stress-ng~, ~lm_sensors~, ~hdparm~, ~iotop~
-- *Disk Operations* - ~partclone~, ~fsarchiver~, ~nwipe~ (secure erase), ~ncdu~
-- *Network Diagnostics* - ~nmap~, ~tcpdump~, ~wireshark-cli~ (tshark), ~mtr~, ~iperf3~, ~iftop~, ~nethogs~
-- *Encryption* - ~cryptsetup~ (LUKS), ~gpg~, ~dislocker~ (BitLocker)
-- *System Tracing* - ~bpftrace~, ~bcc-tools~, ~perf~
-
-A detailed rescue guide is included on the ISO at ~/root/RESCUE-GUIDE.txt~.
-
-* SSH Server
-
-The live environment automatically starts an SSH server, allowing remote access
-for headless installations, rescue operations, or VM testing. Connect from
-another machine on the same network:
-
-#+BEGIN_SRC bash
-ssh root@archangel.local     # via mDNS (avahi)
-#+END_SRC
-
-The default root password is set in ~build.sh~ (variable ~LIVE_ROOT_PASSWORD~).
-
-*Security Warning*: The live ISO has SSH root login enabled with the password
-~archangel~. This is intended for testing, headless installations, and rescue
-operations only. Do not expose the live environment to untrusted networks.
-
 * Testing with VMs
 
-The test suite launches QEMU VMs to validate that the ISO boots correctly and
-that installations complete successfully across all supported configurations
-(ZFS/Btrfs, single/multi-disk, encrypted/unencrypted). Run these tests after
-modifying the installer or build scripts to catch regressions. See
-[[file:testing-strategy.org][testing-strategy.org]] for the full testing strategy, including how to add new
-tests and technical details on encryption testing.
+QEMU VMs validate that the ISO boots correctly and that installations complete
+successfully across all supported configurations (ZFS/Btrfs, single/multi-disk,
+encrypted/unencrypted). Run these after modifying the installer or build scripts
+to catch regressions.
 
-** Basic VM Test
+See [[file:testing-strategy.org][testing-strategy.org]] for the full testing strategy,
+including how to add new tests and technical details on encryption testing.
 
-#+BEGIN_SRC bash
-make test-vm
-#+END_SRC
+- ~make test-vm~ — Create a 50GB virtual disk and boot the ISO in a
+  single-disk QEMU VM. Opens a GTK window with the VM console. SSH in
+  with ~ssh -p 2222 root@localhost~ (password: ~archangel~).
+- ~make test-multi~ — Same as ~test-vm~ but with two 50GB disks for
+  testing mirror and RAID configurations.
+- ~make test-multi3~ — Same as ~test-vm~ but with three 50GB disks for
+  testing raidz1 configurations.
+- ~make test-boot~ — Boot from an existing installed disk (no ISO).
+  Auto-detects multi-disk setups. Use after running an install in the
+  VM to verify the system boots from disk.
+- ~make test-clean~ — Remove all VM disks and OVMF vars to start fresh.
+- ~make test-install~ — Run the full automated test suite (builds ISO
+  first). Runs 12 unattended installs covering ZFS/Btrfs,
+  single/multi-disk, encrypted/unencrypted, and custom locale. Each
+  test installs, reboots from disk, verifies boot, and checks rollback.
+- ~make lint~ — Run shellcheck on all scripts.
 
-This creates a 50GB virtual disk and boots the ISO.
+* Project Structure
 
-** Multi-Disk RAID Test
+#+BEGIN_EXAMPLE
+archangel/
+├── build.sh                       # Main ISO build script
+├── Makefile                       # Build, lint, test, and release targets
+├── installer/
+│   ├── archangel                  # Interactive installation script
+│   ├── archangel.conf.example     # Example config for unattended install
+│   ├── lib/                       # Modular installer components
+│   │   ├── common.sh              # Shared utilities
+│   │   ├── config.sh              # Configuration handling
+│   │   ├── disk.sh                # Disk partitioning
+│   │   ├── zfs.sh                 # ZFS-specific functions
+│   │   └── btrfs.sh               # Btrfs-specific functions
+│   ├── zfssnapshot                # ZFS snapshot utility
+│   ├── zfsrollback                # ZFS rollback utility
+│   └── RESCUE-GUIDE.txt           # Recovery tools documentation
+├── scripts/
+│   ├── test-vm.sh                 # QEMU test VM launcher
+│   ├── test-install.sh            # Automated install tests
+│   ├── test-configs/              # Test configuration files
+│   ├── full-test.sh               # Comprehensive test suite
+│   ├── sanity-test.sh             # Quick ISO verification
+│   ├── boot-vm.sh                 # Boot VM from disk or ISO
+│   └── build-release              # Build and distribute ISO
+├── vm/                            # VM disk images (created by test-vm.sh)
+├── work/                          # Build working directory
+└── out/                           # Built ISO output
+#+END_EXAMPLE
 
-#+BEGIN_SRC bash
-# Two 50GB disks (for mirror)
-make test-multi
+** Script Descriptions
 
-# Three 50GB disks (for raidz1)
-make test-multi3
-#+END_SRC
-
-** SSH Access to VM
-
-*Security Warning*: The live ISO has SSH root login enabled with the password ~archangel~. This is intended for testing, headless installations, and rescue operations only. Do not expose the live environment to untrusted networks.
-
-#+BEGIN_SRC bash
-# Password: archangel
-ssh -p 2222 root@localhost
-
-# Or with sshpass
-sshpass -p archangel ssh -p 2222 root@localhost
-#+END_SRC
-
-** Clean VM State
-
-#+BEGIN_SRC bash
-make test-clean
-#+END_SRC
-
-** Boot from Installed Disk
-
-#+BEGIN_SRC bash
-make test-boot
-#+END_SRC
+| Script              | Description                                                                                                  |
+|---------------------+--------------------------------------------------------------------------------------------------------------|
+| ~build.sh~            | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso                      |
+| ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
+| ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                                  |
 
 * Troubleshooting
 
