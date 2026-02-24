@@ -7,6 +7,39 @@
 This document describes the testing strategy for the archzfs installer project,
 including automated VM testing and the rationale for key technical decisions.
 
+* Running Tests
+
+** Makefile Targets
+
+| Target | Description |
+|--------+-------------|
+| =make test-install= | Run all 12 automated install tests (builds ISO first) |
+| =make test-vm= | Boot ISO in a single-disk VM (interactive) |
+| =make test-multi= | Boot ISO in a 2-disk VM for mirror/RAID testing |
+| =make test-multi3= | Boot ISO in a 3-disk VM for raidz1 testing |
+| =make test-boot= | Boot from installed disk (after running install in VM) |
+| =make test-clean= | Remove VM disks and OVMF vars, start fresh |
+| =make lint= | Run shellcheck on all scripts |
+| =make test= | Run lint (alias) |
+
+** Running a Single Automated Test
+
+#+begin_src bash
+./scripts/test-install.sh zfs-encrypt
+#+end_src
+
+** Running Multiple Specific Tests
+
+#+begin_src bash
+./scripts/test-install.sh zfs-encrypt zfs-mirror-encrypt btrfs-luks
+#+end_src
+
+** Listing Available Test Configs
+
+#+begin_src bash
+./scripts/test-install.sh --list
+#+end_src
+
 * Test Infrastructure
 
 ** Test Scripts
