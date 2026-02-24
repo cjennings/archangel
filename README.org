@@ -44,11 +44,11 @@ Archangel currently uses linux-lts for stability. Choosing linux and linux-zen k
 make build
 
 # Launch a VM for interactive testing
-make vm                # single disk
-make vm-multi          # 2 disks (mirror/RAID)
-make vm-multi3         # 3 disks (raidz1)
-make vm-boot           # boot from installed disk
-make vm-clean          # remove VM disks, start fresh
+make test-vm           # single disk
+make test-multi        # 2 disks (mirror/RAID)
+make test-multi3       # 3 disks (raidz1)
+make test-boot         # boot from installed disk
+make test-clean        # remove VM disks, start fresh
 
 # Run automated install tests (all configs)
 make test-install
@@ -150,7 +150,7 @@ modifying the installer or build scripts to catch regressions.
 ** Basic VM Test
 
 #+BEGIN_SRC bash
-make vm
+make test-vm
 #+END_SRC
 
 This creates a 50GB virtual disk and boots the ISO.
@@ -159,10 +159,10 @@ This creates a 50GB virtual disk and boots the ISO.
 
 #+BEGIN_SRC bash
 # Two 50GB disks (for mirror)
-make vm-multi
+make test-multi
 
 # Three 50GB disks (for raidz1)
-make vm-multi3
+make test-multi3
 #+END_SRC
 
 ** SSH Access to VM
@@ -180,13 +180,13 @@ sshpass -p archangel ssh -p 2222 root@localhost
 ** Clean VM State
 
 #+BEGIN_SRC bash
-make vm-clean
+make test-clean
 #+END_SRC
 
 ** Boot from Installed Disk
 
 #+BEGIN_SRC bash
-make vm-boot
+make test-boot
 #+END_SRC
 
 * Installation Walkthrough
