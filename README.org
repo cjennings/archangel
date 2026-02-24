@@ -353,7 +353,9 @@ operations only. Do not expose the live environment to untrusted networks.
 The test suite launches QEMU VMs to validate that the ISO boots correctly and
 that installations complete successfully across all supported configurations
 (ZFS/Btrfs, single/multi-disk, encrypted/unencrypted). Run these tests after
-modifying the installer or build scripts to catch regressions.
+modifying the installer or build scripts to catch regressions. See
+[[file:testing-strategy.org][testing-strategy.org]] for the full testing strategy, including how to add new
+tests and technical details on encryption testing.
 
 ** Basic VM Test
 
