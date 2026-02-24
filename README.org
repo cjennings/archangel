@@ -43,12 +43,15 @@ Archangel currently uses linux-lts for stability. Choosing linux and linux-zen k
 # Build the ISO (requires sudo)
 make build
 
-# Test in a VM
-make test-install
+# Launch a VM for interactive testing
+make vm                # single disk
+make vm-multi          # 2 disks (mirror/RAID)
+make vm-multi3         # 3 disks (raidz1)
+make vm-boot           # boot from installed disk
+make vm-clean          # remove VM disks, start fresh
 
-# Or launch a VM manually for interactive testing
-./scripts/test-vm.sh
-./scripts/test-vm.sh --multi-disk   # multiple disks for RAID
+# Run automated install tests (all configs)
+make test-install
 #+END_SRC
 
 Boot the ISO and run ~archangel~ to start the installation.
@@ -147,7 +150,7 @@ modifying the installer or build scripts to catch regressions.
 ** Basic VM Test
 
 #+BEGIN_SRC bash
-./scripts/test-vm.sh
+make vm
 #+END_SRC
 
 This creates a 50GB virtual disk and boots the ISO.
@@ -156,10 +159,10 @@ This creates a 50GB virtual disk and boots the ISO.
 
 #+BEGIN_SRC bash
 # Two 50GB disks (for mirror)
-./scripts/test-vm.sh --multi-disk
+make vm-multi
 
 # Three 50GB disks (for raidz1)
-./scripts/test-vm.sh --multi-disk=3
+make vm-multi3
 #+END_SRC
 
 ** SSH Access to VM
@@ -177,13 +180,13 @@ sshpass -p archangel ssh -p 2222 root@localhost
 ** Clean VM State
 
 #+BEGIN_SRC bash
-./scripts/test-vm.sh --clean
+make vm-clean
 #+END_SRC
 
 ** Boot from Installed Disk
 
 #+BEGIN_SRC bash
-./scripts/test-vm.sh --boot-disk
+make vm-boot
 #+END_SRC
 
 * Installation Walkthrough
