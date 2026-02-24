@@ -1,16 +1,25 @@
 # Makefile for archangel ISO build and testing
 #
 # Usage:
-#   make test         - Run lint
-#   make test-install - Run install tests in VM (slow)
-#   make build        - Build the ISO
-#   make release      - Full test + build + deploy
-#   make clean        - Clean build artifacts
-#   make lint         - Run shellcheck on all scripts
+#   make build          - Build the ISO
+#   make lint           - Run shellcheck on all scripts
+#   make test           - Run lint
+#   make test-install   - Run all automated install tests in VMs (slow)
+#   make release        - Full test + build + deploy
+#
+# Manual VM testing:
+#   make vm             - Boot ISO in a single-disk VM
+#   make vm-multi       - Boot ISO in a 2-disk VM (mirror/RAID)
+#   make vm-multi3      - Boot ISO in a 3-disk VM (raidz1)
+#   make vm-boot        - Boot from installed disk (after install)
+#   make vm-clean       - Remove VM disks and OVMF vars
+#
+#   make clean          - Clean build artifacts
+#   make distclean      - Clean everything including releases
 #
 # Test configurations are in scripts/test-configs/
 
-.PHONY: test test-install build release clean lint
+.PHONY: test test-install build release clean distclean lint vm vm-multi vm-multi3 vm-boot vm-clean
 
 # Lint all bash scripts
 lint:
@@ -41,6 +50,30 @@ release: test test-install
 	@cp out/archangel-*.iso .
 	@echo "==> Release complete:"
 	@ls -lh archangel-*.iso
+
+# --- Manual VM testing ---
+
+# Boot ISO in a single-disk VM
+vm:
+	./scripts/test-vm.sh
+
+# Boot ISO in a 2-disk VM (for mirror/RAID testing)
+vm-multi:
+	./scripts/test-vm.sh --multi-disk
+
+# Boot ISO in a 3-disk VM (for raidz1 testing)
+vm-multi3:
+	./scripts/test-vm.sh --multi-disk=3
+
+# Boot from installed disk (after running install in VM)
+vm-boot:
+	./scripts/test-vm.sh --boot-disk
+
+# Remove VM disks and start fresh
+vm-clean:
+	./scripts/test-vm.sh --clean
+
+# --- Cleanup ---
 
 # Clean build artifacts
 clean:
