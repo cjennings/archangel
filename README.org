@@ -140,55 +140,6 @@ archangel/
 | ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
 | ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                                  |
 
-* Testing with VMs
-
-The test suite launches QEMU VMs to validate that the ISO boots correctly and
-that installations complete successfully across all supported configurations
-(ZFS/Btrfs, single/multi-disk, encrypted/unencrypted). Run these tests after
-modifying the installer or build scripts to catch regressions.
-
-** Basic VM Test
-
-#+BEGIN_SRC bash
-make test-vm
-#+END_SRC
-
-This creates a 50GB virtual disk and boots the ISO.
-
-** Multi-Disk RAID Test
-
-#+BEGIN_SRC bash
-# Two 50GB disks (for mirror)
-make test-multi
-
-# Three 50GB disks (for raidz1)
-make test-multi3
-#+END_SRC
-
-** SSH Access to VM
-
-*Security Warning*: The live ISO has SSH root login enabled with the password ~archangel~. This is intended for testing, headless installations, and rescue operations only. Do not expose the live environment to untrusted networks.
-
-#+BEGIN_SRC bash
-# Password: archangel
-ssh -p 2222 root@localhost
-
-# Or with sshpass
-sshpass -p archangel ssh -p 2222 root@localhost
-#+END_SRC
-
-** Clean VM State
-
-#+BEGIN_SRC bash
-make test-clean
-#+END_SRC
-
-** Boot from Installed Disk
-
-#+BEGIN_SRC bash
-make test-boot
-#+END_SRC
-
 * Installation Walkthrough
 
 The ~archangel~ script provides a guided installation with fzf-based selection interfaces with helpful information displayed about the choices. 
@@ -396,6 +347,55 @@ The default root password is set in ~build.sh~ (variable ~LIVE_ROOT_PASSWORD~).
 *Security Warning*: The live ISO has SSH root login enabled with the password
 ~archangel~. This is intended for testing, headless installations, and rescue
 operations only. Do not expose the live environment to untrusted networks.
+
+* Testing with VMs
+
+The test suite launches QEMU VMs to validate that the ISO boots correctly and
+that installations complete successfully across all supported configurations
+(ZFS/Btrfs, single/multi-disk, encrypted/unencrypted). Run these tests after
+modifying the installer or build scripts to catch regressions.
+
+** Basic VM Test
+
+#+BEGIN_SRC bash
+make test-vm
+#+END_SRC
+
+This creates a 50GB virtual disk and boots the ISO.
+
+** Multi-Disk RAID Test
+
+#+BEGIN_SRC bash
+# Two 50GB disks (for mirror)
+make test-multi
+
+# Three 50GB disks (for raidz1)
+make test-multi3
+#+END_SRC
+
+** SSH Access to VM
+
+*Security Warning*: The live ISO has SSH root login enabled with the password ~archangel~. This is intended for testing, headless installations, and rescue operations only. Do not expose the live environment to untrusted networks.
+
+#+BEGIN_SRC bash
+# Password: archangel
+ssh -p 2222 root@localhost
+
+# Or with sshpass
+sshpass -p archangel ssh -p 2222 root@localhost
+#+END_SRC
+
+** Clean VM State
+
+#+BEGIN_SRC bash
+make test-clean
+#+END_SRC
+
+** Boot from Installed Disk
+
+#+BEGIN_SRC bash
+make test-boot
+#+END_SRC
 
 * Troubleshooting
 
