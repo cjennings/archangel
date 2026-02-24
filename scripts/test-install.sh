@@ -173,20 +173,20 @@ start_vm() {
 }
 
 # Start VM from installed disk (no ISO)
-# Pass "luks" as $3 to add a QEMU monitor socket (needed for GRUB passphrase entry via sendkey)
+# Pass encrypt mode as $3 ("luks" or "zfs") to add a QEMU monitor socket (needed for passphrase entry via sendkey)
 start_vm_from_disk() {
     local test_name="$1"
     local disk_count="$2"
-    local luks_mode="${3:-}"
+    local encrypt_mode="${3:-}"
     local disk_args
     disk_args=$(get_disk_args "$disk_count" "$test_name")
 
     # Reuse existing OVMF vars (preserves EFI boot entries from install)
     local ovmf_vars="$VM_DIR/OVMF_VARS_${test_name}.fd"
 
-    # For LUKS: add monitor socket for sendkey (to type GRUB passphrase)
+    # For encrypted configs: add monitor socket for sendkey (to type passphrase)
     local monitor_args=""
-    if [[ "$luks_mode" == "luks" ]]; then
+    if [[ -n "$encrypt_mode" ]]; then
         local monitor_sock="$VM_DIR/monitor-${test_name}.sock"
         rm -f "$monitor_sock"
         monitor_args="-monitor unix:$monitor_sock,server,nowait"
@@ -363,6 +363,47 @@ send_luks_passphrase() {
     return 0
 }
 
+# Send ZFS passphrase via QEMU monitor sendkey
+# Two passphrase prompts occur (both on VGA framebuffer, not serial):
+#   1. ZFSBootMenu prompts to unlock the pool and show boot environments
+#   2. mkinitcpio's zfs hook prompts again when the selected kernel boots
+# We detect the UEFI firmware log to time the first, then wait for the second.
+send_zfs_passphrase() {
+    local test_name="$1"
+    local passphrase="$2"
+    local monitor_sock="$VM_DIR/monitor-${test_name}.sock"
+
+    step "Waiting for ZFSBootMenu to load..."
+
+    # Wait for UEFI to start loading ZFSBootMenu (this appears in serial via BdsDxe)
+    local waited=0
+    while ! grep -q "starting.*ZFSBootMenu" "$SERIAL_LOG" 2>/dev/null; do
+        sleep 1
+        waited=$((waited + 1))
+        if [[ $waited -ge 30 ]]; then
+            error "Timed out waiting for ZFSBootMenu to load"
+            return 1
+        fi
+    done
+    info "ZFSBootMenu loading detected after ${waited}s"
+
+    # Prompt 1: ZFSBootMenu passphrase (unlocks pool to show boot menu)
+    step "Waiting for ZFSBootMenu passphrase prompt (15s)..."
+    sleep 15
+    step "Sending ZFS passphrase (1/2: ZFSBootMenu)..."
+    monitor_sendkeys "$monitor_sock" "$passphrase"
+    info "ZFSBootMenu passphrase sent"
+
+    # Prompt 2: mkinitcpio zfs hook passphrase (re-imports pool during kernel boot)
+    step "Waiting for initramfs passphrase prompt (30s)..."
+    sleep 30
+    step "Sending ZFS passphrase (2/2: initramfs)..."
+    monitor_sendkeys "$monitor_sock" "$passphrase"
+    info "Initramfs passphrase sent"
+
+    return 0
+}
+
 # Run SSH command (uses SSH_PASSWORD by default, or INSTALLED_PASSWORD if set)
 ssh_cmd() {
     local password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
@@ -423,6 +464,18 @@ verify_install() {
                 info "ZFS genesis snapshot exists"
             else
                 warn "ZFS genesis snapshot not found"
+            fi
+
+            # Check ZFS native encryption if configured
+            local zfs_pass
+            zfs_pass=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
+            if [[ -n "$zfs_pass" ]]; then
+                if ssh_cmd "zfs get -H -o value encryption zroot/ROOT" | grep -q "aes-256-gcm"; then
+                    info "ZFS encryption (aes-256-gcm) verified"
+                else
+                    error "ZFS encryption not set on zroot/ROOT"
+                    return 1
+                fi
             fi
         elif [[ "$filesystem" == "btrfs" ]]; then
             # Btrfs-specific checks
@@ -672,18 +725,22 @@ run_test() {
     step "Booting from installed disk..."
     : > "$SERIAL_LOG"  # Clear serial log
 
-    # Determine if this is a LUKS config (needs monitor for GRUB passphrase)
+    # Determine encryption mode (needs monitor socket for passphrase entry via sendkey)
     local luks_passphrase
     luks_passphrase=$(grep '^LUKS_PASSPHRASE=' "$config" | cut -d= -f2)
+    local zfs_passphrase
+    zfs_passphrase=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
     local no_encrypt
     no_encrypt=$(grep '^NO_ENCRYPT=' "$config" | cut -d= -f2)
-    local luks_flag=""
+    local encrypt_flag=""
     if [[ -n "$luks_passphrase" && "$no_encrypt" != "yes" ]]; then
-        luks_flag="luks"
+        encrypt_flag="luks"
+    elif [[ -n "$zfs_passphrase" && "$no_encrypt" != "yes" ]]; then
+        encrypt_flag="zfs"
     fi
 
     local vm_pid2
-    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count" "$luks_flag")
+    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count" "$encrypt_flag")
 
     if [[ -z "$vm_pid2" ]]; then
         error "Failed to start VM from disk"
@@ -694,10 +751,20 @@ run_test() {
     fi
     info "VM started from disk (PID: $vm_pid2)"
 
-    # If LUKS is enabled, send GRUB passphrase via monitor sendkey
-    if [[ -n "$luks_flag" ]]; then
+    # If encryption is enabled, send passphrase via monitor sendkey
+    if [[ "$encrypt_flag" == "luks" ]]; then
         if ! send_luks_passphrase "$config_name" "$luks_passphrase" "$disk_count"; then
             error "Failed to send LUKS passphrase"
+            stop_vm "$config_name"
+            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
+        fi
+    elif [[ "$encrypt_flag" == "zfs" ]]; then
+        if ! send_zfs_passphrase "$config_name" "$zfs_passphrase"; then
+            error "Failed to send ZFS passphrase"
             stop_vm "$config_name"
             cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
             cleanup_disks "$config_name"
