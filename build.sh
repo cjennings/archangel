@@ -74,10 +74,15 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT INT TERM
 
-# Check root
+# Preflight checks
 [[ $EUID -ne 0 ]] && error "This script must be run as root"
+[[ -f /etc/arch-release ]] || error "This script must be run on Arch Linux"
 
-# Check dependencies
+MIN_FREE_GB=10
+free_kb=$(df --output=avail "$SCRIPT_DIR" | tail -1)
+free_gb=$((free_kb / 1024 / 1024))
+[[ $free_gb -lt $MIN_FREE_GB ]] && error "Insufficient disk space: ${free_gb}GB free, ${MIN_FREE_GB}GB required"
+
 command -v mkarchiso >/dev/null 2>&1 || {
     info "Installing archiso..."
     pacman -Sy --noconfirm archiso
@@ -270,10 +275,11 @@ info "LTS Kernel version: $KERNEL_VER"
 
 # Update profiledef.sh with our ISO name
 info "Updating ISO metadata..."
-# Format: archangel-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso
+# Format: archangel-2026-01-18-vmlinuz-6.12.65-lts-x86_64.iso
+# mkarchiso builds: {iso_name}-{iso_version}-{arch}.iso
 ISO_DATE=$(date +%Y-%m-%d)
-sed -i "s/^iso_name=.*/iso_name=\"archangel-vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
-sed -i "s/^iso_version=.*/iso_version=\"${ISO_DATE}\"/" "$PROFILE_DIR/profiledef.sh"
+sed -i "s/^iso_name=.*/iso_name=\"archangel-${ISO_DATE}\"/" "$PROFILE_DIR/profiledef.sh"
+sed -i "s/^iso_version=.*/iso_version=\"vmlinuz-${KERNEL_VER}-lts\"/" "$PROFILE_DIR/profiledef.sh"
 # Fixed label for stable GRUB boot entry (default is date-based ARCH_YYYYMM)
 sed -i "s/^iso_label=.*/iso_label=\"ARCHANGEL\"/" "$PROFILE_DIR/profiledef.sh"
 

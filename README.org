@@ -40,19 +40,22 @@ Archangel currently uses linux-lts for stability. Choosing linux and linux-zen k
 * Quick Start
 
 #+BEGIN_SRC bash
-# Build the ISO (requires root)
-sudo ./build.sh
+# Build the ISO (requires sudo)
+make build
 
 # Test in a VM
-./scripts/test-vm.sh
+make test-install
 
-# Or test with multiple disks for RAID
-./scripts/test-vm.sh --multi-disk
+# Or launch a VM manually for interactive testing
+./scripts/test-vm.sh
+./scripts/test-vm.sh --multi-disk   # multiple disks for RAID
 #+END_SRC
 
 Boot the ISO and run ~archangel~ to start the installation.
 
 * Prerequisites
+
+The build script will report if you're missing any of these in a preflight check.
 
 ** Build Host Requirements
 - Arch Linux (or Arch-based distribution)
@@ -71,7 +74,7 @@ Boot the ISO and run ~archangel~ to start the installation.
 ** Basic Build
 
 #+BEGIN_SRC bash
-sudo ./build.sh
+make build
 #+END_SRC
 
 The build script will:
@@ -84,15 +87,15 @@ The build script will:
 
 ** Build Output
 
-- ISO location: ~out/archangel-vmlinuz-{version}-lts-YYYY-MM-DD-x86_64.iso~
-- Example: ~archangel-vmlinuz-6.12.65-lts-2026-01-18-x86_64.iso~
+- ISO location: ~out/archangel-YYYY-MM-DD-vmlinuz-{version}-lts-x86_64.iso~
+- Example: ~archangel-2026-01-18-vmlinuz-6.12.65-lts-x86_64.iso~
 - Build logs: visible in terminal output (not saved to disk)
 
 ** Clean Rebuild
 
 #+BEGIN_SRC bash
-sudo rm -rf work out
-sudo ./build.sh
+make clean
+make build
 #+END_SRC
 
 * Project Structure
@@ -284,7 +287,7 @@ A complete example with all options is available at ~installer/archangel.conf.ex
 
 #+BEGIN_SRC bash
 # Write ISO to USB drive (replace /dev/sdX)
-sudo dd if=out/archangel-vmlinuz-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=out/archangel-*.iso of=/dev/sdX bs=4M status=progress oflag=sync
 #+END_SRC
 
 ** Booting
@@ -397,8 +400,8 @@ operations only. Do not expose the live environment to untrusted networks.
 
 Clean the work directory and rebuild:
 #+BEGIN_SRC bash
-sudo rm -rf work
-sudo ./build.sh
+make clean
+make build
 #+END_SRC
 
 ** ZFS Module Not Loading
