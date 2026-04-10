@@ -40,9 +40,12 @@ create_luks_container() {
     info "Setting up LUKS encryption on $partition..."
 
     # Create LUKS container (-q for batch mode, -d - to read key from stdin)
+    # Use pbkdf2 (not argon2id) because GRUB's LUKS2 support only handles pbkdf2.
+    # When /boot is inside the encrypted volume, GRUB must decrypt it to read
+    # the kernel/initramfs, and argon2id causes GRUB to reject the correct password.
     echo -n "$passphrase" | cryptsetup -q luksFormat --type luks2 \
         --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
-        --iter-time 2000 --pbkdf argon2id \
+        --iter-time 2000 --pbkdf pbkdf2 \
         -d - "$partition" \
         || error "Failed to create LUKS container"
 
@@ -111,7 +114,7 @@ create_luks_containers() {
         info "Setting up LUKS encryption on $partition..."
         echo -n "$passphrase" | cryptsetup -q luksFormat --type luks2 \
             --cipher aes-xts-plain64 --key-size 512 --hash sha512 \
-            --iter-time 2000 --pbkdf argon2id \
+            --iter-time 2000 --pbkdf pbkdf2 \
             -d - "$partition" \
             || error "Failed to create LUKS container on $partition"
         ((++i))
