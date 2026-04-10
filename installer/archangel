@@ -925,7 +925,7 @@ install_base() {
         cat >> /etc/pacman.conf << 'EOF'
 
 [archzfs]
-Server = https://archzfs.com/$repo/$arch
+Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
     fi
@@ -1034,7 +1034,7 @@ EOF
     cat >> /mnt/etc/pacman.conf << 'EOF'
 
 [archzfs]
-Server = https://archzfs.com/$repo/$arch
+Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
 

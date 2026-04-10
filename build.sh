@@ -2,7 +2,7 @@
 # build.sh - Build the custom Arch ZFS installation ISO
 # Must be run as root
 #
-# Uses linux-lts kernel with zfs-dkms from archzfs.com repository.
+# Uses linux-lts kernel with zfs-dkms from archzfs GitHub releases.
 # DKMS builds ZFS from source, ensuring it always matches the kernel version.
 
 set -euo pipefail
@@ -151,7 +151,7 @@ info "Adding archzfs repository..."
 cat >> "$PROFILE_DIR/pacman.conf" << 'EOF'
 
 [archzfs]
-Server = https://archzfs.com/$repo/$arch
+Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
 
