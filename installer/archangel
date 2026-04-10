@@ -955,6 +955,7 @@ EOF
         ttf-dejavu \
         fzf \
         wget \
+        inetutils \
         wireless-regdb
 
     info "Base system installed."
@@ -993,6 +994,7 @@ install_base_btrfs() {
         ttf-dejavu \
         fzf \
         wget \
+        inetutils \
         wireless-regdb
 
     info "Base system installed."
