@@ -41,6 +41,10 @@ parse_args() {
                     error "--config-file requires a path argument"
                 fi
                 ;;
+            --color)
+                enable_color
+                shift
+                ;;
             --help|-h)
                 show_usage
                 exit 0
@@ -60,6 +64,7 @@ Arch Linux installer with ZFS/Btrfs support and snapshot management.
 
 Options:
   --config-file PATH  Use config file for unattended installation
+  --color             Enable colored output
   --help, -h          Show this help message
 
 Without --config-file, runs in interactive mode.

@@ -6,22 +6,22 @@
 # Output Functions
 #############################
 
-# Colors (optional, gracefully degrade if not supported)
-if [[ -t 1 ]]; then
+# No color by default — use --color flag to enable
+RED=''
+GREEN=''
+YELLOW=''
+BLUE=''
+BOLD=''
+NC=''
+
+enable_color() {
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     YELLOW='\033[0;33m'
     BLUE='\033[0;34m'
     BOLD='\033[1m'
-    NC='\033[0m' # No Color
-else
-    RED=''
-    GREEN=''
-    YELLOW=''
-    BLUE=''
-    BOLD=''
-    NC=''
-fi
+    NC='\033[0m'
+}
 
 info()   { echo -e "${GREEN}[INFO]${NC} $1"; }
 warn()   { echo -e "${YELLOW}[WARN]${NC} $1"; }
