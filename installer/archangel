@@ -878,84 +878,30 @@ install_base() {
     pacman-key --init
     pacman-key --populate archlinux
 
-    # Add archzfs repo to pacman.conf for pacstrap
-    # SigLevel=Never: pacstrap -K creates empty keyring where key import fails;
-    # repo is explicitly added and served over HTTPS, GPG adds no real value here
-    if ! grep -q "\[archzfs\]" /etc/pacman.conf; then
-        cat >> /etc/pacman.conf << 'EOF'
+    # ZFS needs the archzfs repo added to pacman.conf for pacstrap.
+    # SigLevel=Never: pacstrap -K creates empty keyring where key import
+    # fails; repo is explicitly added and served over HTTPS, GPG adds no
+    # real value here.
+    if [[ "$FILESYSTEM" == "zfs" ]]; then
+        if ! grep -q "\[archzfs\]" /etc/pacman.conf; then
+            cat >> /etc/pacman.conf << 'EOF'
 
 [archzfs]
 Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
+        fi
+        info "ZFS will be built from source via DKMS - this ensures kernel compatibility."
     fi
 
     info "Installing base packages (this takes a while)..."
-    info "ZFS will be built from source via DKMS - this ensures kernel compatibility."
+
+    local packages
+    mapfile -t packages < <(pacstrap_packages "$FILESYSTEM") \
+        || error "Unknown filesystem: $FILESYSTEM"
+
     # Use yes to auto-select defaults for provider prompts
-    yes "" | pacstrap -K /mnt \
-        base \
-        base-devel \
-        linux-lts \
-        linux-lts-headers \
-        linux-firmware \
-        zfs-dkms \
-        zfs-utils \
-        efibootmgr \
-        networkmanager \
-        avahi \
-        nss-mdns \
-        openssh \
-        git \
-        vim \
-        sudo \
-        zsh \
-        nodejs \
-        npm \
-        ttf-dejavu \
-        fzf \
-        wget \
-        inetutils \
-        wireless-regdb
-
-    info "Base system installed."
-}
-
-install_base_btrfs() {
-    step "Installing Base System (Btrfs)"
-
-    info "Updating pacman keys..."
-    pacman-key --init
-    pacman-key --populate archlinux
-
-    info "Installing base packages (this takes a while)..."
-    yes "" | pacstrap -K /mnt \
-        base \
-        base-devel \
-        linux-lts \
-        linux-lts-headers \
-        linux-firmware \
-        btrfs-progs \
-        grub \
-        grub-btrfs \
-        efibootmgr \
-        snapper \
-        snap-pac \
-        networkmanager \
-        avahi \
-        nss-mdns \
-        openssh \
-        git \
-        vim \
-        sudo \
-        zsh \
-        nodejs \
-        npm \
-        ttf-dejavu \
-        fzf \
-        wget \
-        inetutils \
-        wireless-regdb
+    yes "" | pacstrap -K /mnt "${packages[@]}"
 
     info "Base system installed."
 }
@@ -1614,7 +1560,7 @@ install_btrfs() {
     mount "${efi_parts[0]}" /mnt/efi
 
     # Install base system
-    install_base_btrfs
+    install_base
 
     # Configure system
     configure_system
