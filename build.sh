@@ -48,11 +48,15 @@ safe_cleanup_work_dir() {
             fi
         done
 
-        # Also catch any other mounts we might have missed
-        if findmnt --list -o TARGET 2>/dev/null | grep -q "$airootfs"; then
-            findmnt --list -o TARGET 2>/dev/null | grep "$airootfs" | sort -r | while read -r mp; do
+        # Catch any other mounts under airootfs (bind mounts not in the
+        # explicit list above). Deepest-first via reverse sort.
+        local leftover
+        leftover=$(findmnt --list --noheadings -o TARGET 2>/dev/null \
+                       | grep "$airootfs" | sort -r)
+        if [[ -n "$leftover" ]]; then
+            while IFS= read -r mp; do
                 umount -l "$mp" 2>/dev/null || true
-            done
+            done <<< "$leftover"
         fi
 
         # Small delay to let lazy unmounts complete
