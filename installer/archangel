@@ -28,7 +28,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/disk.sh"
-source "$SCRIPT_DIR/lib/zfs.sh"
 source "$SCRIPT_DIR/lib/btrfs.sh"
 
 #############################
@@ -81,6 +80,14 @@ echo ""
 
 preflight_checks() {
     require_root
+}
+
+zfs_preflight() {
+    if ! lsmod | grep -q zfs; then
+        info "Loading ZFS module..."
+        modprobe zfs || error "Failed to load ZFS module. Is zfs-linux-lts installed?"
+    fi
+    info "ZFS module loaded successfully."
 }
 
 # Filesystem-specific preflight (called after filesystem is selected)
