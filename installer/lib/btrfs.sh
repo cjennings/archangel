@@ -901,3 +901,83 @@ btrfs_cleanup() {
 
     info "Btrfs cleanup complete."
 }
+
+#############################
+# Btrfs Install Orchestration
+#############################
+# These helpers dispatch single-disk vs multi-disk branches that used
+# to live inline in install_btrfs(). They use namerefs so the caller's
+# arrays stay as locals in install_btrfs.
+
+# Open LUKS containers (if encryption enabled) and fill _devices with
+# either /dev/mapper/* names or the raw partitions.
+# Usage: btrfs_open_encryption ROOT_PARTS_VAR OUT_DEVICES_VAR
+btrfs_open_encryption() {
+    local -n _root_parts="$1"
+    local -n _devices="$2"
+    local num_disks=${#SELECTED_DISKS[@]}
+
+    if [[ "$NO_ENCRYPT" == "yes" ]]; then
+        _devices=("${_root_parts[@]}")
+        return 0
+    fi
+
+    if [[ $num_disks -eq 1 ]]; then
+        create_luks_container "${_root_parts[0]}" "$LUKS_PASSPHRASE"
+        open_luks_container   "${_root_parts[0]}" "$LUKS_PASSPHRASE"
+        _devices=("/dev/mapper/$LUKS_MAPPER_NAME")
+    else
+        create_luks_containers "$LUKS_PASSPHRASE" "${_root_parts[@]}"
+        open_luks_containers   "$LUKS_PASSPHRASE" "${_root_parts[@]}"
+        # shellcheck disable=SC2207
+        _devices=($(get_luks_devices "$num_disks"))
+    fi
+}
+
+# Create the btrfs filesystem: plain for single disk, raided for multi.
+# Usage: btrfs_make_filesystem DEVICES_VAR
+btrfs_make_filesystem() {
+    local -n _devices="$1"
+    local num_disks=${#SELECTED_DISKS[@]}
+
+    if [[ $num_disks -eq 1 ]]; then
+        create_btrfs_volume "${_devices[0]}"
+    else
+        create_btrfs_volume "${_devices[@]}" --raid-level "$RAID_LEVEL"
+    fi
+}
+
+# Run the in-chroot LUKS configuration (no-op if encryption disabled).
+# Usage: btrfs_configure_luks_target ROOT_PARTS_VAR
+btrfs_configure_luks_target() {
+    local -n _root_parts="$1"
+    [[ "$NO_ENCRYPT" == "yes" ]] && return 0
+    setup_luks_testing_keyfile "$LUKS_PASSPHRASE" "${_root_parts[@]}"
+    configure_crypttab         "${_root_parts[@]}"
+    configure_luks_grub        "${_root_parts[0]}"
+    configure_luks_initramfs
+}
+
+# Install GRUB to the first EFI partition, then mirror to any others.
+# Usage: btrfs_install_grub EFI_PARTS_VAR
+btrfs_install_grub() {
+    local -n _efi_parts="$1"
+    local num_disks=${#SELECTED_DISKS[@]}
+
+    configure_grub "${_efi_parts[0]}"
+    if [[ $num_disks -gt 1 ]]; then
+        install_grub_all_efi  "${_efi_parts[@]}"
+        create_grub_sync_hook "${_efi_parts[@]}"
+    fi
+}
+
+# Close LUKS containers opened during install (no-op if encryption disabled).
+btrfs_close_encryption() {
+    [[ "$NO_ENCRYPT" == "yes" ]] && return 0
+    local num_disks=${#SELECTED_DISKS[@]}
+    if [[ $num_disks -eq 1 ]]; then
+        close_luks_container
+    else
+        close_luks_containers "$num_disks"
+    fi
+}

@@ -1507,7 +1507,6 @@ install_zfs() {
 #############################
 
 install_btrfs() {
-    local num_disks=${#SELECTED_DISKS[@]}
     local btrfs_devices=()
     local efi_parts=()
     local root_parts=()
@@ -1518,92 +1517,46 @@ install_btrfs() {
         efi_parts+=("$(get_efi_partition "$disk")")
     done
 
-    # Partition all disks
+    # Partition and format EFI
     for disk in "${SELECTED_DISKS[@]}"; do
         partition_disk "$disk"
     done
-
-    # Format all EFI partitions
     format_efi_partitions "${SELECTED_DISKS[@]}"
 
-    # LUKS encryption (if enabled)
-    if [[ "$NO_ENCRYPT" != "yes" ]]; then
-        if [[ $num_disks -eq 1 ]]; then
-            # Single disk LUKS
-            create_luks_container "${root_parts[0]}" "$LUKS_PASSPHRASE"
-            open_luks_container "${root_parts[0]}" "$LUKS_PASSPHRASE"
-            btrfs_devices=("/dev/mapper/$LUKS_MAPPER_NAME")
-        else
-            # Multi-disk LUKS - encrypt each partition
-            create_luks_containers "$LUKS_PASSPHRASE" "${root_parts[@]}"
-            open_luks_containers "$LUKS_PASSPHRASE" "${root_parts[@]}"
-            btrfs_devices=($(get_luks_devices $num_disks))
-        fi
-    else
-        # No encryption - use raw partitions
-        btrfs_devices=("${root_parts[@]}")
-    fi
+    # LUKS (optional) fills btrfs_devices with either /dev/mapper/* or raw parts
+    btrfs_open_encryption root_parts btrfs_devices
 
-    # Create btrfs filesystem
-    if [[ $num_disks -eq 1 ]]; then
-        create_btrfs_volume "${btrfs_devices[0]}"
-    else
-        create_btrfs_volume "${btrfs_devices[@]}" --raid-level "$RAID_LEVEL"
-    fi
-
-    # Create and mount subvolumes (use first device for mount)
-    create_btrfs_subvolumes "${btrfs_devices[0]}"
-    mount_btrfs_subvolumes "${btrfs_devices[0]}"
-
-    # Mount primary EFI
+    # Btrfs filesystem + subvolumes + EFI mount
+    btrfs_make_filesystem     btrfs_devices
+    create_btrfs_subvolumes   "${btrfs_devices[0]}"
+    mount_btrfs_subvolumes    "${btrfs_devices[0]}"
     mkdir -p /mnt/efi
     mount "${efi_parts[0]}" /mnt/efi
 
-    # Install base system
+    # Base install + system config
     install_base
-
-    # Configure system
     configure_system
     configure_wifi
     configure_ssh
 
-    # Configure encryption if enabled
-    if [[ "$NO_ENCRYPT" != "yes" ]]; then
-        setup_luks_testing_keyfile "$LUKS_PASSPHRASE" "${root_parts[@]}"
-        configure_crypttab "${root_parts[@]}"
-        configure_luks_grub "${root_parts[0]}"
-        configure_luks_initramfs
-    fi
+    # LUKS config inside chroot (no-op if encryption disabled)
+    btrfs_configure_luks_target root_parts
 
     generate_btrfs_fstab "${btrfs_devices[0]}" "${efi_parts[0]}"
     configure_btrfs_initramfs
 
-    # GRUB installation
-    if [[ $num_disks -eq 1 ]]; then
-        configure_grub "${efi_parts[0]}"
-    else
-        # Multi-disk: install GRUB to all EFI partitions
-        configure_grub "${efi_parts[0]}"
-        install_grub_all_efi "${efi_parts[@]}"
-        create_grub_sync_hook "${efi_parts[@]}"
-    fi
+    # Bootloader
+    btrfs_install_grub efi_parts
 
+    # Snapshots + services
     configure_snapper
     configure_btrfs_services
     configure_btrfs_pacman_hook
-
-    # Genesis snapshot
     create_btrfs_genesis_snapshot
 
     # Cleanup
     btrfs_cleanup
-    if [[ "$NO_ENCRYPT" != "yes" ]]; then
-        if [[ $num_disks -eq 1 ]]; then
-            close_luks_container
-        else
-            close_luks_containers $num_disks
-        fi
-    fi
+    btrfs_close_encryption
     print_btrfs_summary
 }
 
