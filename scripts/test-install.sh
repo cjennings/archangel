@@ -28,7 +28,10 @@ SERIAL_LOG="$LOG_DIR/serial.log"
 
 # Timeouts (seconds)
 BOOT_TIMEOUT=120
-INSTALL_TIMEOUT=600
+# INSTALL_TIMEOUT: 30 min. DKMS zfs compile + depmod on kernel 6.18+ in
+# a VM can exceed 10 min under host load. 600 was tight for 6.12; 1800
+# gives headroom without masking real hangs.
+INSTALL_TIMEOUT=1800
 SSH_TIMEOUT=30
 VERIFY_TIMEOUT=60
 
