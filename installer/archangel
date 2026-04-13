@@ -590,26 +590,8 @@ get_luks_passphrase() {
     echo "IMPORTANT: If you forget this passphrase, your data is UNRECOVERABLE!"
     echo ""
 
-    while true; do
-        prompt "Enter LUKS encryption passphrase:"
-        read -rs LUKS_PASSPHRASE
-        echo ""
-
-        prompt "Confirm passphrase:"
-        read -rs confirm
-        echo ""
-
-        if [[ "$LUKS_PASSPHRASE" == "$confirm" ]]; then
-            if [[ ${#LUKS_PASSPHRASE} -lt 8 ]]; then
-                warn "Passphrase should be at least 8 characters. Try again."
-            else
-                info "Passphrase confirmed."
-                break
-            fi
-        else
-            warn "Passphrases don't match. Try again."
-        fi
-    done
+    prompt_password LUKS_PASSPHRASE "LUKS encryption passphrase" 8
+    info "Passphrase confirmed."
 }
 
 get_encryption_choice() {
@@ -647,46 +629,14 @@ get_zfs_passphrase() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    while true; do
-        prompt "Enter ZFS encryption passphrase:"
-        read -s -p "> " ZFS_PASSPHRASE
-        echo ""
-
-        prompt "Confirm passphrase:"
-        read -s -p "> " confirm_pass
-        echo ""
-
-        if [[ "$ZFS_PASSPHRASE" == "$confirm_pass" ]]; then
-            if [[ ${#ZFS_PASSPHRASE} -lt 8 ]]; then
-                warn "Passphrase should be at least 8 characters."
-                continue
-            fi
-            break
-        else
-            warn "Passphrases do not match. Try again."
-        fi
-    done
+    prompt_password ZFS_PASSPHRASE "ZFS encryption passphrase" 8
 }
 
 get_root_password() {
     step "Root Password"
     echo ""
 
-    while true; do
-        prompt "Enter root password:"
-        read -s -p "> " ROOT_PASSWORD
-        echo ""
-
-        prompt "Confirm root password:"
-        read -s -p "> " confirm_pass
-        echo ""
-
-        if [[ "$ROOT_PASSWORD" == "$confirm_pass" ]]; then
-            break
-        else
-            warn "Passwords do not match. Try again."
-        fi
-    done
+    prompt_password ROOT_PASSWORD "root password" 0
 }
 
 get_ssh_config() {
