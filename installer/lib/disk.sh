@@ -122,16 +122,6 @@ format_efi_partitions() {
     done
 }
 
-# Mount EFI partition
-mount_efi() {
-    local partition="$1"
-    local mount_point="${2:-/mnt/efi}"
-
-    mkdir -p "$mount_point"
-    mount "$partition" "$mount_point" || error "Failed to mount EFI at $mount_point"
-    info "Mounted EFI: $partition -> $mount_point"
-}
-
 #############################
 # Disk Selection (Interactive)
 #############################
@@ -171,34 +161,3 @@ select_disks() {
     info "Selected disks: ${SELECTED_DISKS[*]}"
 }
 
-#############################
-# RAID Level Selection
-#############################
-
-select_raid_level() {
-    local num_disks=${#SELECTED_DISKS[@]}
-
-    if [[ $num_disks -eq 1 ]]; then
-        RAID_LEVEL=""
-        info "Single disk - no RAID"
-        return
-    fi
-
-    step "Select RAID level"
-
-    local options=()
-    options+=("mirror - Mirror data across disks (recommended)")
-
-    if [[ $num_disks -ge 3 ]]; then
-        options+=("raidz1 - Single parity, lose 1 disk capacity")
-    fi
-    if [[ $num_disks -ge 4 ]]; then
-        options+=("raidz2 - Double parity, lose 2 disks capacity")
-    fi
-
-    local selected
-    selected=$(fzf_select "RAID level:" "${options[@]}")
-    RAID_LEVEL=$(echo "$selected" | cut -d' ' -f1)
-
-    info "Selected RAID level: $RAID_LEVEL"
-}
