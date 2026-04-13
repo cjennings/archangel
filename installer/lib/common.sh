@@ -57,6 +57,34 @@ require_command() {
 }
 
 #############################
+# Package Selection
+#############################
+
+# Print the pacstrap package list for the given filesystem, one per line.
+# Common packages first, then filesystem-specific ones.
+# Returns 1 for unknown filesystem.
+#
+# Usage: mapfile -t pkgs < <(pacstrap_packages zfs)
+pacstrap_packages() {
+    local fs="$1"
+    local common=(
+        base base-devel
+        linux-lts linux-lts-headers linux-firmware
+        efibootmgr
+        networkmanager avahi nss-mdns openssh
+        git vim sudo zsh nodejs npm
+        ttf-dejavu fzf wget inetutils wireless-regdb
+    )
+    local fs_specific
+    case "$fs" in
+        zfs)   fs_specific=(zfs-dkms zfs-utils) ;;
+        btrfs) fs_specific=(btrfs-progs grub grub-btrfs snapper snap-pac) ;;
+        *)     return 1 ;;
+    esac
+    printf '%s\n' "${common[@]}" "${fs_specific[@]}"
+}
+
+#############################
 # Password / Passphrase Input
 #############################
 

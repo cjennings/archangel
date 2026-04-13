@@ -88,6 +88,69 @@ setup() {
 }
 
 #############################
+# pacstrap_packages
+#############################
+
+@test "pacstrap_packages zfs includes zfs-dkms and zfs-utils" {
+    run pacstrap_packages zfs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"zfs-dkms"* ]]
+    [[ "$output" == *"zfs-utils"* ]]
+}
+
+@test "pacstrap_packages btrfs includes btrfs-progs, grub, grub-btrfs, snapper, snap-pac" {
+    run pacstrap_packages btrfs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"btrfs-progs"* ]]
+    [[ "$output" == *"grub"* ]]
+    [[ "$output" == *"grub-btrfs"* ]]
+    [[ "$output" == *"snapper"* ]]
+    [[ "$output" == *"snap-pac"* ]]
+}
+
+@test "pacstrap_packages zfs excludes Btrfs-specific packages" {
+    run pacstrap_packages zfs
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"btrfs-progs"* ]]
+    [[ "$output" != *"grub-btrfs"* ]]
+    [[ "$output" != *"snapper"* ]]
+}
+
+@test "pacstrap_packages btrfs excludes ZFS-specific packages" {
+    run pacstrap_packages btrfs
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"zfs-dkms"* ]]
+    [[ "$output" != *"zfs-utils"* ]]
+}
+
+@test "pacstrap_packages includes common packages for both filesystems" {
+    for fs in zfs btrfs; do
+        run pacstrap_packages "$fs"
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"base"* ]]
+        [[ "$output" == *"linux-lts"* ]]
+        [[ "$output" == *"efibootmgr"* ]]
+        [[ "$output" == *"networkmanager"* ]]
+        [[ "$output" == *"openssh"* ]]
+        [[ "$output" == *"inetutils"* ]]
+    done
+}
+
+@test "pacstrap_packages unknown filesystem returns status 1" {
+    run pacstrap_packages reiserfs
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "pacstrap_packages emits one package per line" {
+    run pacstrap_packages zfs
+    [ "$status" -eq 0 ]
+    local expected_lines
+    expected_lines=$(echo "$output" | wc -l)
+    [ "$expected_lines" -ge 20 ]
+}
+
+#############################
 # prompt_password
 #############################
 
