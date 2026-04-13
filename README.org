@@ -57,7 +57,7 @@ The build script will report if you're missing any of these in a preflight check
 
 ** Basic Build
 
-The makefile is your primary entry point for building, [[#testing-with-vms][testing]], and cleaning the project ISO.
+The makefile is your primary entry point for building, [[#testing][testing]], and cleaning the project ISO.
 
 #+BEGIN_SRC bash
 make build
@@ -303,16 +303,19 @@ installation and can decline, or set ~ENABLE_SSH=no~ in a config file.
 *Important*: Harden SSH after installation — switch to key-based authentication
 and consider installing ~fail2ban~.
 
-* Testing with VMs
+* Testing
 
-QEMU VMs validate that the ISO boots correctly and that installations complete
-successfully across all supported configurations (ZFS/Btrfs, single/multi-disk,
-encrypted/unencrypted). Run these after modifying the installer or build scripts
-to catch regressions.
+Two test layers: ~make test~ runs shellcheck + bats unit tests for the pure
+logic in ~installer/lib/*.sh~ (fast, no VMs). ~make test-install~ runs the full
+VM integration suite against a freshly built ISO. Use the former every commit;
+the latter before releases or when touching install paths.
 
-See [[file:testing-strategy.org][testing-strategy.org]] for the full testing strategy,
-including how to add new tests and technical details on encryption testing.
+See [[file:testing-strategy.org][testing-strategy.org]] for the full testing strategy, unit-test coverage,
+how to add new tests, and technical details on encryption testing.
 
+- ~make test~ — Run shellcheck + bats unit tests (~1s, no VMs needed).
+- ~make bats~ — Run bats unit tests only.
+- ~make lint~ — Run shellcheck on all scripts.
 - ~make test-vm~ — Create a 50GB virtual disk and boot the ISO in a
   single-disk QEMU VM. Opens a GTK window with the VM console. SSH in
   with ~ssh -p 2222 root@localhost~ (password: ~archangel~).
@@ -328,7 +331,6 @@ including how to add new tests and technical details on encryption testing.
   first). Runs 12 unattended installs covering ZFS/Btrfs,
   single/multi-disk, encrypted/unencrypted, and custom locale. Each
   test installs, reboots from disk, verifies boot, and checks rollback.
-- ~make lint~ — Run shellcheck on all scripts.
 
 * Project Structure
 
@@ -340,14 +342,16 @@ archangel/
 │   ├── archangel                  # Interactive installation script
 │   ├── archangel.conf.example     # Example config for unattended install
 │   ├── lib/                       # Modular installer components
-│   │   ├── common.sh              # Shared utilities
-│   │   ├── config.sh              # Configuration handling
-│   │   ├── disk.sh                # Disk partitioning
-│   │   ├── zfs.sh                 # ZFS-specific functions
-│   │   └── btrfs.sh               # Btrfs-specific functions
+│   │   ├── common.sh              # Shared utilities, password prompt, pacstrap list
+│   │   ├── config.sh              # Argument parsing + config-file loading + validation
+│   │   ├── disk.sh                # Disk partitioning and EFI formatting
+│   │   ├── btrfs.sh               # Btrfs-specific functions (LUKS, subvolumes, GRUB)
+│   │   └── raid.sh                # Pure RAID-level logic (levels, validation, usable space)
 │   ├── zfssnapshot                # ZFS snapshot utility
 │   ├── zfsrollback                # ZFS rollback utility
 │   └── RESCUE-GUIDE.txt           # Recovery tools documentation
+├── tests/
+│   └── unit/                      # Bats unit tests for installer/lib/*.sh
 ├── scripts/
 │   ├── test-vm.sh                 # QEMU test VM launcher
 │   ├── test-install.sh            # Automated install tests
@@ -403,7 +407,7 @@ The ISO includes DKMS-built ZFS modules. If modules fail to load:
 
 * Links
 
-- [[https://archzfs.com][archzfs Repository]] - ZFS packages for Arch Linux
+- [[https://github.com/archzfs/archzfs][archzfs Repository]] - ZFS packages for Arch Linux (GitHub Releases; archzfs.com was abandoned mid-2025)
 - [[https://openzfs.github.io/openzfs-docs/][OpenZFS Documentation]] - Official ZFS documentation
 - [[https://get.zfsbootmenu.org][ZFSBootMenu]] - ZFS boot manager
 - [[https://wiki.archlinux.org/title/Btrfs][Arch Wiki - Btrfs]] - Btrfs information
