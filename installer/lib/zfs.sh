@@ -133,10 +133,14 @@ create_zfs_datasets() {
     zfs create -o mountpoint=/var/lib/pacman "$POOL_NAME/var/lib/pacman"
     zfs create -o mountpoint=/var/lib/docker "$POOL_NAME/var/lib/docker"
 
-    # Temp directories - excluded from snapshots
+    # /var/tmp - ZFS-backed, persists across reboots, excluded from snapshots
     zfs create -o mountpoint=/var/tmp -o com.sun:auto-snapshot=false "$POOL_NAME/var/tmp"
-    zfs create -o mountpoint=/tmp -o com.sun:auto-snapshot=false "$POOL_NAME/tmp"
-    chmod 1777 /mnt/tmp /mnt/var/tmp
+    chmod 1777 /mnt/var/tmp
+
+    # /tmp - tmpfs via fstab (not ZFS: ZFS statx() returns ENOLINK on
+    # systemd PrivateTmp paths, breaking systemd-tmpfiles-clean every boot)
+    mkdir -p /mnt/tmp
+    chmod 1777 /mnt/tmp
 
     info "Datasets created:"
     zfs list -r "$POOL_NAME" -o name,mountpoint,compression
@@ -266,11 +270,25 @@ EOF
 #!/bin/bash
 POOL="zroot"
 DATASET="$POOL/ROOT/default"
+LOCKFILE="/run/zfs-pre-snapshot.lock"
+MIN_INTERVAL=60
+
+# Dedup bursts of back-to-back pacman transactions (e.g. archsetup runs)
+# into a single snapshot. Lockfile on tmpfs — clears on reboot.
+if [ -f "$LOCKFILE" ]; then
+    last=$(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if (( now - last < MIN_INTERVAL )); then
+        exit 0
+    fi
+fi
+
 TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
 SNAPSHOT_NAME="pre-pacman_$TIMESTAMP"
 
 if zfs snapshot "$DATASET@$SNAPSHOT_NAME"; then
     echo "Created snapshot: $DATASET@$SNAPSHOT_NAME"
+    touch "$LOCKFILE"
 else
     echo "Warning: Failed to create snapshot" >&2
 fi
