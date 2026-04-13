@@ -57,6 +57,43 @@ require_command() {
 }
 
 #############################
+# Password / Passphrase Input
+#############################
+
+# Prompt for a secret, require confirmation, enforce min length, loop
+# until valid. Sets the named variable by nameref so UI output stays
+# on the terminal and the caller doesn't command-substitute.
+#
+# Usage: prompt_password VAR_NAME "label for prompts" MIN_LEN
+#   min_len of 0 disables the length check.
+prompt_password() {
+    local -n _out="$1"
+    local label="$2"
+    local min_len="${3:-0}"
+    local confirm
+
+    while true; do
+        prompt "Enter $label:"
+        read -rs _out
+        echo ""
+
+        prompt "Confirm $label:"
+        read -rs confirm
+        echo ""
+
+        if [[ "$_out" != "$confirm" ]]; then
+            warn "Passphrases do not match. Try again."
+            continue
+        fi
+        if [[ $min_len -gt 0 && ${#_out} -lt $min_len ]]; then
+            warn "Passphrase must be at least $min_len characters. Try again."
+            continue
+        fi
+        break
+    done
+}
+
+#############################
 # FZF Prompts
 #############################
 

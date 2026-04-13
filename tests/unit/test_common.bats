@@ -86,3 +86,32 @@ setup() {
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
+#############################
+# prompt_password
+#############################
+
+@test "prompt_password accepts matching value meeting min length" {
+    prompt_password PASS "label" 4 < <(printf 'hello\nhello\n') >/dev/null
+    [ "$PASS" = "hello" ]
+}
+
+@test "prompt_password enforces min length by looping until met" {
+    prompt_password PASS "label" 4 < <(printf 'ab\nab\nlongenough\nlongenough\n') >/dev/null
+    [ "$PASS" = "longenough" ]
+}
+
+@test "prompt_password retries on mismatch" {
+    prompt_password PASS "label" 4 < <(printf 'aaaa\nbbbb\nfinal1234\nfinal1234\n') >/dev/null
+    [ "$PASS" = "final1234" ]
+}
+
+@test "prompt_password with min_len=0 skips length check" {
+    prompt_password PASS "label" 0 < <(printf 'x\nx\n') >/dev/null
+    [ "$PASS" = "x" ]
+}
+
+@test "prompt_password accepts empty passphrase when min_len=0" {
+    prompt_password PASS "label" 0 < <(printf '\n\n') >/dev/null
+    [ -z "$PASS" ]
+}
