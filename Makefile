@@ -3,7 +3,8 @@
 # Usage:
 #   make build          - Build the ISO
 #   make lint           - Run shellcheck on all scripts
-#   make test           - Run lint
+#   make bats           - Run bats unit tests (tests/unit/)
+#   make test           - Run lint + bats
 #   make test-install   - Run all automated install tests in VMs (slow)
 #   make release        - Full test + build + deploy
 #
@@ -19,13 +20,20 @@
 #
 # Test configurations are in scripts/test-configs/
 
-.PHONY: test test-install test-vm test-multi test-multi3 test-boot test-clean build release clean distclean lint
+.PHONY: test test-install test-vm test-multi test-multi3 test-boot test-clean build release clean distclean lint bats
 
 # Lint all bash scripts
 lint:
 	@echo "==> Running shellcheck..."
 	@shellcheck -x build.sh scripts/*.sh installer/archangel installer/zfsrollback installer/zfssnapshot installer/lib/*.sh
 	@echo "==> Shellcheck complete"
+
+# Run bats unit tests
+bats:
+	@command -v bats >/dev/null 2>&1 || { echo "bats not installed. Install: sudo pacman -S bats (Arch), brew install bats-core (macOS), apt install bats (Debian/Ubuntu)"; exit 1; }
+	@echo "==> Running bats unit tests..."
+	@bats tests/unit/
+	@echo "==> Bats tests complete"
 
 # Build the ISO (requires sudo)
 build:
@@ -37,8 +45,8 @@ test-install: build
 	@echo "==> Running install tests..."
 	./scripts/test-install.sh
 
-# All tests (lint only - VM tests via test-install)
-test: lint
+# All fast tests (lint + bats — VM integration tests via test-install)
+test: lint bats
 
 # Full release: test everything, build, deploy
 release: test test-install
