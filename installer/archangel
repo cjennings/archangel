@@ -29,6 +29,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 source "$SCRIPT_DIR/lib/config.sh"
 source "$SCRIPT_DIR/lib/disk.sh"
 source "$SCRIPT_DIR/lib/btrfs.sh"
+source "$SCRIPT_DIR/lib/raid.sh"
 
 #############################
 # Configuration
@@ -368,18 +369,16 @@ get_raid_level() {
     local total_gb=$((total_bytes / 1073741824))
     local smallest_gb=$((smallest_bytes / 1073741824))
 
-    # Build options based on disk count
-    local options="mirror\nstripe"
-    [[ $disk_count -ge 3 ]] && options+="\nraidz1"
-    [[ $disk_count -ge 4 ]] && options+="\nraidz2"
-    [[ $disk_count -ge 5 ]] && options+="\nraidz3"
+    # Build options based on disk count (pure logic → lib/raid.sh)
+    local options
+    options=$(raid_valid_levels_for_count "$disk_count")
 
     # Export variables for preview subshell
     export RAID_DISK_COUNT=$disk_count
     export RAID_TOTAL_GB=$total_gb
     export RAID_SMALLEST_GB=$smallest_gb
 
-    RAID_LEVEL=$(echo -e "$options" \
+    RAID_LEVEL=$(echo "$options" \
         | fzf --height=20 --layout=reverse --border \
               --header="Select RAID Level ($disk_count disks, ${total_gb}GB total)" \
               --preview='
