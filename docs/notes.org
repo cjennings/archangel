@@ -283,11 +283,86 @@ Implementation is ready - just need Craig's preference.
 
 (None currently - will be added as they arise)
 
+* Technical Debt Backlog
+
+Catalogued 2026-04-12 after =lib/zfs.sh= removal. Ordered by impact × ease
+(ripe fruit first). File:line references were accurate at catalog time —
+re-verify before acting.
+
+** Ripe Fruit (minutes–hour each)
+
+*** [#A] Duplicate =mount_efi()= — 15 min
+- =installer/archangel=:916 defines a ZFS-specific no-arg version
+- =installer/lib/disk.sh=:126 defines a general (partition, mountpoint) version that's never called
+- Fix: remove from monolith, call library version with =EFI_PARTS[0]=
+
+*** [#A] =get_zfs_passphrase()= vs =get_luks_passphrase()= — 20 min
+- =installer/archangel=:639 and :583, 90% identical prompt+confirm+min-length logic
+- Fix: unify into =get_encryption_passphrase(var_name, description)=
+
+*** [#A] =install_base()= vs =install_base_btrfs()= — 45 min
+- =installer/archangel=:925 vs :975, 95% copy-paste, differ only in package list
+- Fix: single =install_base()= with =FILESYSTEM=-conditional package array
+
+*** [#B] Fragile grep-head chains — 20 min
+- =installer/archangel=:1269, :1170 use =... | head -1 | grep -oP ...= without null guards
+- Silent failure → empty variable → cryptic failure downstream
+- Fix: =x=$(...) || error "..."= pattern
+
+*** [#B] Redundant =sed= calls on sshd_config — 25 min
+- =installer/archangel=:1099-1100 runs sed twice without =-e= combining
+- Both fail silently if config has unexpected format; SSH config never logged
+- Fix: single sed with =-e -e=, explicit error check
+
+** Medium Lifts (half-day each)
+
+*** [#B] =partition_disks()= is ZFS-only — 45 min
+- =installer/archangel=:756 hardcodes =EFI_PARTS= + =ZFS_PARTS=, called only from =install_zfs()=
+- Btrfs path uses =partition_disk()= (singular) — parallel partitioning logic
+- Fix: merge into =disk.sh=, dispatch on =FILESYSTEM=
+
+*** [#B] FILESYSTEM validation scattered — 30 min
+- =config.sh=:113+ validates, then =archangel=:135-137 re-validates, then :115 sets defaults
+- Unclear which wins; easy to drift
+- Fix: single source of truth in =config.sh=, monolith trusts it
+
+*** [#C] Hardcoded =/mnt/efi= paths — 30 min
+- =btrfs.sh=:731-739 and =archangel=:920
+- Fix: export =MNTPOINT=/mnt= and =EFI_DIR=/mnt/efi= at startup
+
+** Scale Smells (full day+)
+
+*** [#B] =get_raid_level()= is 146 lines — 2 hr
+- =installer/archangel=:350-496, 3-level nested if/elif on RAID_LEVEL × disk count × encryption
+- Hard to unit-test, hard to spot uncovered branches
+- Fix: extract raid mode dispatch; use =case= instead of if chains
+
+*** [#C] ZFS vs Btrfs install paths diverge — 1.5 hr
+- =install_zfs()= (:1590) sequential calls, no mid-step recovery
+- =install_btrfs()= (:1614) captures partition arrays but doesn't validate population
+- Two eras of code; LUKS-open failure mid-btrfs install goes unnoticed
+- Fix: return checks after partition ops, shared error hooks
+
+** Review Cadence
+
+Revisit this section at the start of any session that touches the
+installer. Completed items move to Session History with a commit ref.
+Add new items as they're discovered (format: priority, title, time
+estimate, locations, fix direction).
+
 * Active Reminders
 
 ** Current Reminders
 
-None.
+- =[2026-04-13]= **Investigate =zfs-mirror-encrypt= rollback soft-failure.**
+  In tonight's full VM integration run (=test-logs/full-run-05-53.log=,
+  05:53-08:10 EDT), the test framework marked =zfs-mirror-encrypt= PASSED
+  but logged =ERROR: Rollback failed - test file not restored= →
+  =WARN: Rollback verification had issues=. ZFS rollback completed but
+  the filesystem state wasn't what =verify_rollback= expected. Not a
+  regression from tonight's refactors (rollback code wasn't touched).
+  Worth a look — possibly drift in =verify_rollback= vs. the ZFS
+  rollback semantics on a mirrored pool.
 
 ** Instructions for This Section
 
@@ -326,6 +401,123 @@ Each entry should use this format:
 - Link to files using org-mode =file:= links
 
 ** Session Entries
+
+*** 2026-04-12 Sun → 2026-04-13 Mon @ 23:12-08:10 EDT
+
+*Status:* COMPLETE
+
+*What We Completed:*
+
+**1. Security scrub** — =cmjdase1n= (velox LUKS/ZFS passphrase + root
+password) was leaked into git history in the velox-{zfs,btrfs}.conf
+files and in prior session-context notes. Used =git filter-branch
+--tree-filter= to rewrite 182 commits, replacing the literal with
+=welcome=; cleaned refs/original + gc =--prune=now=; force-pushed
+main (8e47d45 → d59fe14) and tag v0.8 (8444325 → 05f5c36). Templated
+=velox-{zfs,btrfs}.conf= as =.example= files, real files added to
+=.gitignore=. Craig declined to rotate the leaked passphrase or
+contact GitHub Support to purge cached commit views.
+
+**2. Testing infrastructure** — shellcheck was already wired; added
+bats-core (v1.13 via pacman). Created =tests/unit/test_common.bats=,
+=test_config.bats=, =test_raid.bats=. =make bats= + =make test= targets
+(lint + bats). 65 bats tests total; shellcheck clean.
+
+**3. Refactor scan** (=/refactor full=) — 13 findings. Applied all 5
+critical+high in sequence, each behavior-preserving, lint+bats clean,
+individual commit:
+- =ce4f716= drop dead =mount_efi= + =select_raid_level= in =lib/disk.sh=
+- =81b169f= unify =get_{luks,zfs}_passphrase= + =get_root_password= →
+  =prompt_password(varname, label, min_len)= via nameref
+- =32422a8= merge =install_base= + =install_base_btrfs= → extract
+  =pacstrap_packages(filesystem)= pure helper
+- =53df8d4= dedupe =findmnt= invocation in =build.sh:safe_cleanup_work_dir=
+- =ea6f252= decompose =install_btrfs()= into five named orchestration
+  stages in =lib/btrfs.sh= (=btrfs_open_encryption=,
+  =btrfs_make_filesystem=, =btrfs_configure_luks_target=,
+  =btrfs_install_grub=, =btrfs_close_encryption=). Dropped from ~99
+  lines of nested conditionals to a ~45-line flat sequence.
+
+**4. Earlier in session** — =610d6be= extracted pure RAID logic into
+=lib/raid.sh= (=raid_valid_levels_for_count=, =raid_is_valid=,
+=raid_usable_bytes=, =raid_fault_tolerance=) with 30 bats tests.
+
+**5. Docs** — =402bbd8= testing-strategy.org got a proper "Unit Tests
+(bats)" section; README.org testing section renamed + two-layer
+framed, project structure tree synced (dropped zfs.sh, added raid.sh
++ tests/unit/), archzfs link updated to GitHub Releases.
+
+**6. todo.org** — created at project root (gitignored) with the 8
+remaining refactor items tagged =:refactor:= (#4–#13 from the scan,
+all medium or low). Includes =[[file:../todo.org][Archangel Open Work]]= open-list +
+Archangel Resolved ledger.
+
+**7. Full VM test run** — =make test-install=. First pass failed 6/12
+(all ZFS configs) due to DKMS compile timeout on kernel 6.18.22. Root
+cause: =INSTALL_TIMEOUT=600= in =scripts/test-install.sh= — your
+2026-02-12 session notes mentioned bumping to 1800 but the change
+never made it into git. =d42fa81= bumped to 1800. Second pass (direct
+=./scripts/test-install.sh=, skipping rebuild): **12/12 PASSED** in
+~2h 17m.
+
+*Key Decisions:*
+- bats-core installed system-wide via pacman rather than vendored as
+  a submodule — follows the pattern already used for shellcheck.
+- Namerefs (=local -n=) added two new =.shellcheckrc= disables
+  (SC2178, SC2153) as recurring false positives.
+- For the #5 =install_btrfs= decomposition: no new bats tests added,
+  because every new helper shells out to real LUKS/mkfs.btrfs
+  operations. VM integration tests remain the behavior validator;
+  the VM run confirmed no regression.
+- Tech-debt backlog that had been sitting uncommitted in =docs/notes.org=
+  since the prior (velox) session wrap-up got rolled into this
+  wrap-up commit.
+
+*Files Modified (session):*
+- [[file:../installer/archangel][installer/archangel]] — lib/raid.sh source, prompt_password,
+  install_base merge, install_btrfs decompose
+- [[file:../installer/lib/common.sh][installer/lib/common.sh]] — prompt_password, pacstrap_packages
+- [[file:../installer/lib/disk.sh][installer/lib/disk.sh]] — dropped dead =mount_efi=, =select_raid_level=
+- [[file:../installer/lib/btrfs.sh][installer/lib/btrfs.sh]] — 5 new =btrfs_*= orchestration helpers
+- [[file:../installer/lib/raid.sh][installer/lib/raid.sh]] — NEW, pure RAID logic
+- [[file:../build.sh][build.sh]] — dedupe findmnt in =safe_cleanup_work_dir=
+- [[file:../scripts/test-install.sh][scripts/test-install.sh]] — =INSTALL_TIMEOUT=1800=
+- [[file:../.shellcheckrc][.shellcheckrc]] — disable SC2178, SC2153
+- [[file:../.gitignore][.gitignore]] — add =installer/velox-*.conf=
+- [[file:../Makefile][Makefile]] — add =bats= target, =test=lint+bats=
+- [[file:../README.org][README.org]] — testing section update
+- [[file:../testing-strategy.org][testing-strategy.org]] — new "Unit Tests (bats)" section
+
+*Files Created:*
+- [[file:../installer/lib/raid.sh][installer/lib/raid.sh]] (70 lines)
+- [[file:../tests/unit/test_common.bats][tests/unit/test_common.bats]] (23 tests)
+- [[file:../tests/unit/test_config.bats][tests/unit/test_config.bats]] (12 tests)
+- [[file:../tests/unit/test_raid.bats][tests/unit/test_raid.bats]] (30 tests)
+- [[file:../installer/velox-btrfs.conf.example][installer/velox-btrfs.conf.example]] (template)
+- [[file:../installer/velox-zfs.conf.example][installer/velox-zfs.conf.example]] (template)
+- [[file:../todo.org][todo.org]] (gitignored, tracks remaining refactors)
+
+*Commits (main branch, chronological):*
+1. =d59fe14= security: gitignore host configs, add .example templates (post-scrub)
+2. =626428e= test: add bats unit tests for common.sh and config.sh
+3. =610d6be= refactor: extract pure RAID logic to lib/raid.sh with bats coverage
+4. =ce4f716= refactor: drop dead mount_efi and select_raid_level from lib/disk.sh
+5. =81b169f= refactor: unify get_{luks,zfs}_passphrase and get_root_password
+6. =32422a8= refactor: merge install_base and install_base_btrfs
+7. =53df8d4= refactor: dedupe findmnt invocation in safe_cleanup_work_dir
+8. =ea6f252= refactor: decompose install_btrfs into named orchestration stages
+9. =402bbd8= docs: document bats unit tests + sync stale README bits
+10. =d42fa81= fix: bump INSTALL_TIMEOUT from 600 to 1800 for kernel 6.18+ DKMS builds
+
+(Plus the filter-branch rewrite of all prior commits and v0.8 tag
+earlier in session — all pre-scrub SHAs are now invalidated.)
+
+*Next Session Pickup:*
+- **[Reminder] Investigate =zfs-mirror-encrypt= rollback soft-failure**
+  logged in =test-logs/full-run-05-53.log= — see Active Reminders section.
+- 8 remaining =:refactor:= items in =todo.org= (6 medium-priority quick
+  wins + 1 medium multi-hour #8 partition_disks consolidation + 1 low
+  #13 build.sh shadow-file fallback).
 
 *** 2026-04-09 Thu @ 21:30-22:31 -0500
 
