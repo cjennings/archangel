@@ -4,8 +4,13 @@
 
 * Overview
 
-This document describes the testing strategy for the archzfs installer project,
-including automated VM testing and the rationale for key technical decisions.
+This document describes the testing strategy for the archangel installer
+project, including automated VM testing and the rationale for key technical
+decisions.
+
+Testing has two layers: fast [[#unit-tests-bats][bats unit tests]] for pure logic in
+=installer/lib/*.sh=, and slower [[#running-tests][VM integration tests]] that exercise the
+full install path against real block devices.
 
 * Running Tests
 
@@ -19,8 +24,9 @@ including automated VM testing and the rationale for key technical decisions.
 | =make test-multi3= | Boot ISO in a 3-disk VM for raidz1 testing |
 | =make test-boot= | Boot from installed disk (after running install in VM) |
 | =make test-clean= | Remove VM disks and OVMF vars, start fresh |
+| =make bats= | Run bats unit tests only (tests/unit/) |
 | =make lint= | Run shellcheck on all scripts |
-| =make test= | Run lint (alias) |
+| =make test= | Run lint + bats (fast; no VMs) |
 
 ** Running a Single Automated Test
 
@@ -39,6 +45,58 @@ including automated VM testing and the rationale for key technical decisions.
 #+begin_src bash
 ./scripts/test-install.sh --list
 #+end_src
+
+* Unit Tests (bats)
+:PROPERTIES:
+:CUSTOM_ID: unit-tests-bats
+:END:
+
+** What bats covers
+
+The bats test suite exercises pure logic in =installer/lib/*.sh= — helpers
+that can run without root, without block devices, and without a chroot.
+It runs in under a second and is the fast feedback loop for every commit.
+
+Current coverage lives in =tests/unit/=:
+
+| File | What it covers |
+|------+----------------|
+| =test_common.bats= | =command_exists=, =require_command=, =info=/=warn=/=error=, =enable_color=, =log=, =prompt_password=, =pacstrap_packages= |
+| =test_config.bats= | =parse_args=, =load_config=, =validate_config=, =check_config= |
+| =test_raid.bats= | =raid_valid_levels_for_count=, =raid_is_valid=, =raid_usable_bytes=, =raid_fault_tolerance= |
+
+** What bats does NOT cover (deliberately)
+
+Anything that shells out to =mkfs=, =cryptsetup=, =zpool create=,
+=pacstrap=, =arch-chroot=, =grub-install=, or needs root. Those behaviors
+only mean anything against real partitions on real (virtual) hardware and
+belong in the VM integration tests below.
+
+** Running
+
+#+begin_src bash
+make bats             # bats only
+make test             # lint + bats (pre-commit check)
+bats tests/unit/      # direct invocation, same result
+#+end_src
+
+** Installing bats
+
+#+begin_src bash
+sudo pacman -S bats   # Arch
+brew install bats-core # macOS
+apt install bats      # Debian/Ubuntu
+#+end_src
+
+The =make bats= target prints an install hint if =bats= isn't on =PATH=.
+
+** The pattern for adding coverage
+
+When a refactor extracts pure logic out of a monolithic installer
+function into a =lib/*.sh= helper, add bats cases for the helper in the
+same commit. Don't try to write bats tests against the monolith
+directly — extract, then test. That's how =raid.sh=, =pacstrap_packages=,
+and =prompt_password= got covered.
 
 * Test Infrastructure
 
