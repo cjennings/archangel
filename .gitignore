@@ -10,7 +10,7 @@ test-logs/
 reference-repos/
 
 # Personal session/workflow docs (not project documentation)
-docs/
+.ai/
 todo.org
 inbox/
 
