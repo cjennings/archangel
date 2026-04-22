@@ -50,9 +50,11 @@ safe_cleanup_work_dir() {
 
         # Catch any other mounts under airootfs (bind mounts not in the
         # explicit list above). Deepest-first via reverse sort.
+        # grep exits 1 on no-match; with pipefail that would propagate and
+        # trip set -e, so swallow it — "no leftover mounts" is the common case.
         local leftover
         leftover=$(findmnt --list --noheadings -o TARGET 2>/dev/null \
-                       | grep "$airootfs" | sort -r)
+                       | grep "$airootfs" | sort -r || true)
         if [[ -n "$leftover" ]]; then
             while IFS= read -r mp; do
                 umount -l "$mp" 2>/dev/null || true
@@ -422,10 +424,10 @@ if grep -q "file_permissions=" "$PROFILE_DIR/profiledef.sh"; then
         /)/ i\  ["/usr/local/bin/lib/disk.sh"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
-        /)/ i\  ["/usr/local/bin/lib/zfs.sh"]="0:0:755"
+        /)/ i\  ["/usr/local/bin/lib/btrfs.sh"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
-        /)/ i\  ["/usr/local/bin/lib/btrfs.sh"]="0:0:755"
+        /)/ i\  ["/usr/local/bin/lib/raid.sh"]="0:0:755"
     }' "$PROFILE_DIR/profiledef.sh"
     sed -i '/^file_permissions=(/,/)/ {
         /)/ i\  ["/etc/shadow"]="0:0:400"
