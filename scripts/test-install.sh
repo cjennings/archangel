@@ -574,9 +574,15 @@ verify_rollback() {
 
     step "Verifying rollback functionality..."
 
+    # Sentinel lives on zroot/ROOT/default so the rollback we issue below
+    # actually affects it. /root is a separate dataset (zroot/home/root,
+    # see archangel:create_datasets), so writing the sentinel there would
+    # make the rollback a no-op for our check.
+    local test_file="/etc/archangel-rollback-test"
+
     # Create a test file
-    ssh_cmd "echo 'test-marker-$(date +%s)' > /root/rollback-test-file"
-    if ! ssh_cmd "test -f /root/rollback-test-file"; then
+    ssh_cmd "echo 'test-marker-$(date +%s)' > '$test_file'"
+    if ! ssh_cmd "test -f '$test_file'"; then
         error "Failed to create test file"
         return 1
     fi
@@ -599,7 +605,7 @@ verify_rollback() {
         fi
 
         # Delete the test file (change to rollback)
-        ssh_cmd "rm -f /root/rollback-test-file"
+        ssh_cmd "rm -f '$test_file'"
 
         # Rollback
         if ! ssh_cmd "snapper -c root rollback $snap_num"; then
@@ -616,7 +622,7 @@ verify_rollback() {
         info "ZFS snapshot created"
 
         # Delete the test file
-        ssh_cmd "rm -f /root/rollback-test-file"
+        ssh_cmd "rm -f '$test_file'"
 
         # Rollback
         if ! ssh_cmd "zfs rollback zroot/ROOT/default@rollback-test"; then
@@ -628,7 +634,7 @@ verify_rollback() {
 
     # Verify file is back (for ZFS, immediate; for btrfs, needs reboot)
     if [[ "$filesystem" == "zfs" ]]; then
-        if ssh_cmd "test -f /root/rollback-test-file"; then
+        if ssh_cmd "test -f '$test_file'"; then
             info "Rollback verified - test file restored"
         else
             error "Rollback failed - test file not restored"
