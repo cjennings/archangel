@@ -20,6 +20,12 @@
 #
 # Test configurations are in scripts/test-configs/
 
+# Recipe shell uses pipefail so intra-recipe pipelines (e.g. the baked-in
+# tee on test-install) propagate the first non-zero exit instead of the
+# last. Without this, `cmd | tee log` would mask cmd's failure.
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
 .PHONY: test test-install test-vm test-multi test-multi3 test-boot test-clean build release clean distclean lint bats
 
 # Lint all bash scripts
@@ -41,9 +47,16 @@ build:
 	sudo ./build.sh
 
 # Integration tests (runs VMs, slow)
+# tee is baked into the recipe so output is always captured to a
+# timestamped log and callers never need to remember `set -o pipefail`
+# before `make test-install 2>&1 | tee ...` — the recipe's SHELLFLAGS
+# propagates the test script's exit code through the pipe to tee.
 test-install: build
 	@echo "==> Running install tests..."
-	./scripts/test-install.sh
+	@mkdir -p test-logs
+	@logfile="test-logs/make-test-install-$$(date +%Y-%m-%d-%H%M).log"; \
+	 echo "==> Log: $$logfile"; \
+	 ./scripts/test-install.sh 2>&1 | tee "$$logfile"
 
 # All fast tests (lint + bats — VM integration tests via test-install)
 test: lint bats
