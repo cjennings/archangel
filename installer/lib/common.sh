@@ -222,6 +222,20 @@ disk_in_use() {
     return 1
 }
 
+# Install a systemd drop-in for $service under $root, reading its body
+# from stdin. Creates $root/etc/systemd/system/$service.service.d/ at
+# mode 755 (idempotent) and writes $dropin_name.conf there. Intended
+# for post-pacstrap customization — pass "/mnt" as root at install
+# time; tests pass a tempdir.
+install_dropin() {
+    local service="$1"
+    local dropin_name="$2"
+    local root="$3"
+    local dir="${root}/etc/systemd/system/${service}.service.d"
+    install -d -m 755 "$dir"
+    cat > "${dir}/${dropin_name}.conf"
+}
+
 # List available disks (not in use)
 list_available_disks() {
     local disks=()

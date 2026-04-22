@@ -1269,6 +1269,25 @@ configure_zfs_tools() {
     info "Tip: Install sanoid for automated snapshot retention."
 }
 
+configure_tmpfiles_private_tmp() {
+    # On ZFS-on-root, statx() across sibling services' /var/tmp/systemd-private-*/tmp
+    # mounts returns errno 132 (ENOTNAM). Running tmpfiles in its own mount
+    # namespace avoids traversing them. See docs/zfs-tmpfiles-private-tmp-fix.md.
+    step "Isolating systemd-tmpfiles from sibling private-tmp (ZFS)"
+
+    local svc
+    for svc in systemd-tmpfiles-setup systemd-tmpfiles-clean; do
+        install_dropin "$svc" zfs-private-tmp /mnt << 'EOF'
+# ZFS: statx of sibling services' /var/tmp/systemd-private-*/tmp mounts
+# returns errno 132. Running in own namespace avoids traversing them.
+[Service]
+PrivateTmp=yes
+EOF
+    done
+
+    info "systemd-tmpfiles drop-ins installed (PrivateTmp=yes)."
+}
+
 sync_efi_partitions() {
     # Skip if only one disk
     if [[ ${#EFI_PARTS[@]} -le 1 ]]; then
@@ -1496,6 +1515,7 @@ install_zfs() {
     configure_zfs_services
     configure_pacman_hook
     configure_zfs_tools
+    configure_tmpfiles_private_tmp
     sync_efi_partitions
     create_genesis_snapshot
     cleanup

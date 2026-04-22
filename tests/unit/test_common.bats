@@ -178,3 +178,71 @@ setup() {
     prompt_password PASS "label" 0 < <(printf '\n\n') >/dev/null
     [ -z "$PASS" ]
 }
+
+#############################
+# install_dropin
+#############################
+
+setup_dropin_tmp() {
+    DROPIN_ROOT=$(mktemp -d)
+}
+
+teardown_dropin_tmp() {
+    [ -n "${DROPIN_ROOT:-}" ] && rm -rf "$DROPIN_ROOT"
+}
+
+@test "install_dropin writes conf file at expected path" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" <<< "[Service]"
+    [ -f "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf" ]
+    teardown_dropin_tmp
+}
+
+@test "install_dropin writes stdin content verbatim" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" <<< "[Service]
+PrivateTmp=yes"
+    run cat "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[Service]"* ]]
+    [[ "$output" == *"PrivateTmp=yes"* ]]
+    teardown_dropin_tmp
+}
+
+@test "install_dropin creates dropin dir with 755 perms" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" <<< "x"
+    local perms
+    perms=$(stat -c '%a' "$DROPIN_ROOT/etc/systemd/system/foo.service.d")
+    [ "$perms" = "755" ]
+    teardown_dropin_tmp
+}
+
+@test "install_dropin is idempotent — second call overwrites content" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" <<< "first"
+    install_dropin foo bar "$DROPIN_ROOT" <<< "second"
+    run cat "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf"
+    [ "$output" = "second" ]
+    teardown_dropin_tmp
+}
+
+@test "install_dropin accepts empty content" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" < /dev/null
+    [ -f "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf" ]
+    [ ! -s "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf" ]
+    teardown_dropin_tmp
+}
+
+@test "install_dropin preserves special characters in content" {
+    setup_dropin_tmp
+    install_dropin foo bar "$DROPIN_ROOT" <<< '# comment with $var and `backtick`
+[Service]
+Environment="FOO=bar baz"'
+    run cat "$DROPIN_ROOT/etc/systemd/system/foo.service.d/bar.conf"
+    [[ "$output" == *'$var'* ]]
+    [[ "$output" == *'`backtick`'* ]]
+    [[ "$output" == *'"FOO=bar baz"'* ]]
+    teardown_dropin_tmp
+}
