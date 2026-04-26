@@ -212,3 +212,108 @@ setup() {
     gather_input >/dev/null
     [ -z "$RAID_LEVEL" ]
 }
+
+#############################
+# install_failure_cleanup
+#############################
+# install_failure_cleanup is the trap target for ERR / INT / TERM
+# during install_zfs and install_btrfs. It clears sensitive vars,
+# dispatches on FILESYSTEM, and exits non-zero. Tests use function
+# overrides to capture which system tools the cleanup invokes; the
+# tools themselves (umount, zpool, btrfs_cleanup,
+# btrfs_close_encryption) are deliberately VM-tested per
+# testing-strategy.org.
+
+@test "install_failure_cleanup clears sensitive variables before exiting" {
+    FILESYSTEM=zfs
+    POOL_NAME=zroot
+    ROOT_PASSWORD="topsecret"
+    ZFS_PASSPHRASE="anothersecret"
+    LUKS_PASSPHRASE="thirdsecret"
+
+    # Mocks: silent no-ops for system tools; error returns non-zero
+    # so the function returns instead of exiting the test process.
+    umount() { :; }
+    zpool() { return 1; }
+    btrfs_cleanup() { :; }
+    btrfs_close_encryption() { :; }
+    warn() { :; }
+    error() { return 1; }
+
+    install_failure_cleanup || true
+
+    [ -z "$ROOT_PASSWORD" ]
+    [ -z "$ZFS_PASSPHRASE" ]
+    [ -z "$LUKS_PASSPHRASE" ]
+}
+
+@test "install_failure_cleanup dispatches to ZFS path when FILESYSTEM=zfs" {
+    FILESYSTEM=zfs
+    POOL_NAME=zroot
+    CALLS=()
+
+    # Mocks track invocations via CALLS array. Array assignment is not
+    # affected by the production code's >/dev/null 2>&1 redirects on
+    # the zpool list check, so we capture the call regardless of where
+    # the mock's stdout would have gone.
+    umount() { CALLS+=("umount $*"); return 0; }
+    zpool() {
+        CALLS+=("zpool $*")
+        [[ "$1" == "list" ]] && return 0
+        return 0
+    }
+    btrfs_cleanup() { CALLS+=("btrfs_cleanup"); }
+    btrfs_close_encryption() { CALLS+=("btrfs_close_encryption"); }
+    warn() { :; }
+    error() { CALLS+=("error"); return 1; }
+
+    install_failure_cleanup || true
+
+    [[ " ${CALLS[*]} " == *" umount /mnt/efi "* ]]
+    [[ " ${CALLS[*]} " == *" umount -R /mnt "* ]]
+    [[ " ${CALLS[*]} " == *" zpool list zroot "* ]]
+    [[ " ${CALLS[*]} " == *" zpool export zroot "* ]]
+    [[ " ${CALLS[*]} " != *" btrfs_cleanup "* ]]
+    [[ " ${CALLS[*]} " != *" btrfs_close_encryption "* ]]
+}
+
+@test "install_failure_cleanup dispatches to Btrfs path when FILESYSTEM=btrfs" {
+    FILESYSTEM=btrfs
+    CALLS=()
+
+    umount() { CALLS+=("umount $*"); return 0; }
+    zpool() { CALLS+=("zpool $*"); return 0; }
+    btrfs_cleanup() { CALLS+=("btrfs_cleanup"); }
+    btrfs_close_encryption() { CALLS+=("btrfs_close_encryption"); }
+    warn() { :; }
+    error() { CALLS+=("error"); return 1; }
+
+    install_failure_cleanup || true
+
+    [[ " ${CALLS[*]} " == *" umount /mnt/efi "* ]]
+    [[ " ${CALLS[*]} " == *" btrfs_cleanup "* ]]
+    [[ " ${CALLS[*]} " == *" btrfs_close_encryption "* ]]
+    [[ " ${CALLS[*]} " != *" zpool"* ]]
+}
+
+@test "install_failure_cleanup ZFS path skips zpool export when pool not imported" {
+    FILESYSTEM=zfs
+    POOL_NAME=zroot
+    CALLS=()
+
+    umount() { CALLS+=("umount $*"); return 0; }
+    zpool() {
+        CALLS+=("zpool $*")
+        [[ "$1" == "list" ]] && return 1  # pool NOT imported
+        return 0
+    }
+    btrfs_cleanup() { :; }
+    btrfs_close_encryption() { :; }
+    warn() { :; }
+    error() { return 1; }
+
+    install_failure_cleanup || true
+
+    [[ " ${CALLS[*]} " == *" zpool list zroot "* ]]
+    [[ " ${CALLS[*]} " != *" zpool export"* ]]
+}

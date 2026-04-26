@@ -1311,6 +1311,44 @@ cleanup() {
     info "Cleanup complete."
 }
 
+# Trap target for ERR / INT / TERM during install_zfs and
+# install_btrfs. Captures the failing exit code first, disarms the
+# trap to prevent recursion, clears sensitive variables, and
+# dispatches to the right per-filesystem cleanup before exiting via
+# error(). All cleanup steps swallow their own errors — partial
+# state is expected when this fires mid-install, so individual tool
+# failures are not fatal.
+install_failure_cleanup() {
+    local exit_code=$?
+    trap - ERR INT TERM
+
+    ROOT_PASSWORD=""
+    ZFS_PASSPHRASE=""
+    LUKS_PASSPHRASE=""
+
+    warn ""
+    warn "Installation failed (exit code $exit_code) — cleaning up..."
+
+    case "$FILESYSTEM" in
+        zfs)
+            umount /mnt/efi 2>/dev/null || true
+            umount -R /mnt 2>/dev/null || true
+            if zpool list "$POOL_NAME" >/dev/null 2>&1; then
+                zpool export "$POOL_NAME" 2>/dev/null \
+                    || zpool export -f "$POOL_NAME" 2>/dev/null \
+                    || true
+            fi
+            ;;
+        btrfs)
+            umount /mnt/efi 2>/dev/null || true
+            btrfs_cleanup 2>/dev/null || true
+            btrfs_close_encryption 2>/dev/null || true
+            ;;
+    esac
+
+    error "Installation failed; system cleaned up. Re-run the installer to retry."
+}
+
 print_summary() {
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════╗"
@@ -1416,6 +1454,13 @@ main() {
 #############################
 
 install_zfs() {
+    # Arm the failure trap before the first destructive operation. If
+    # any step below errors out or the user hits Ctrl-C, the trap runs
+    # cleanup (unmount /mnt + export pool) so the live ISO is left in a
+    # state where the user can re-run the installer without manual
+    # intervention.
+    trap 'install_failure_cleanup' ERR INT TERM
+
     partition_disks
     create_zfs_pool
     create_datasets
@@ -1432,6 +1477,11 @@ install_zfs() {
     configure_tmpfiles_private_tmp
     sync_efi_partitions
     create_genesis_snapshot
+
+    # Disarm the failure trap before the success-path cleanup. The
+    # success cleanup may emit non-zero exit codes that we don't want
+    # to interpret as "installation failed".
+    trap - ERR INT TERM
     cleanup
     print_summary
 }
@@ -1441,6 +1491,10 @@ install_zfs() {
 #############################
 
 install_btrfs() {
+    # Arm the failure trap before any destructive operation. See the
+    # matching block in install_zfs() for the rationale.
+    trap 'install_failure_cleanup' ERR INT TERM
+
     local btrfs_devices=()
     local efi_parts=()
     local root_parts=()
@@ -1487,6 +1541,10 @@ install_btrfs() {
     configure_btrfs_services
     configure_btrfs_pacman_hook
     create_btrfs_genesis_snapshot
+
+    # Disarm the failure trap before the success-path cleanup. See
+    # the matching block in install_zfs() for the rationale.
+    trap - ERR INT TERM
 
     # Cleanup
     btrfs_cleanup
