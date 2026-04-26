@@ -373,113 +373,17 @@ get_raid_level() {
     local options
     options=$(raid_valid_levels_for_count "$disk_count")
 
-    # Export variables for preview subshell
-    export RAID_DISK_COUNT=$disk_count
-    export RAID_TOTAL_GB=$total_gb
-    export RAID_SMALLEST_GB=$smallest_gb
+    # Make raid_preview and its dependencies available to fzf's preview
+    # subshell. The text and math live in lib/raid.sh so they're
+    # bats-tested and editor-friendly instead of buried in a
+    # single-quoted fzf argument.
+    export -f raid_preview raid_fault_tolerance raid_usable_bytes
 
     RAID_LEVEL=$(echo "$options" \
         | fzf --height=20 --layout=reverse --border \
               --header="Select RAID Level ($disk_count disks, ${total_gb}GB total)" \
-              --preview='
-                  n=$RAID_DISK_COUNT
-                  total=$RAID_TOTAL_GB
-                  small=$RAID_SMALLEST_GB
-
-                  case {} in
-                    mirror)
-                      echo "MIRROR"
-                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                      echo ""
-                      echo "All disks contain identical copies of data."
-                      echo "Maximum redundancy - can survive loss of"
-                      echo "all disks except one."
-                      echo ""
-                      echo "Redundancy:    Can lose $((n-1)) of $n disks"
-                      echo "Usable space:  ~${small}GB (smallest disk)"
-                      echo "Read speed:    Fast (parallel reads)"
-                      echo "Write speed:   Normal"
-                      echo ""
-                      echo "Best for:"
-                      echo "  - Boot drives"
-                      echo "  - Critical data"
-                      echo "  - Maximum safety"
-                      ;;
-                    stripe)
-                      echo "STRIPE (RAID0)"
-                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                      echo ""
-                      echo "WARNING: NO REDUNDANCY!"
-                      echo "Data is striped across all disks."
-                      echo "ANY disk failure = ALL data lost!"
-                      echo ""
-                      echo "Redundancy:    NONE"
-                      echo "Usable space:  ~${total}GB (all disks)"
-                      echo "Read speed:    Very fast"
-                      echo "Write speed:   Very fast"
-                      echo ""
-                      echo "Best for:"
-                      echo "  - Scratch/temp space"
-                      echo "  - Replaceable data"
-                      echo "  - Maximum performance"
-                      ;;
-                    raidz1)
-                      usable=$(( (n-1) * small ))
-                      echo "RAIDZ1 (Single Parity)"
-                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                      echo ""
-                      echo "One disk worth of parity distributed"
-                      echo "across all disks."
-                      echo ""
-                      echo "Redundancy:    Can lose 1 disk"
-                      echo "Usable space:  ~${usable}GB ($((n-1)) of $n disks)"
-                      echo "Read speed:    Fast"
-                      echo "Write speed:   Good"
-                      echo ""
-                      echo "Best for:"
-                      echo "  - General storage"
-                      echo "  - Good balance of space/safety"
-                      ;;
-                    raidz2)
-                      usable=$(( (n-2) * small ))
-                      echo "RAIDZ2 (Double Parity)"
-                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                      echo ""
-                      echo "Two disks worth of parity distributed"
-                      echo "across all disks."
-                      echo ""
-                      echo "Redundancy:    Can lose 2 disks"
-                      echo "Usable space:  ~${usable}GB ($((n-2)) of $n disks)"
-                      echo "Read speed:    Fast"
-                      echo "Write speed:   Good"
-                      echo ""
-                      echo "Best for:"
-                      echo "  - Large arrays (5+ disks)"
-                      echo "  - Important data"
-                      ;;
-                    raidz3)
-                      usable=$(( (n-3) * small ))
-                      echo "RAIDZ3 (Triple Parity)"
-                      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                      echo ""
-                      echo "Three disks worth of parity distributed"
-                      echo "across all disks."
-                      echo ""
-                      echo "Redundancy:    Can lose 3 disks"
-                      echo "Usable space:  ~${usable}GB ($((n-3)) of $n disks)"
-                      echo "Read speed:    Fast"
-                      echo "Write speed:   Moderate"
-                      echo ""
-                      echo "Best for:"
-                      echo "  - Very large arrays (8+ disks)"
-                      echo "  - Archival storage"
-                      ;;
-                  esac
-              ' \
+              --preview="raid_preview {} $disk_count $total_gb $smallest_gb" \
               --preview-window=right:50%)
-
-    # Clean up exported variables
-    unset RAID_DISK_COUNT RAID_TOTAL_GB RAID_SMALLEST_GB
 
     if [[ -z "$RAID_LEVEL" ]]; then
         error "No RAID level selected!"

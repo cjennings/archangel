@@ -68,3 +68,122 @@ raid_fault_tolerance() {
         *)       return 1 ;;
     esac
 }
+
+#############################
+# Preview text
+#############################
+
+# Print preview text for a single RAID level. Used by get_raid_level()
+# in the fzf preview pane. Calls raid_fault_tolerance and
+# raid_usable_bytes for the data lines so the math stays in one place.
+# Numeric arguments are unit-agnostic — pass GB if you want GB out.
+#
+# Usage: raid_preview LEVEL DISK_COUNT TOTAL_GB SMALLEST_GB
+# Returns 1 for unknown level (no output).
+raid_preview() {
+    local level=$1 count=$2 total=$3 small=$4
+    local tol usable
+
+    tol=$(raid_fault_tolerance "$level" "$count") || return 1
+    usable=$(raid_usable_bytes "$level" "$count" "$small" "$total") || return 1
+
+    case "$level" in
+        mirror)
+            cat <<EOF
+MIRROR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All disks contain identical copies of data.
+Maximum redundancy. Can survive loss of all
+disks except one.
+
+Redundancy:    Can lose $tol of $count disks
+Usable space:  ~${usable}GB (smallest disk)
+Read speed:    Fast (parallel reads)
+Write speed:   Normal
+
+Best for:
+  - Boot drives
+  - Critical data
+  - Maximum safety
+EOF
+            ;;
+        stripe)
+            cat <<EOF
+STRIPE (RAID0)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WARNING: NO REDUNDANCY!
+Data is striped across all disks.
+ANY disk failure = ALL data lost!
+
+Redundancy:    NONE
+Usable space:  ~${usable}GB (all disks)
+Read speed:    Very fast
+Write speed:   Very fast
+
+Best for:
+  - Scratch/temp space
+  - Replaceable data
+  - Maximum performance
+EOF
+            ;;
+        raidz1)
+            cat <<EOF
+RAIDZ1 (Single Parity)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+One disk worth of parity distributed
+across all disks.
+
+Redundancy:    Can lose $tol of $count disks
+Usable space:  ~${usable}GB ($((count - 1)) of $count disks)
+Read speed:    Fast
+Write speed:   Good
+
+Best for:
+  - General storage
+  - Good balance of space/safety
+EOF
+            ;;
+        raidz2)
+            cat <<EOF
+RAIDZ2 (Double Parity)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Two disks worth of parity distributed
+across all disks.
+
+Redundancy:    Can lose $tol of $count disks
+Usable space:  ~${usable}GB ($((count - 2)) of $count disks)
+Read speed:    Fast
+Write speed:   Good
+
+Best for:
+  - Large arrays (5+ disks)
+  - Important data
+EOF
+            ;;
+        raidz3)
+            cat <<EOF
+RAIDZ3 (Triple Parity)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Three disks worth of parity distributed
+across all disks.
+
+Redundancy:    Can lose $tol of $count disks
+Usable space:  ~${usable}GB ($((count - 3)) of $count disks)
+Read speed:    Fast
+Write speed:   Moderate
+
+Best for:
+  - Very large arrays (8+ disks)
+  - Archival storage
+EOF
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}

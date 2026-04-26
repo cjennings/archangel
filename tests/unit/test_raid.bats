@@ -197,3 +197,72 @@ raidz3" ]
     run raid_fault_tolerance bogus 3
     [ "$status" -eq 1 ]
 }
+
+#############################
+# raid_preview
+#############################
+# Signature: raid_preview LEVEL DISK_COUNT TOTAL_GB SMALLEST_GB
+# Returns 1 for unknown level. Output is preview text — assertions
+# focus on structural pieces (headlines, computed numbers, key
+# labels), not exact prose.
+
+@test "raid_preview mirror: headline + fault tolerance + smallest disk size" {
+    run raid_preview mirror 3 300 100
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"MIRROR"* ]]
+    [[ "$output" == *"Can lose 2 of 3 disks"* ]]
+    [[ "$output" == *"100"* ]]
+}
+
+@test "raid_preview stripe: headline + no-redundancy warning + total size" {
+    run raid_preview stripe 2 200 100
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"STRIPE"* ]]
+    [[ "$output" == *"NO REDUNDANCY"* ]]
+    [[ "$output" == *"200"* ]]
+}
+
+@test "raid_preview raidz1: headline + can-lose-1 + (n-1)*smallest size" {
+    run raid_preview raidz1 4 400 100
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RAIDZ1"* ]]
+    [[ "$output" == *"Can lose 1 of 4 disks"* ]]
+    [[ "$output" == *"300"* ]]
+}
+
+@test "raid_preview raidz2: headline + can-lose-2 + (n-2)*smallest size" {
+    run raid_preview raidz2 5 500 100
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RAIDZ2"* ]]
+    [[ "$output" == *"Can lose 2 of 5 disks"* ]]
+    [[ "$output" == *"300"* ]]
+}
+
+@test "raid_preview raidz3: headline + can-lose-3 + (n-3)*smallest size" {
+    run raid_preview raidz3 6 600 100
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RAIDZ3"* ]]
+    [[ "$output" == *"Can lose 3 of 6 disks"* ]]
+    [[ "$output" == *"300"* ]]
+}
+
+@test "raid_preview mirror with mixed-size disks honors smallest, not average" {
+    run raid_preview mirror 3 300 80
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"80"* ]]
+    [[ "$output" != *"100"* ]]
+}
+
+@test "raid_preview unknown level returns 1 with empty output" {
+    run raid_preview bogus 3 300 100
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "raid_preview every valid level produces non-empty output" {
+    for level in mirror stripe raidz1 raidz2 raidz3; do
+        run raid_preview "$level" 5 500 100
+        [ "$status" -eq 0 ]
+        [ -n "$output" ]
+    done
+}
