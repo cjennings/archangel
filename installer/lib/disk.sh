@@ -6,46 +6,66 @@
 # Partition Disks
 #############################
 
-# Partition a single disk for ZFS/Btrfs installation
-# Creates: EFI partition (512M) + root partition (rest)
-# Uses global FILESYSTEM variable to determine partition type
+# Partition a single disk for ZFS or Btrfs installation. Wipes
+# non-GPT signatures (LVM, mdadm, ext) with wipefs, zaps the GPT
+# with sgdisk, then lays down a 512M EFI partition plus a root
+# partition that fills the rest. Root partition type code is
+# selected from FILESYSTEM (BF00 for ZFS, 8300 for Btrfs).
 partition_disk() {
     local disk="$1"
     local efi_size="${2:-512M}"
 
-    # Determine root partition type based on filesystem
-    local root_type="BF00"  # ZFS (Solaris root)
+    local root_type="BF00"
     if [[ "$FILESYSTEM" == "btrfs" ]]; then
-        root_type="8300"    # Linux filesystem
+        root_type="8300"
     fi
 
     info "Partitioning $disk..."
 
-    # Wipe existing partition table
-    sgdisk --zap-all "$disk" || error "Failed to wipe $disk"
-
-    # Create EFI partition (512M, type EF00)
+    wipefs -af "$disk" || error "Failed to wipe signatures on $disk"
+    sgdisk --zap-all "$disk" || error "Failed to zap GPT on $disk"
     sgdisk -n 1:0:+${efi_size} -t 1:EF00 -c 1:"EFI" "$disk" || error "Failed to create EFI partition on $disk"
-
-    # Create root partition (rest of disk)
     sgdisk -n 2:0:0 -t 2:$root_type -c 2:"ROOT" "$disk" || error "Failed to create root partition on $disk"
 
-    # Notify kernel of partition changes
     partprobe "$disk" 2>/dev/null || true
     sleep 1
 
     info "Partitioned $disk: EFI=${efi_size}, ROOT=remainder"
 }
 
-# Partition multiple disks (for RAID configurations)
+# Partition every disk in SELECTED_DISKS, format each EFI partition,
+# and populate the EFI_PARTS + ROOT_PARTS arrays for downstream
+# callers (create_zfs_pool, btrfs_open_encryption,
+# sync_efi_partitions, fstab generation).
+#
+# EFI labels are EFI0, EFI1, ... in selection order so multi-disk
+# layouts get a stable, distinguishable scheme that lsblk -f can
+# show. Errors out if SELECTED_DISKS is empty so a misconfigured
+# install can't silently skip partitioning.
 partition_disks() {
-    local efi_size="${1:-512M}"
-    shift
-    local disks=("$@")
+    if [[ ${#SELECTED_DISKS[@]} -eq 0 ]]; then
+        error "partition_disks: SELECTED_DISKS is empty"
+    fi
 
-    for disk in "${disks[@]}"; do
-        partition_disk "$disk" "$efi_size"
+    step "Partitioning ${#SELECTED_DISKS[@]} disk(s)"
+
+    EFI_PARTS=()
+    ROOT_PARTS=()
+
+    for disk in "${SELECTED_DISKS[@]}"; do
+        partition_disk "$disk"
+        EFI_PARTS+=("$(get_efi_partition "$disk")")
+        ROOT_PARTS+=("$(get_root_partition "$disk")")
     done
+
+    sleep 2
+
+    for i in "${!EFI_PARTS[@]}"; do
+        info "Formatting EFI partition ${EFI_PARTS[$i]}..."
+        mkfs.fat -F32 -n "EFI$i" "${EFI_PARTS[$i]}" || error "Failed to format ${EFI_PARTS[$i]}"
+    done
+
+    info "Partitioning complete. Created ${#EFI_PARTS[@]} EFI and ${#ROOT_PARTS[@]} ROOT partitions."
 }
 
 #############################
@@ -70,56 +90,6 @@ get_root_partition() {
     else
         echo "${disk}2"
     fi
-}
-
-# Get all root partitions from disk array
-get_root_partitions() {
-    local disks=("$@")
-    local parts=()
-    for disk in "${disks[@]}"; do
-        parts+=("$(get_root_partition "$disk")")
-    done
-    printf '%s\n' "${parts[@]}"
-}
-
-# Get all EFI partitions from disk array
-get_efi_partitions() {
-    local disks=("$@")
-    local parts=()
-    for disk in "${disks[@]}"; do
-        parts+=("$(get_efi_partition "$disk")")
-    done
-    printf '%s\n' "${parts[@]}"
-}
-
-#############################
-# EFI Partition Management
-#############################
-
-# Format EFI partition
-format_efi() {
-    local partition="$1"
-    local label="${2:-EFI}"
-
-    info "Formatting EFI partition: $partition"
-    mkfs.fat -F32 -n "$label" "$partition" || error "Failed to format EFI: $partition"
-}
-
-# Format all EFI partitions
-format_efi_partitions() {
-    local disks=("$@")
-    local first=true
-
-    for disk in "${disks[@]}"; do
-        local efi
-        efi=$(get_efi_partition "$disk")
-        if $first; then
-            format_efi "$efi" "EFI"
-            first=false
-        else
-            format_efi "$efi" "EFI2"
-        fi
-    done
 }
 
 #############################

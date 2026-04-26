@@ -55,8 +55,8 @@ ASHIFT="12"  # 4K sectors (use 13 for 8K)
 
 # Multi-disk RAID support
 SELECTED_DISKS=()      # Array of selected disk paths (/dev/sda, /dev/sdb, ...)
-ZFS_PARTS=()           # Array of ZFS partition paths
-EFI_PARTS=()           # Array of EFI partition paths
+ROOT_PARTS=()          # Array of root partition paths (populated by partition_disks)
+EFI_PARTS=()           # Array of EFI partition paths (populated by partition_disks)
 RAID_LEVEL=""          # "", "mirror", "raidz1", "raidz2", "raidz3"
 ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
 NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
@@ -611,52 +611,6 @@ show_summary() {
 # Phase 2: Installation
 #############################
 
-partition_disks() {
-    step "Partitioning ${#SELECTED_DISKS[@]} disk(s)"
-
-    EFI_PARTS=()
-    ZFS_PARTS=()
-
-    for disk in "${SELECTED_DISKS[@]}"; do
-        info "Partitioning $disk..."
-
-        # Wipe existing signatures
-        wipefs -af "$disk"
-        sgdisk --zap-all "$disk"
-
-        # Create partitions: 512M EFI + rest for ZFS
-        # EFI only needs to hold ZFSBootMenu binary (~64MB) - 512MB is plenty
-        sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" "$disk"
-        sgdisk -n 2:0:0 -t 2:bf00 -c 2:"ZFS" "$disk"
-
-        # Determine partition names (handle nvme/mmcblk naming)
-        local efi_part zfs_part
-        if [[ "$disk" == *"nvme"* ]] || [[ "$disk" == *"mmcblk"* ]]; then
-            efi_part="${disk}p1"
-            zfs_part="${disk}p2"
-        else
-            efi_part="${disk}1"
-            zfs_part="${disk}2"
-        fi
-
-        EFI_PARTS+=("$efi_part")
-        ZFS_PARTS+=("$zfs_part")
-
-        sleep 1
-        partprobe "$disk"
-    done
-
-    sleep 2
-
-    # Format all EFI partitions
-    for i in "${!EFI_PARTS[@]}"; do
-        info "Formatting EFI partition ${EFI_PARTS[$i]}..."
-        mkfs.fat -F32 -n "EFI$i" "${EFI_PARTS[$i]}"
-    done
-
-    info "Partitioning complete. Created ${#EFI_PARTS[@]} EFI and ${#ZFS_PARTS[@]} ZFS partitions."
-}
-
 create_zfs_pool() {
     step "Creating ZFS Pool with Native Encryption"
 
@@ -669,14 +623,14 @@ create_zfs_pool() {
     local pool_config
     if [[ "$RAID_LEVEL" == "stripe" ]]; then
         # Stripe: just list devices without a vdev type (RAID0 equivalent)
-        pool_config="${ZFS_PARTS[*]}"
-        info "Creating striped pool with ${#ZFS_PARTS[@]} disks (NO redundancy)..."
+        pool_config="${ROOT_PARTS[*]}"
+        info "Creating striped pool with ${#ROOT_PARTS[@]} disks (NO redundancy)..."
         warn "Data loss will occur if ANY disk fails!"
     elif [[ -n "$RAID_LEVEL" ]]; then
-        pool_config="$RAID_LEVEL ${ZFS_PARTS[*]}"
-        info "Creating $RAID_LEVEL pool with ${#ZFS_PARTS[@]} disks..."
+        pool_config="$RAID_LEVEL ${ROOT_PARTS[*]}"
+        info "Creating $RAID_LEVEL pool with ${#ROOT_PARTS[@]} disks..."
     else
-        pool_config="${ZFS_PARTS[0]}"
+        pool_config="${ROOT_PARTS[0]}"
         info "Creating single-disk pool..."
     fi
 
@@ -1496,30 +1450,19 @@ install_btrfs() {
     trap 'install_failure_cleanup' ERR INT TERM
 
     local btrfs_devices=()
-    local efi_parts=()
-    local root_parts=()
 
-    # Collect partition references for all disks
-    for disk in "${SELECTED_DISKS[@]}"; do
-        root_parts+=("$(get_root_partition "$disk")")
-        efi_parts+=("$(get_efi_partition "$disk")")
-    done
-
-    # Partition and format EFI
-    for disk in "${SELECTED_DISKS[@]}"; do
-        partition_disk "$disk"
-    done
-    format_efi_partitions "${SELECTED_DISKS[@]}"
+    # Partition + format EFI; populates EFI_PARTS and ROOT_PARTS globals.
+    partition_disks
 
     # LUKS (optional) fills btrfs_devices with either /dev/mapper/* or raw parts
-    btrfs_open_encryption root_parts btrfs_devices
+    btrfs_open_encryption ROOT_PARTS btrfs_devices
 
     # Btrfs filesystem + subvolumes + EFI mount
     btrfs_make_filesystem     btrfs_devices
     create_btrfs_subvolumes   "${btrfs_devices[0]}"
     mount_btrfs_subvolumes    "${btrfs_devices[0]}"
     mkdir -p /mnt/efi
-    mount "${efi_parts[0]}" /mnt/efi
+    mount "${EFI_PARTS[0]}" /mnt/efi
 
     # Base install + system config
     install_base
@@ -1528,13 +1471,13 @@ install_btrfs() {
     configure_ssh
 
     # LUKS config inside chroot (no-op if encryption disabled)
-    btrfs_configure_luks_target root_parts
+    btrfs_configure_luks_target ROOT_PARTS
 
-    generate_btrfs_fstab "${btrfs_devices[0]}" "${efi_parts[0]}"
+    generate_btrfs_fstab "${btrfs_devices[0]}" "${EFI_PARTS[0]}"
     configure_btrfs_initramfs
 
     # Bootloader
-    btrfs_install_grub efi_parts
+    btrfs_install_grub EFI_PARTS
 
     # Snapshots + services
     configure_snapper
