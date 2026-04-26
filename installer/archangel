@@ -1159,16 +1159,20 @@ configure_zfsbootmenu() {
             --quiet
     done
 
-    # Get the boot entry number and set as first in boot order
-    local bootnum
-    bootnum=$(efibootmgr | grep "ZFSBootMenu" | head -1 | grep -oP 'Boot\K[0-9A-F]+')
-    if [[ -n "$bootnum" ]]; then
-        # Get current boot order, prepend our entry
-        local current_order
-        current_order=$(efibootmgr | grep "BootOrder" | cut -d: -f2 | tr -d ' ')
-        efibootmgr --bootorder "$bootnum,$current_order" --quiet
-        info "ZFSBootMenu set as primary boot option"
-    fi
+    # Look up our boot entry and the current boot order, then prepend
+    # our entry. Capture efibootmgr output once and parse via helpers
+    # so a missing entry or a malformed BootOrder line fails fast with
+    # an actionable message instead of silently leaving the boot order
+    # unset (which produces a non-booting machine after reboot).
+    local efibootmgr_output bootnum current_order
+    efibootmgr_output=$(efibootmgr) \
+        || error "efibootmgr command failed; cannot configure boot order"
+    bootnum=$(parse_efibootmgr_entry "ZFSBootMenu" <<< "$efibootmgr_output") \
+        || error "Could not find ZFSBootMenu entry in efibootmgr output; boot order not set"
+    current_order=$(parse_efibootmgr_bootorder <<< "$efibootmgr_output") \
+        || error "Could not parse BootOrder line from efibootmgr output; boot order not set"
+    efibootmgr --bootorder "$bootnum,$current_order" --quiet
+    info "ZFSBootMenu set as primary boot option"
 
     info "ZFSBootMenu configuration complete."
 }

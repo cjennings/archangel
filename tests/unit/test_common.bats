@@ -246,3 +246,81 @@ Environment="FOO=bar baz"'
     [[ "$output" == *'"FOO=bar baz"'* ]]
     teardown_dropin_tmp
 }
+
+#############################
+# parse_efibootmgr_entry
+#############################
+
+@test "parse_efibootmgr_entry returns boot number for matching label" {
+    local sample="BootCurrent: 0001
+Boot0000* Windows Boot Manager
+Boot0001* ZFSBootMenu
+Boot0002* PXE Boot"
+    run parse_efibootmgr_entry "ZFSBootMenu" <<< "$sample"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0001" ]
+}
+
+@test "parse_efibootmgr_entry returns first match when multiple labels match" {
+    local sample="Boot0001* ZFSBootMenu
+Boot0002* ZFSBootMenu-disk2"
+    run parse_efibootmgr_entry "ZFSBootMenu" <<< "$sample"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0001" ]
+}
+
+@test "parse_efibootmgr_entry handles hex characters in boot number" {
+    local sample="Boot00FE* ZFSBootMenu"
+    run parse_efibootmgr_entry "ZFSBootMenu" <<< "$sample"
+    [ "$status" -eq 0 ]
+    [ "$output" = "00FE" ]
+}
+
+@test "parse_efibootmgr_entry returns 1 with empty output when label absent" {
+    local sample="Boot0001* Windows Boot Manager"
+    run parse_efibootmgr_entry "ZFSBootMenu" <<< "$sample"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "parse_efibootmgr_entry returns 1 with empty output for empty input" {
+    run parse_efibootmgr_entry "ZFSBootMenu" < /dev/null
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+@test "parse_efibootmgr_entry returns 1 for empty label without false-matching BootCurrent" {
+    local sample="BootCurrent: 0001
+Boot0001* ZFSBootMenu"
+    run parse_efibootmgr_entry "" <<< "$sample"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
+#############################
+# parse_efibootmgr_bootorder
+#############################
+
+@test "parse_efibootmgr_bootorder extracts comma-separated boot numbers" {
+    local sample="BootCurrent: 0001
+BootOrder: 0001,0002,0003
+Boot0001* ZFSBootMenu"
+    run parse_efibootmgr_bootorder <<< "$sample"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0001,0002,0003" ]
+}
+
+@test "parse_efibootmgr_bootorder strips whitespace from boot order" {
+    local sample="BootOrder: 0001, 0002 , 0003"
+    run parse_efibootmgr_bootorder <<< "$sample"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0001,0002,0003" ]
+}
+
+@test "parse_efibootmgr_bootorder returns 1 when BootOrder line absent" {
+    local sample="BootCurrent: 0001
+Boot0001* ZFSBootMenu"
+    run parse_efibootmgr_bootorder <<< "$sample"
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}

@@ -236,6 +236,30 @@ install_dropin() {
     cat > "${dir}/${dropin_name}.conf"
 }
 
+# Read efibootmgr output from stdin and echo the boot number of the
+# first entry whose label contains $1. Returns 1 (with empty output)
+# if the label is empty, no entry matches, or the matched line has no
+# Boot[0-9A-F]+ prefix. The empty-label guard is important: an empty
+# string would match every line, and a line like "BootCurrent: 0001"
+# would falsely satisfy the Boot[hex]+ regex (capturing "C").
+parse_efibootmgr_entry() {
+    local label="$1"
+    [[ -z "$label" ]] && return 1
+    local line
+    line=$(grep -F -m 1 "$label") || return 1
+    [[ "$line" =~ Boot([0-9A-Fa-f]+) ]] || return 1
+    echo "${BASH_REMATCH[1]}"
+}
+
+# Read efibootmgr output from stdin and echo the comma-separated boot
+# numbers from the BootOrder line, with whitespace stripped. Returns 1
+# (with empty output) if no BootOrder line is present.
+parse_efibootmgr_bootorder() {
+    local line
+    line=$(grep "^BootOrder:") || return 1
+    echo "${line#BootOrder:}" | tr -d ' '
+}
+
 # List available disks (not in use)
 list_available_disks() {
     local disks=()
