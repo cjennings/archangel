@@ -61,16 +61,42 @@ Current coverage lives in =tests/unit/=:
 
 | File | What it covers |
 |------+----------------|
-| =test_common.bats= | =command_exists=, =require_command=, =info=/=warn=/=error=, =enable_color=, =log=, =prompt_password=, =pacstrap_packages= |
+| =test_common.bats= | =command_exists=, =require_command=, =info=/=warn=/=error=, =enable_color=, =log=, =prompt_password=, =pacstrap_packages=, =install_dropin= |
 | =test_config.bats= | =parse_args=, =load_config=, =validate_config=, =check_config= |
 | =test_raid.bats= | =raid_valid_levels_for_count=, =raid_is_valid=, =raid_usable_bytes=, =raid_fault_tolerance= |
+| =test_disk.bats= | =get_efi_partition=, =get_root_partition=, =get_efi_partitions=, =get_root_partitions= |
+| =test_btrfs.bats= | =get_luks_devices= |
+| =test_archangel.bats= | =gather_input= (unattended branch only) |
 
 ** What bats does NOT cover (deliberately)
 
-Anything that shells out to =mkfs=, =cryptsetup=, =zpool create=,
-=pacstrap=, =arch-chroot=, =grub-install=, or needs root. Those behaviors
-only mean anything against real partitions on real (virtual) hardware and
-belong in the VM integration tests below.
+Anything that shells out to a tool whose behavior only means something
+against real partitions, real hardware, or root privileges. Those
+behaviors belong in the VM integration tests below.
+
+The full list of deliberately-skipped tools and conditions:
+
+- *Filesystem creation*: =mkfs.fat=, =mkfs.btrfs=, =mkfs.ext4=, generic =mkfs=
+- *Encryption*: =cryptsetup= (LUKS), ZFS native encryption via =zfs create -O encryption=
+- *ZFS pool / dataset operations*: =zpool create=, =zpool import=, =zfs create=, =zfs snapshot=, =zfs rollback=
+- *Partitioning*: =sgdisk=, =partprobe=, =blkid=
+- *Bootstrap and chroot*: =pacstrap=, =arch-chroot=, =genfstab=
+- *Bootloader*: =grub-install=, =grub-mkconfig=, =efibootmgr=
+- *Snapshot management*: =snapper=, =zfs-pre-snapshot=
+- *Mount / unmount of real filesystems*: =mount=, =umount=, =findmnt=,
+  =mountpoint=
+- *Interactive UI*: =fzf= (the helper-fallback path is also skipped because
+  the value is in the user-facing flow)
+- Anything that needs =root= privileges to do its real work
+- Anything that depends on real =/dev= or =/sys= state (=lsblk= against
+  actual disks, =/sys/block/= holders)
+
+Pure helpers adjacent to these tools — ones that compute values
+without invoking the tool — are in scope for bats. =pacstrap_packages=
+is the canonical example: it builds the package list that =pacstrap=
+will install, but doesn't run pacstrap itself, so it's covered by
+=test_common.bats=. Same pattern when a future helper parses a captured
+fixture of a tool's output instead of running the tool live.
 
 ** Running
 

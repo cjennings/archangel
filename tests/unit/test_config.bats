@@ -109,3 +109,50 @@ EOF
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
+@test "check_config loads the config file when CONFIG_FILE is set" {
+    local tmp
+    tmp=$(mktemp)
+    cat >"$tmp" <<'EOF'
+HOSTNAME=fromcheckconfig
+TIMEZONE=UTC
+EOF
+    CONFIG_FILE="$tmp"
+    check_config
+    [ "$HOSTNAME" = "fromcheckconfig" ]
+    [ "$TIMEZONE" = "UTC" ]
+    [ "$UNATTENDED" = "true" ]
+    rm -f "$tmp"
+}
+
+@test "validate_config flags an existing-but-not-block path in SELECTED_DISKS" {
+    HOSTNAME=h
+    TIMEZONE=UTC
+    ROOT_PASSWORD=x
+    SELECTED_DISKS=(/dev/null)
+    run validate_config
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Disk not found: /dev/null"* ]]
+}
+
+@test "validate_config flags a missing path in SELECTED_DISKS" {
+    HOSTNAME=h
+    TIMEZONE=UTC
+    ROOT_PASSWORD=x
+    SELECTED_DISKS=(/nonexistent/disk-xyz-42)
+    run validate_config
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Disk not found"* ]]
+}
+
+@test "parse_args accepts --color and --config-file together (color first)" {
+    parse_args --color --config-file /tmp/foo.conf
+    [ "$CONFIG_FILE" = "/tmp/foo.conf" ]
+    [ -n "$RED" ]
+}
+
+@test "parse_args accepts --config-file and --color together (config first)" {
+    parse_args --config-file /tmp/foo.conf --color
+    [ "$CONFIG_FILE" = "/tmp/foo.conf" ]
+    [ -n "$RED" ]
+}

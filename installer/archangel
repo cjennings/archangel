@@ -61,16 +61,21 @@ RAID_LEVEL=""          # "", "mirror", "raidz1", "raidz2", "raidz3"
 ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
 NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
 
-# Logging
-LOGFILE="/tmp/archangel-$(date +'%Y-%m-%d-%H-%M-%S').log"
-exec > >(tee -a "$LOGFILE") 2>&1
+# Logging — initialized by init_logging() at install time only. Sourcing
+# this script (e.g. from a bats test) loads the function definitions
+# without redirecting stdout or creating a log file in /tmp.
+LOGFILE=""
 
-# Log header with timestamp
-echo ""
-echo "================================================================================"
-echo "archangel started @ $(date +'%Y-%m-%d %H:%M:%S')"
-echo "================================================================================"
-echo ""
+init_logging() {
+    LOGFILE="/tmp/archangel-$(date +'%Y-%m-%d-%H-%M-%S').log"
+    exec > >(tee -a "$LOGFILE") 2>&1
+
+    echo ""
+    echo "================================================================================"
+    echo "archangel started @ $(date +'%Y-%m-%d %H:%M:%S')"
+    echo "================================================================================"
+    echo ""
+}
 
 # Output functions now in lib/common.sh
 # Config functions now in lib/config.sh
@@ -1385,6 +1390,7 @@ print_btrfs_summary() {
 #############################
 
 main() {
+    init_logging
     parse_args "$@"
     preflight_checks
     check_config
@@ -1490,4 +1496,9 @@ install_btrfs() {
 
 trap 'error "Installation interrupted!"' INT TERM
 
-main "$@"
+# Only invoke main when archangel is executed directly. When sourced
+# (e.g. from a bats test) the function definitions load but main does
+# not run, so tests can exercise individual helpers like gather_input.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
