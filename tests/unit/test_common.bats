@@ -405,3 +405,67 @@ Boot0001* ZFSBootMenu"
     ! grep -q 'PermitRootLogin' "$f"
     rm -f "$f"
 }
+
+#############################
+# prepend_grub_cmdline_linux
+#############################
+# prepend_grub_cmdline_linux prepends a string to GRUB_CMDLINE_LINUX
+# in /etc/default/grub. Errors loudly if the line isn't present, since
+# silently doing nothing would leave the kernel without the parameter
+# (e.g. cryptdevice= for LUKS — a missing prefix means the system
+# can't unlock the root partition at boot).
+
+@test "prepend_grub_cmdline_linux prepends to an empty GRUB_CMDLINE_LINUX" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'GRUB_CMDLINE_LINUX=""' > "$f"
+
+    prepend_grub_cmdline_linux "cryptdevice=UUID=abc123:root " "$f"
+
+    grep -qF 'GRUB_CMDLINE_LINUX="cryptdevice=UUID=abc123:root "' "$f"
+    rm -f "$f"
+}
+
+@test "prepend_grub_cmdline_linux preserves text already inside GRUB_CMDLINE_LINUX" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'GRUB_CMDLINE_LINUX="quiet splash"' > "$f"
+
+    prepend_grub_cmdline_linux "cryptdevice=UUID=abc:root " "$f"
+
+    grep -qF 'GRUB_CMDLINE_LINUX="cryptdevice=UUID=abc:root quiet splash"' "$f"
+    rm -f "$f"
+}
+
+@test "prepend_grub_cmdline_linux preserves other lines in /etc/default/grub" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        'GRUB_DEFAULT=0' \
+        'GRUB_TIMEOUT=5' \
+        'GRUB_CMDLINE_LINUX=""' \
+        'GRUB_DISABLE_RECOVERY=true' > "$f"
+
+    prepend_grub_cmdline_linux "cryptdevice=UUID=abc:root " "$f"
+
+    grep -qF 'GRUB_DEFAULT=0' "$f"
+    grep -qF 'GRUB_TIMEOUT=5' "$f"
+    grep -qF 'GRUB_CMDLINE_LINUX="cryptdevice=UUID=abc:root "' "$f"
+    grep -qF 'GRUB_DISABLE_RECOVERY=true' "$f"
+    rm -f "$f"
+}
+
+@test "prepend_grub_cmdline_linux errors when GRUB_CMDLINE_LINUX line is absent" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        'GRUB_DEFAULT=0' \
+        'GRUB_TIMEOUT=5' > "$f"
+
+    error() { echo "ERROR: $*" >&2; return 1; }
+    run prepend_grub_cmdline_linux "cryptdevice=UUID=abc:root " "$f"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"GRUB_CMDLINE_LINUX"* ]]
+    ! grep -q 'cryptdevice' "$f"
+    rm -f "$f"
+}

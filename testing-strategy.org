@@ -61,7 +61,7 @@ Current coverage lives in =tests/unit/=:
 
 | File | What it covers |
 |------+----------------|
-| =test_common.bats= | =command_exists=, =require_command=, =info=/=warn=/=error=, =enable_color=, =log=, =prompt_password=, =pacstrap_packages=, =install_dropin= |
+| =test_common.bats= | =command_exists=, =require_command=, =info=/=warn=/=error=, =enable_color=, =log=, =prompt_password=, =pacstrap_packages=, =install_dropin=, =parse_efibootmgr_*=, =EFI_DIR=, =enable_sshd_root_login=, =prepend_grub_cmdline_linux= |
 | =test_config.bats= | =parse_args=, =load_config=, =validate_config=, =validate_filesystem=, =check_config=, default values pinned in config.sh |
 | =test_raid.bats= | =raid_valid_levels_for_count=, =raid_is_valid=, =raid_usable_bytes=, =raid_fault_tolerance= |
 | =test_disk.bats= | =get_efi_partition=, =get_root_partition=, =partition_disks= (orchestration shape) |

@@ -204,6 +204,8 @@ configure_luks_initramfs() {
 
     # Add encrypt hook before filesystems (configure_btrfs_initramfs overwrites
     # this with the final hook list, using sd-encrypt for multi-disk setups)
+    # No sed verification needed: a missing HOOKS= line makes mkinitcpio -P
+    # fail loudly downstream. (Audited 2026-04-27 against silent-sed pattern.)
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
         /mnt/etc/mkinitcpio.conf
 
@@ -247,7 +249,8 @@ configure_luks_grub() {
         info "Testing mode: adding cryptkey parameter for automated unlock"
     fi
 
-    sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}|" \
+    prepend_grub_cmdline_linux \
+        "cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}" \
         /mnt/etc/default/grub
 
     info "GRUB configured with cryptdevice parameter and cryptodisk enabled."
@@ -613,7 +616,8 @@ EOF
                     cryptkey_param="cryptkey=rootfs:$LUKS_KEYFILE "
                     info "Testing mode: adding cryptkey parameter for automated unlock"
                 fi
-                sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}|" \
+                prepend_grub_cmdline_linux \
+                    "cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}" \
                     /mnt/etc/default/grub
                 info "Added cryptdevice parameter for LUKS partition."
             fi
@@ -844,6 +848,9 @@ EOF
 
     # Configure hooks for btrfs
     # Include encrypt hook if LUKS is enabled, btrfs hook if multi-device
+    # No sed verification needed on the four HOOKS= seds below: a missing
+    # HOOKS= line makes mkinitcpio -P fail loudly downstream. (Audited
+    # 2026-04-27 against silent-sed pattern.)
     local num_disks=${#SELECTED_DISKS[@]}
     local luks_enabled="no"
     [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]] && luks_enabled="yes"

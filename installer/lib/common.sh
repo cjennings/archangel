@@ -302,3 +302,21 @@ enable_sshd_root_login() {
     grep -q '^PermitRootLogin yes$' "$config_file" \
         || error "PermitRootLogin not set in $config_file (no matching line to replace)"
 }
+
+#############################
+# GRUB Configuration
+#############################
+
+# Prepend a string just inside the GRUB_CMDLINE_LINUX="..." quotes in
+# /etc/default/grub. Errors if the line isn't present in the file.
+# Silently doing nothing here would leave the kernel without the
+# parameter — for cryptdevice= that means the system can't unlock the
+# root partition at boot, so we want a loud failure during install
+# rather than an unbootable system after first reboot.
+prepend_grub_cmdline_linux() {
+    local addition="$1"
+    local config_file="$2"
+    sed -i "s|^GRUB_CMDLINE_LINUX=\"|GRUB_CMDLINE_LINUX=\"${addition}|" "$config_file"
+    grep -qF "GRUB_CMDLINE_LINUX=\"${addition}" "$config_file" \
+        || error "GRUB_CMDLINE_LINUX not modified in $config_file (line missing or pattern unmatched)"
+}

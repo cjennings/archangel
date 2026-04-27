@@ -896,6 +896,9 @@ EOF
     #   This ensures NVMe, AHCI, and other storage drivers are always included
     # - Remove fsck: ZFS doesn't use it, avoids confusing error messages
     # - Add zfs: required for ZFS root boot
+    # No sed verification needed: a missing HOOKS= line makes mkinitcpio -P
+    # fail loudly downstream, so silent-replace failure can't reach a booted
+    # system. (Audited 2026-04-27 against silent-sed pattern.)
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
 
     # Get the installed kernel version (not the running kernel)
