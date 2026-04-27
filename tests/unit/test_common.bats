@@ -332,3 +332,76 @@ Boot0001* ZFSBootMenu"
 @test "EFI_DIR is defined and equals /mnt/efi" {
     [ "$EFI_DIR" = "/mnt/efi" ]
 }
+
+#############################
+# enable_sshd_root_login
+#############################
+# enable_sshd_root_login takes an sshd_config path and ensures the
+# file ends up with `PermitRootLogin yes`. It must error loudly if
+# neither the commented (#PermitRootLogin) nor uncommented
+# (PermitRootLogin) form is present, since silently appending would
+# mask a corrupted starting file.
+
+@test "enable_sshd_root_login uncomments stock Arch sshd_config line" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '#PermitRootLogin prohibit-password' > "$f"
+
+    enable_sshd_root_login "$f"
+
+    grep -q '^PermitRootLogin yes$' "$f"
+    rm -f "$f"
+}
+
+@test "enable_sshd_root_login flips PermitRootLogin no to yes" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'PermitRootLogin no' > "$f"
+
+    enable_sshd_root_login "$f"
+
+    grep -q '^PermitRootLogin yes$' "$f"
+    ! grep -q '^PermitRootLogin no$' "$f"
+    rm -f "$f"
+}
+
+@test "enable_sshd_root_login is idempotent on PermitRootLogin yes" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'PermitRootLogin yes' > "$f"
+
+    enable_sshd_root_login "$f"
+
+    [ "$(grep -c '^PermitRootLogin yes$' "$f")" -eq 1 ]
+    rm -f "$f"
+}
+
+@test "enable_sshd_root_login replaces all matching lines (mixed commented + uncommented)" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        '#PermitRootLogin prohibit-password' \
+        'PermitRootLogin no' \
+        'OtherOption value' \
+        '#PermitRootLogin without-password' > "$f"
+
+    enable_sshd_root_login "$f"
+
+    [ "$(grep -c '^PermitRootLogin yes$' "$f")" -eq 3 ]
+    ! grep -q '^PermitRootLogin no$' "$f"
+    grep -q '^OtherOption value$' "$f"
+    rm -f "$f"
+}
+
+@test "enable_sshd_root_login errors when no PermitRootLogin line is present" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'OnlyOtherOptions yes' > "$f"
+
+    error() { echo "ERROR: $*" >&2; return 1; }
+    run enable_sshd_root_login "$f"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"PermitRootLogin"* ]]
+    ! grep -q 'PermitRootLogin' "$f"
+    rm -f "$f"
+}

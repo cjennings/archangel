@@ -853,9 +853,7 @@ configure_ssh() {
     if [[ "$ENABLE_SSH" == "yes" ]]; then
         step "Configuring SSH"
 
-        # Ensure sshd config allows root login with password
-        sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
-        sed -i 's/^PermitRootLogin.*/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config
+        enable_sshd_root_login /mnt/etc/ssh/sshd_config
 
         # Enable sshd service
         arch-chroot /mnt systemctl enable sshd

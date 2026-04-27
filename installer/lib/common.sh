@@ -284,3 +284,21 @@ list_available_disks() {
     done
     printf '%s\n' "${disks[@]}"
 }
+
+#############################
+# SSH Configuration
+#############################
+
+# Ensure the given sshd_config file ends up with `PermitRootLogin yes`.
+# Combines the commented (#PermitRootLogin) and uncommented
+# (PermitRootLogin) replacements into one sed invocation, then verifies
+# the directive is present. Errors out if neither pattern matched, since
+# silently appending would mask a corrupted starting file.
+enable_sshd_root_login() {
+    local config_file="$1"
+    sed -i -e 's/^#PermitRootLogin.*/PermitRootLogin yes/' \
+           -e 's/^PermitRootLogin.*/PermitRootLogin yes/' \
+           "$config_file"
+    grep -q '^PermitRootLogin yes$' "$config_file" \
+        || error "PermitRootLogin not set in $config_file (no matching line to replace)"
+}
