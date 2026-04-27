@@ -67,6 +67,7 @@ Current coverage lives in =tests/unit/=:
 | =test_disk.bats= | =get_efi_partition=, =get_root_partition=, =partition_disks= (orchestration shape) |
 | =test_btrfs.bats= | =get_luks_devices= |
 | =test_archangel.bats= | =gather_input= (unattended branch only), =install_failure_cleanup= (dispatch shape) |
+| =test_zfssnapshot.bats= | =sanitize_description=, =validate_description=, =format_snapshot_name=, =main= subcommand dispatch |
 
 ** What bats does NOT cover (deliberately)
 

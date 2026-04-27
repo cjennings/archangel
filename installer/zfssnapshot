@@ -1,105 +1,435 @@
 #!/usr/bin/env bash
 # Craig Jennings (github.com/cjennings)
-# Create a ZFS snapshot across all datasets with a dated, descriptive name.
+# zfssnapshot - ZFS snapshot management
+# Subcommands: list, create, rollback, delete
 
 set -euo pipefail
 
-# Usage info
+#############################
+# Help
+#############################
+
 show_help() {
     cat << EOF
-Usage: ${0##*/} [-h] [DESCRIPTION]
-Create a ZFS snapshot across all datasets.
+Usage: ${0##*/} <subcommand> [options]
 
-    -h              display this help and exit
-    DESCRIPTION     short description for the snapshot (optional, will prompt if omitted)
+ZFS snapshot management. Recursive across all pools.
 
-Snapshot names are formatted as: YYYY-MM-DD_HH-MM-SS_description
-Only alphanumeric characters, hyphens, and underscores are allowed in descriptions.
-Spaces are converted to underscores automatically.
+Subcommands:
+    list                       List all snapshots.
+    create [DESCRIPTION]       Create a new snapshot. Prompts if DESCRIPTION
+                               is omitted. Snapshot name format:
+                               YYYY-MM-DD_HH-MM-SS_description.
+                               Description must be alphanumeric, hyphens,
+                               or underscores. Spaces become underscores.
+    rollback [-s]              fzf-select a snapshot, then roll back. By
+                               default, rolls back ALL datasets that share
+                               the selected snapshot name. -s rolls back
+                               only the selected dataset.
+    delete                     fzf multi-select snapshots to destroy. By
+                               default, destroys the snapshot across ALL
+                               matching datasets.
+
+Common options:
+    -h, --help                 Show this help and exit.
+
+WARNING: rollback and delete destroy data. Both prompt for explicit
+"yes" confirmation. Genesis snapshots get a louder warning.
 
 Examples:
-    ${0##*/} before-upgrade
-    ${0##*/} "pre system update"
-    ${0##*/}                        # prompts for description
+    ${0##*/} list
+    ${0##*/} create before-upgrade
+    ${0##*/} create "pre system update"
+    ${0##*/} rollback
+    ${0##*/} rollback -s
+    ${0##*/} delete
 EOF
 }
 
-# Check for ZFS
-if ! command -v zfs &> /dev/null; then
-    echo "Error: zfs command not found. Is ZFS installed?"
-    exit 1
-fi
+#############################
+# Pure helpers (bats-tested)
+#############################
 
-# Check for root/sudo
-if [ "$EUID" -ne 0 ]; then
-    echo "Error: This script must be run as root (use sudo)"
-    exit 1
-fi
+# Lowercase the input and convert spaces to underscores.
+sanitize_description() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' ' '_'
+}
 
-# Parse arguments
-while getopts ":h" opt; do
-    case ${opt} in
-        h)
-            show_help
+# Return 0 if $1 is non-empty and contains only alphanumerics, hyphens,
+# and underscores. Return 1 otherwise.
+validate_description() {
+    [[ -n "$1" && "$1" =~ ^[a-z0-9_-]+$ ]]
+}
+
+# Compose a snapshot name from a timestamp string and a description.
+# The caller passes the timestamp in (rather than the helper calling
+# date) so tests don't need to mock the clock.
+format_snapshot_name() {
+    local timestamp="$1"
+    local description="$2"
+    echo "${timestamp}_${description}"
+}
+
+#############################
+# Pre-flight checks
+#############################
+
+require_root() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Error: This script must be run as root (use sudo)" >&2
+        exit 1
+    fi
+}
+
+require_zfs() {
+    if ! command -v zfs &> /dev/null; then
+        echo "Error: zfs command not found. Is ZFS installed?" >&2
+        exit 1
+    fi
+}
+
+require_fzf() {
+    if ! command -v fzf &> /dev/null; then
+        echo "Error: fzf command not found" >&2
+        exit 1
+    fi
+}
+
+#############################
+# Subcommand: list
+#############################
+
+cmd_list() {
+    require_zfs
+    if ! zfs list -t snapshot -o name,creation,used,refer 2>/dev/null; then
+        echo "No ZFS snapshots found"
+    fi
+}
+
+#############################
+# Subcommand: create
+#############################
+
+cmd_create() {
+    require_root
+    require_zfs
+
+    local description
+    if [ $# -ge 1 ]; then
+        description="$*"
+    else
+        read -r -p "Enter snapshot description: " description
+    fi
+
+    description=$(sanitize_description "$description")
+
+    if ! validate_description "$description"; then
+        echo "Error: Description must be non-empty and contain only" >&2
+        echo "letters, numbers, hyphens, and underscores." >&2
+        echo "Sanitized input was: $description" >&2
+        exit 1
+    fi
+
+    local timestamp snapshot_name pools
+    timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+    snapshot_name=$(format_snapshot_name "$timestamp" "$description")
+    pools=$(zpool list -H -o name)
+
+    if [ -z "$pools" ]; then
+        echo "Error: No ZFS pools found" >&2
+        exit 1
+    fi
+
+    echo "Creating snapshots with name: @${snapshot_name}"
+    echo ""
+
+    for pool in $pools; do
+        echo "Snapshotting pool: $pool"
+        if zfs snapshot -r "${pool}@${snapshot_name}"; then
+            echo "  ✓ Created ${pool}@${snapshot_name} (recursive)"
+        else
+            echo "  ✗ Failed to snapshot $pool"
+        fi
+    done
+
+    echo ""
+    echo "Snapshot complete. Verify with: zfs list -t snapshot | grep $snapshot_name"
+    echo ""
+    echo "To boot from this snapshot: reboot and press Ctrl+D at ZFSBootMenu"
+}
+
+#############################
+# Subcommand: rollback
+#############################
+
+cmd_rollback() {
+    require_root
+    require_zfs
+    require_fzf
+
+    local single_mode=false
+    while getopts ":hs" opt; do
+        case ${opt} in
+            h) show_help; exit 0 ;;
+            s) single_mode=true ;;
+            \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        esac
+    done
+
+    local snapshots
+    snapshots=$(zfs list -t snapshot -H -o name 2>/dev/null)
+
+    if [ -z "$snapshots" ]; then
+        echo "No ZFS snapshots found"
+        exit 0
+    fi
+
+    local snap_name selected
+    local -a targets
+
+    if $single_mode; then
+        # Single mode: pick a specific dataset@snapshot.
+        selected=$(zfs list -t snapshot -H -o name -S creation | fzf --height=70% --reverse \
+            --header="Select snapshot to roll back (ESC to cancel)" \
+            --preview="zfs list -t snapshot -o name,creation,used,refer -r {1}" \
+            --preview-window=down:5)
+
+        if [ -z "$selected" ]; then
+            echo "No snapshot selected, exiting"
             exit 0
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
+        fi
+
+        snap_name="${selected#*@}"
+        targets=("$selected")
+    else
+        # Multi mode: pick a snapshot NAME, roll back every dataset
+        # carrying that name. Children rolled back before parents
+        # (sort by dataset path length, descending).
+        local unique_snaps
+        unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
+
+        snap_name=$(echo "$unique_snaps" | fzf --height=70% --reverse \
+            --header="Select snapshot name to roll back ALL matching datasets (ESC to cancel)" \
+            --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
+            --preview-window=down:10)
+
+        if [ -z "$snap_name" ]; then
+            echo "No snapshot selected, exiting"
+            exit 0
+        fi
+
+        mapfile -t targets < <(echo "$snapshots" | grep "@${snap_name}$" \
+            | awk -F'@' '{print length($1), $0}' | sort -rn | cut -d' ' -f2-)
+
+        if [ ${#targets[@]} -eq 0 ]; then
+            echo "Error: No datasets found with snapshot @${snap_name}" >&2
+            exit 1
+        fi
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo "                        ⚠️  WARNING ⚠️"
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
+
+    if [[ "$snap_name" == "genesis" ]]; then
+        echo "  🚨 GENESIS ROLLBACK DETECTED 🚨"
+        echo ""
+        echo "  Rolling back to genesis will destroy ALL changes since installation!"
+        echo "  This includes all packages installed, configurations, and user data."
+        echo ""
+    fi
+
+    echo "You are about to roll back to snapshot: @${snap_name}"
+    echo ""
+    echo "The following datasets will be rolled back:"
+    for target in "${targets[@]}"; do
+        local dataset="${target%@*}"
+        echo "  • $dataset"
+
+        local newer
+        newer=$(zfs list -t snapshot -H -o name -S creation "$dataset" 2>/dev/null | \
+            awk -v snap="$target" 'found {print "      ✗ " $0 " (will be DESTROYED)"} $0 == snap {found=1}')
+        if [ -n "$newer" ]; then
+            echo "$newer"
+        fi
+    done
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo "  THIS OPERATION CANNOT BE UNDONE!"
+    echo "  All data written after the snapshot will be permanently lost."
+    echo "  All snapshots newer than the target will be destroyed."
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
+
+    local confirmation
+    read -r -p "Type 'yes' to confirm rollback: " confirmation
+
+    if [ "$confirmation" != "yes" ]; then
+        echo "Rollback cancelled"
+        exit 0
+    fi
+
+    echo ""
+    echo "Rolling back..."
+
+    local failed=0
+    for target in "${targets[@]}"; do
+        local dataset="${target%@*}"
+        echo -n "  Rolling back $dataset... "
+        if zfs rollback -r "$target" 2>&1; then
+            echo "✓"
+        else
+            echo "✗ FAILED"
+            ((failed++))
+        fi
+    done
+
+    echo ""
+    if [ $failed -eq 0 ]; then
+        echo "Rollback complete."
+        echo ""
+        echo "Note: ZFSBootMenu auto-detects snapshots - no menu regeneration needed."
+    else
+        echo "Rollback completed with $failed failure(s)" >&2
+        exit 1
+    fi
+}
+
+#############################
+# Subcommand: delete
+#############################
+
+cmd_delete() {
+    require_root
+    require_zfs
+    require_fzf
+
+    local snapshots
+    snapshots=$(zfs list -t snapshot -H -o name 2>/dev/null)
+
+    if [ -z "$snapshots" ]; then
+        echo "No ZFS snapshots found"
+        exit 0
+    fi
+
+    # Pick snapshot NAMES (not full dataset@name); destroy each across
+    # every dataset that carries it. Same shape as rollback's default
+    # so the user model is consistent.
+    local unique_snaps
+    unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
+
+    local selected_names
+    selected_names=$(echo "$unique_snaps" | fzf --height=70% --reverse --multi \
+        --header="TAB to multi-select snapshots to DESTROY (ESC to cancel)" \
+        --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
+        --preview-window=down:10)
+
+    if [ -z "$selected_names" ]; then
+        echo "No snapshots selected, exiting"
+        exit 0
+    fi
+
+    # Expand selected names to full dataset@name targets.
+    local -a targets=()
+    while IFS= read -r snap_name; do
+        [[ -z "$snap_name" ]] && continue
+        while IFS= read -r match; do
+            [[ -n "$match" ]] && targets+=("$match")
+        done < <(echo "$snapshots" | grep "@${snap_name}$" || true)
+    done <<< "$selected_names"
+
+    if [ ${#targets[@]} -eq 0 ]; then
+        echo "Error: No datasets found for the selected snapshot names" >&2
+        exit 1
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo "                        ⚠️  WARNING ⚠️"
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
+
+    local genesis_selected=false
+    while IFS= read -r snap_name; do
+        [[ "$snap_name" == "genesis" ]] && genesis_selected=true
+    done <<< "$selected_names"
+
+    if $genesis_selected; then
+        echo "  🚨 GENESIS DESTROY DETECTED 🚨"
+        echo ""
+        echo "  Destroying the genesis snapshot loses the post-install"
+        echo "  recovery point. The system can no longer roll back to a"
+        echo "  pristine state."
+        echo ""
+    fi
+
+    echo "The following ${#targets[@]} snapshot(s) will be destroyed:"
+    for target in "${targets[@]}"; do
+        echo "  • $target"
+    done
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo "  THIS OPERATION CANNOT BE UNDONE!"
+    echo "═══════════════════════════════════════════════════════════════════"
+    echo ""
+
+    local confirmation
+    read -r -p "Type 'yes' to confirm destroy: " confirmation
+
+    if [ "$confirmation" != "yes" ]; then
+        echo "Destroy cancelled"
+        exit 0
+    fi
+
+    echo ""
+    echo "Destroying..."
+
+    local failed=0
+    for target in "${targets[@]}"; do
+        echo -n "  Destroying $target... "
+        if zfs destroy "$target" 2>&1; then
+            echo "✓"
+        else
+            echo "✗ FAILED"
+            ((failed++))
+        fi
+    done
+
+    echo ""
+    if [ $failed -eq 0 ]; then
+        echo "Destroy complete."
+    else
+        echo "Destroy completed with $failed failure(s)" >&2
+        exit 1
+    fi
+}
+
+#############################
+# Dispatch
+#############################
+
+main() {
+    local subcmd="${1:-}"
+    shift || true
+
+    case "$subcmd" in
+        list)             cmd_list "$@" ;;
+        create)           cmd_create "$@" ;;
+        rollback)         cmd_rollback "$@" ;;
+        delete)           cmd_delete "$@" ;;
+        ""|-h|--help|help) show_help ;;
+        *)
+            echo "Unknown subcommand: $subcmd" >&2
             show_help
             exit 1
             ;;
     esac
-done
-shift $((OPTIND - 1))
+}
 
-# Get description from argument or prompt
-if [ $# -ge 1 ]; then
-    description="$*"
-else
-    read -r -p "Enter snapshot description: " description
-    if [ -z "$description" ]; then
-        echo "Error: Description cannot be empty"
-        exit 1
-    fi
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
 fi
-
-# Sanitize description: convert spaces to underscores, lowercase
-description=$(echo "$description" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
-
-# Validate description: only allow alphanumeric, hyphens, underscores
-if [[ ! "$description" =~ ^[a-z0-9_-]+$ ]]; then
-    echo "Error: Description contains invalid characters"
-    echo "Only letters, numbers, hyphens, and underscores are allowed"
-    echo "Sanitized input was: $description"
-    exit 1
-fi
-
-# Create snapshot name with timestamp prefix (matches pre-pacman format)
-timestamp=$(date +%Y-%m-%d_%H-%M-%S)
-snapshot_name="${timestamp}_${description}"
-
-# Get all pools
-pools=$(zpool list -H -o name)
-
-if [ -z "$pools" ]; then
-    echo "Error: No ZFS pools found"
-    exit 1
-fi
-
-echo "Creating snapshots with name: @${snapshot_name}"
-echo ""
-
-# Create recursive snapshots on each pool
-for pool in $pools; do
-    echo "Snapshotting pool: $pool"
-    if zfs snapshot -r "${pool}@${snapshot_name}"; then
-        echo "  ✓ Created ${pool}@${snapshot_name} (recursive)"
-    else
-        echo "  ✗ Failed to snapshot $pool"
-    fi
-done
-
-echo ""
-echo "Snapshot complete. Verify with: zfs list -t snapshot | grep $snapshot_name"
-echo ""
-echo "To boot from this snapshot: reboot and press Ctrl+D at ZFSBootMenu"

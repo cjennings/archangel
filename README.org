@@ -32,7 +32,7 @@ Archangel currently uses linux-lts for stability. Choosing linux and linux-zen k
 |------------------+----------------------------+----------------------|
 | Bootloader       | ZFSBootMenu                | GRUB + grub-btrfs    |
 | Encryption       | Native ZFS encryption      | LUKS2                |
-| Snapshot utility | zfssnapshot helper scripts | snapper              |
+| Snapshot utility | zfssnapshot                | snapper              |
 | Snapshot boot    | Built into ZFSBootMenu     | grub-btrfs menu      |
 | RAID support     | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
 | EFI size         | 512MB                      | 1GB                  |
@@ -258,14 +258,17 @@ A complete example with all options is available at ~installer/archangel.conf.ex
 ** ZFS Snapshot Management
 
 #+BEGIN_SRC bash
-# Create a snapshot
-zfssnapshot "before-experiment"
-
-# Interactive rollback with fzf
-zfsrollback
-
 # List snapshots
-zfs list -t snapshot
+zfssnapshot list
+
+# Create a snapshot
+zfssnapshot create "before-experiment"
+
+# Interactive rollback (fzf)
+zfssnapshot rollback
+
+# Interactive multi-select destroy (fzf)
+zfssnapshot delete
 #+END_SRC
 
 ** Btrfs Snapshot Management
@@ -347,8 +350,7 @@ archangel/
 │   │   ├── disk.sh                # Disk partitioning and EFI formatting
 │   │   ├── btrfs.sh               # Btrfs-specific functions (LUKS, subvolumes, GRUB)
 │   │   └── raid.sh                # Pure RAID-level logic (levels, validation, usable space)
-│   ├── zfssnapshot                # ZFS snapshot utility
-│   ├── zfsrollback                # ZFS rollback utility
+│   ├── zfssnapshot                # ZFS snapshot utility (list/create/rollback/delete)
 │   └── RESCUE-GUIDE.txt           # Recovery tools documentation
 ├── tests/
 │   └── unit/                      # Bats unit tests for installer/lib/*.sh

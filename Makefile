@@ -31,7 +31,7 @@ SHELL := /bin/bash
 # Lint all bash scripts
 lint:
 	@echo "==> Running shellcheck..."
-	@shellcheck -x build.sh scripts/*.sh installer/archangel installer/zfsrollback installer/zfssnapshot installer/lib/*.sh
+	@shellcheck -x build.sh scripts/*.sh installer/archangel installer/zfssnapshot installer/lib/*.sh
 	@echo "==> Shellcheck complete"
 
 # Run bats unit tests

@@ -236,15 +236,11 @@ run_sanity_tests() {
         "test -x /usr/local/bin/archangel && echo 'exists'" \
         "exists"
 
-    run_test "zfsrollback script present" \
-        "test -x /usr/local/bin/zfsrollback && echo 'exists'" \
-        "exists"
-
     run_test "zfssnapshot script present" \
         "test -x /usr/local/bin/zfssnapshot && echo 'exists'" \
         "exists"
 
-    # Test 5: fzf installed (required by zfsrollback)
+    # Test 5: fzf installed (required by zfssnapshot rollback/delete)
     run_test "fzf installed" \
         "command -v fzf && echo 'found'" \
         "found"
