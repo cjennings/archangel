@@ -87,14 +87,14 @@ setup_luks_testing_keyfile() {
     warn "This reduces security - for testing only!"
 
     # Generate random keyfile
-    dd if=/dev/urandom of="/mnt${LUKS_KEYFILE}" bs=512 count=4 status=none \
+    dd if=/dev/urandom of="$MNTPOINT${LUKS_KEYFILE}" bs=512 count=4 status=none \
         || error "Failed to generate keyfile"
-    chmod 000 "/mnt${LUKS_KEYFILE}"
+    chmod 000 "$MNTPOINT${LUKS_KEYFILE}"
 
     # Add keyfile to each LUKS partition (slot 1, passphrase stays in slot 0)
     for partition in "${partitions[@]}"; do
         info "Adding keyfile to $partition..."
-        echo -n "$passphrase" | cryptsetup luksAddKey "$partition" "/mnt${LUKS_KEYFILE}" -d - \
+        echo -n "$passphrase" | cryptsetup luksAddKey "$partition" "$MNTPOINT${LUKS_KEYFILE}" -d - \
             || error "Failed to add keyfile to $partition"
     done
 
@@ -172,7 +172,7 @@ configure_crypttab() {
 
     step "Configuring crypttab"
 
-    echo "# LUKS encrypted root partitions" > /mnt/etc/crypttab
+    echo "# LUKS encrypted root partitions" > $MNTPOINT/etc/crypttab
 
     # Use keyfile if in testing mode, otherwise prompt for passphrase
     local key_source="none"
@@ -188,7 +188,7 @@ configure_crypttab() {
         local name="${LUKS_MAPPER_NAME}${i}"
         [[ $i -eq 0 ]] && name="$LUKS_MAPPER_NAME"
 
-        echo "$name  UUID=$uuid  $key_source  luks,discard" >> /mnt/etc/crypttab
+        echo "$name  UUID=$uuid  $key_source  luks,discard" >> $MNTPOINT/etc/crypttab
         info "crypttab: $name -> UUID=$uuid"
         ((++i))
     done
@@ -200,29 +200,29 @@ configure_luks_initramfs() {
     step "Configuring Initramfs for LUKS"
 
     # Backup original
-    cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
+    cp $MNTPOINT/etc/mkinitcpio.conf $MNTPOINT/etc/mkinitcpio.conf.bak
 
     # Add encrypt hook before filesystems (configure_btrfs_initramfs overwrites
     # this with the final hook list, using sd-encrypt for multi-disk setups)
     # No sed verification needed: a missing HOOKS= line makes mkinitcpio -P
     # fail loudly downstream. (Audited 2026-04-27 against silent-sed pattern.)
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/' \
-        /mnt/etc/mkinitcpio.conf
+        $MNTPOINT/etc/mkinitcpio.conf
 
     # Include keyfile in initramfs for testing mode (unattended boot)
     if [[ "${TESTING:-}" == "yes" ]]; then
         info "Testing mode: embedding keyfile in initramfs"
-        sed -i "s|^FILES=.*|FILES=($LUKS_KEYFILE)|" /mnt/etc/mkinitcpio.conf
+        sed -i "s|^FILES=.*|FILES=($LUKS_KEYFILE)|" $MNTPOINT/etc/mkinitcpio.conf
         # If FILES line doesn't exist, add it
-        if ! grep -q "^FILES=" /mnt/etc/mkinitcpio.conf; then
-            echo "FILES=($LUKS_KEYFILE)" >> /mnt/etc/mkinitcpio.conf
+        if ! grep -q "^FILES=" $MNTPOINT/etc/mkinitcpio.conf; then
+            echo "FILES=($LUKS_KEYFILE)" >> $MNTPOINT/etc/mkinitcpio.conf
         fi
     fi
 
     # Create crypttab.initramfs for sd-encrypt (used by multi-disk LUKS)
     # sd-encrypt reads this file to open all LUKS devices during initramfs
-    if [[ -f /mnt/etc/crypttab ]]; then
-        cp /mnt/etc/crypttab /mnt/etc/crypttab.initramfs
+    if [[ -f $MNTPOINT/etc/crypttab ]]; then
+        cp $MNTPOINT/etc/crypttab $MNTPOINT/etc/crypttab.initramfs
         info "Created crypttab.initramfs for sd-encrypt."
     fi
 
@@ -238,7 +238,7 @@ configure_luks_grub() {
     uuid=$(blkid -s UUID -o value "$partition")
 
     # Enable GRUB cryptodisk support (required for encrypted /boot)
-    echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+    echo "GRUB_ENABLE_CRYPTODISK=y" >> $MNTPOINT/etc/default/grub
 
     # Add cryptdevice to GRUB cmdline
     # For testing mode, also add cryptkey parameter for automated unlock
@@ -251,7 +251,7 @@ configure_luks_grub() {
 
     prepend_grub_cmdline_linux \
         "cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}" \
-        /mnt/etc/default/grub
+        $MNTPOINT/etc/default/grub
 
     info "GRUB configured with cryptdevice parameter and cryptodisk enabled."
 }
@@ -352,17 +352,17 @@ create_btrfs_subvolumes() {
     step "Creating Btrfs Subvolumes"
 
     # Mount the raw btrfs volume temporarily
-    mount "$partition" /mnt || error "Failed to mount btrfs volume"
+    mount "$partition" $MNTPOINT || error "Failed to mount btrfs volume"
 
     # Create each subvolume
     for subvol_spec in "${BTRFS_SUBVOLS[@]}"; do
         IFS=':' read -r name mountpoint extra <<< "$subvol_spec"
         info "Creating subvolume: $name -> $mountpoint"
-        btrfs subvolume create "/mnt/$name" || error "Failed to create subvolume $name"
+        btrfs subvolume create "$MNTPOINT/$name" || error "Failed to create subvolume $name"
     done
 
     # Unmount raw volume
-    umount /mnt
+    umount $MNTPOINT
 
     info "Created ${#BTRFS_SUBVOLS[@]} subvolumes."
 }
@@ -377,8 +377,8 @@ mount_btrfs_subvolumes() {
     step "Mounting Btrfs Subvolumes"
 
     # Mount root subvolume first
-    info "Mounting @ -> /mnt"
-    mount -o "subvol=@,$BTRFS_OPTS" "$partition" /mnt || error "Failed to mount root subvolume"
+    info "Mounting @ -> $MNTPOINT"
+    mount -o "subvol=@,$BTRFS_OPTS" "$partition" $MNTPOINT || error "Failed to mount root subvolume"
 
     # Create mount points and mount remaining subvolumes
     for subvol_spec in "${BTRFS_SUBVOLS[@]}"; do
@@ -407,13 +407,13 @@ mount_btrfs_subvolumes() {
             fi
         fi
 
-        info "Mounting $name -> /mnt$mountpoint"
-        mkdir -p "/mnt$mountpoint"
-        mount -o "$opts" "$partition" "/mnt$mountpoint" || error "Failed to mount $name"
+        info "Mounting $name -> $MNTPOINT$mountpoint"
+        mkdir -p "$MNTPOINT$mountpoint"
+        mount -o "$opts" "$partition" "$MNTPOINT$mountpoint" || error "Failed to mount $name"
     done
 
     # Set permissions on tmp directories
-    chmod 1777 /mnt/tmp /mnt/var/tmp
+    chmod 1777 $MNTPOINT/tmp $MNTPOINT/var/tmp
 
     info "All subvolumes mounted."
 }
@@ -432,7 +432,7 @@ generate_btrfs_fstab() {
     uuid=$(blkid -s UUID -o value "$partition")
 
     # Start with header
-    cat > /mnt/etc/fstab << EOF
+    cat > $MNTPOINT/etc/fstab << EOF
 # /etc/fstab - Btrfs subvolume mounts
 # IMPORTANT: Using subvol= NOT subvolid= for snapshot compatibility
 # Generated by archangel installer
@@ -460,15 +460,15 @@ EOF
             fi
         fi
 
-        echo "UUID=$uuid  $mountpoint  btrfs  $opts  0 0" >> /mnt/etc/fstab
+        echo "UUID=$uuid  $mountpoint  btrfs  $opts  0 0" >> $MNTPOINT/etc/fstab
     done
 
     # Add EFI partition
     local efi_uuid
     efi_uuid=$(blkid -s UUID -o value "$efi_partition")
-    echo "" >> /mnt/etc/fstab
-    echo "# EFI System Partition" >> /mnt/etc/fstab
-    echo "UUID=$efi_uuid  /efi  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
+    echo "" >> $MNTPOINT/etc/fstab
+    echo "# EFI System Partition" >> $MNTPOINT/etc/fstab
+    echo "UUID=$efi_uuid  /efi  vfat  defaults,noatime  0 2" >> $MNTPOINT/etc/fstab
 
     info "fstab generated with ${#BTRFS_SUBVOLS[@]} btrfs mounts + EFI"
 }
@@ -528,8 +528,8 @@ configure_snapper() {
         echo 'grub-mkconfig -o /efi/grub/grub.cfg'
         echo ''
         echo 'echo "Snapper configuration complete!"'
-    } > /mnt/usr/local/bin/snapper-firstboot
-    chmod +x /mnt/usr/local/bin/snapper-firstboot
+    } > $MNTPOINT/usr/local/bin/snapper-firstboot
+    chmod +x $MNTPOINT/usr/local/bin/snapper-firstboot
 
     # Create systemd service for firstboot
     {
@@ -547,14 +547,14 @@ configure_snapper() {
         echo ''
         echo '[Install]'
         echo 'WantedBy=multi-user.target'
-    } > /mnt/etc/systemd/system/snapper-firstboot.service
+    } > $MNTPOINT/etc/systemd/system/snapper-firstboot.service
 
     # Enable the firstboot service
-    arch-chroot /mnt systemctl enable snapper-firstboot.service
+    arch-chroot $MNTPOINT systemctl enable snapper-firstboot.service
 
     # Enable snapper timers
-    arch-chroot /mnt systemctl enable snapper-timeline.timer
-    arch-chroot /mnt systemctl enable snapper-cleanup.timer
+    arch-chroot $MNTPOINT systemctl enable snapper-timeline.timer
+    arch-chroot $MNTPOINT systemctl enable snapper-cleanup.timer
 
     info "Snapper firstboot service configured."
     info "Snapper will be fully configured on first boot."
@@ -575,7 +575,7 @@ configure_grub() {
 
     # Configure GRUB defaults for btrfs
     info "Setting GRUB configuration..."
-    cat > /mnt/etc/default/grub << 'EOF'
+    cat > $MNTPOINT/etc/default/grub << 'EOF'
 # GRUB configuration for btrfs root with snapshots
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
@@ -596,9 +596,9 @@ EOF
 
     # Add LUKS encryption settings if enabled
     if [[ "$NO_ENCRYPT" != "yes" && -n "$LUKS_PASSPHRASE" ]]; then
-        echo "" >> /mnt/etc/default/grub
-        echo "# LUKS encryption support" >> /mnt/etc/default/grub
-        echo "GRUB_ENABLE_CRYPTODISK=y" >> /mnt/etc/default/grub
+        echo "" >> $MNTPOINT/etc/default/grub
+        echo "# LUKS encryption support" >> $MNTPOINT/etc/default/grub
+        echo "GRUB_ENABLE_CRYPTODISK=y" >> $MNTPOINT/etc/default/grub
 
         # For multi-disk LUKS, sd-encrypt reads crypttab.initramfs — no cmdline params needed
         # For single-disk LUKS, the encrypt hook needs cryptdevice= on the cmdline
@@ -618,7 +618,7 @@ EOF
                 fi
                 prepend_grub_cmdline_linux \
                     "cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}" \
-                    /mnt/etc/default/grub
+                    $MNTPOINT/etc/default/grub
                 info "Added cryptdevice parameter for LUKS partition."
             fi
         else
@@ -632,17 +632,17 @@ EOF
 
     # Install GRUB with boot-directory on EFI partition
     info "Installing GRUB to EFI partition..."
-    arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/efi \
+    arch-chroot $MNTPOINT grub-install --target=x86_64-efi --efi-directory=/efi \
         --bootloader-id=GRUB --boot-directory=/efi \
         || error "GRUB installation failed"
 
     # Create symlink BEFORE grub-mkconfig (grub-btrfs expects /boot/grub)
-    rm -rf /mnt/boot/grub 2>/dev/null || true
-    arch-chroot /mnt ln -sfn /efi/grub /boot/grub
+    rm -rf $MNTPOINT/boot/grub 2>/dev/null || true
+    arch-chroot $MNTPOINT ln -sfn /efi/grub /boot/grub
 
     # Generate GRUB config (uses /boot/grub symlink -> /efi/grub)
     info "Generating GRUB configuration..."
-    arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg \
+    arch-chroot $MNTPOINT grub-mkconfig -o /boot/grub/grub.cfg \
         || error "Failed to generate GRUB config"
 
     # Sync to ensure grub.cfg is written to FAT32 EFI partition
@@ -650,7 +650,7 @@ EOF
 
     # Enable grub-btrfsd for automatic snapshot menu updates
     info "Enabling grub-btrfs daemon..."
-    arch-chroot /mnt systemctl enable grub-btrfsd
+    arch-chroot $MNTPOINT systemctl enable grub-btrfsd
 
     info "GRUB configured with btrfs snapshot support."
 }
@@ -682,13 +682,13 @@ install_grub_all_efi() {
                 mkdir -p "$mount_point"
                 mount "$efi_part" "$mount_point" || { warn "Failed to mount $efi_part"; ((++i)); continue; }
                 # Also create the directory in chroot for grub-install
-                mkdir -p "/mnt${chroot_efi_dir}"
-                mount --bind "$mount_point" "/mnt${chroot_efi_dir}"
+                mkdir -p "${MNTPOINT}${chroot_efi_dir}"
+                mount --bind "$mount_point" "${MNTPOINT}${chroot_efi_dir}"
             fi
         fi
 
         info "Installing GRUB to $efi_part ($bootloader_id)..."
-        arch-chroot /mnt grub-install --target=x86_64-efi \
+        arch-chroot $MNTPOINT grub-install --target=x86_64-efi \
             --efi-directory="$chroot_efi_dir" \
             --bootloader-id="$bootloader_id" \
             --boot-directory=/efi \
@@ -750,12 +750,12 @@ sync_grub() {
 
 sync_grub
 '
-    echo "$script_content" > /mnt/usr/local/bin/grub-sync-efi
-    chmod +x /mnt/usr/local/bin/grub-sync-efi
+    echo "$script_content" > $MNTPOINT/usr/local/bin/grub-sync-efi
+    chmod +x $MNTPOINT/usr/local/bin/grub-sync-efi
 
     # Create pacman hook
-    mkdir -p /mnt/etc/pacman.d/hooks
-    cat > /mnt/etc/pacman.d/hooks/99-grub-sync-efi.hook << 'HOOKEOF'
+    mkdir -p $MNTPOINT/etc/pacman.d/hooks
+    cat > $MNTPOINT/etc/pacman.d/hooks/99-grub-sync-efi.hook << 'HOOKEOF'
 [Trigger]
 Type = Package
 Operation = Upgrade
@@ -805,8 +805,8 @@ configure_btrfs_services() {
     step "Configuring System Services"
 
     # Enable standard services
-    arch-chroot /mnt systemctl enable NetworkManager
-    arch-chroot /mnt systemctl enable avahi-daemon
+    arch-chroot $MNTPOINT systemctl enable NetworkManager
+    arch-chroot $MNTPOINT systemctl enable avahi-daemon
 
     # Snapper timers (already enabled in configure_snapper)
 
@@ -823,17 +823,17 @@ configure_btrfs_initramfs() {
     step "Configuring Initramfs for Btrfs"
 
     # Backup original
-    cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
+    cp $MNTPOINT/etc/mkinitcpio.conf $MNTPOINT/etc/mkinitcpio.conf.bak
 
     # Remove archiso drop-in if present
-    if [[ -f /mnt/etc/mkinitcpio.conf.d/archiso.conf ]]; then
+    if [[ -f $MNTPOINT/etc/mkinitcpio.conf.d/archiso.conf ]]; then
         info "Removing archiso drop-in config..."
-        rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+        rm -f $MNTPOINT/etc/mkinitcpio.conf.d/archiso.conf
     fi
 
     # Create proper linux-lts preset
     info "Creating linux-lts preset..."
-    cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'EOF'
+    cat > $MNTPOINT/etc/mkinitcpio.d/linux-lts.preset << 'EOF'
 # mkinitcpio preset file for linux-lts
 
 PRESETS=(default fallback)
@@ -860,22 +860,22 @@ EOF
         # The traditional encrypt hook only supports a single cryptdevice
         info "Multi-device LUKS: using sd-encrypt for multi-device LUKS unlock"
         sed -i "s/^HOOKS=.*/HOOKS=(base systemd microcode modconf kms keyboard sd-vconsole block sd-encrypt btrfs filesystems fsck)/" \
-            /mnt/etc/mkinitcpio.conf
+            $MNTPOINT/etc/mkinitcpio.conf
     elif [[ $num_disks -gt 1 ]]; then
         info "Multi-device btrfs: adding btrfs hook for device assembly"
         sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block btrfs filesystems fsck)/" \
-            /mnt/etc/mkinitcpio.conf
+            $MNTPOINT/etc/mkinitcpio.conf
     elif [[ "$luks_enabled" == "yes" ]]; then
         sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block encrypt filesystems fsck)/" \
-            /mnt/etc/mkinitcpio.conf
+            $MNTPOINT/etc/mkinitcpio.conf
     else
         sed -i "s/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block filesystems fsck)/" \
-            /mnt/etc/mkinitcpio.conf
+            $MNTPOINT/etc/mkinitcpio.conf
     fi
 
     # Regenerate initramfs
     info "Regenerating initramfs..."
-    arch-chroot /mnt mkinitcpio -P
+    arch-chroot $MNTPOINT mkinitcpio -P
 
     info "Initramfs configured for btrfs."
 }
@@ -900,11 +900,11 @@ btrfs_cleanup() {
     for ((i=${#BTRFS_SUBVOLS[@]}-1; i>=0; i--)); do
         IFS=':' read -r name mountpoint extra <<< "${BTRFS_SUBVOLS[$i]}"
         [[ "$name" == "@" ]] && continue
-        umount "/mnt$mountpoint" 2>/dev/null || true
+        umount "$MNTPOINT$mountpoint" 2>/dev/null || true
     done
 
     # Unmount root last
-    umount /mnt 2>/dev/null || true
+    umount $MNTPOINT 2>/dev/null || true
 
     info "Btrfs cleanup complete."
 }

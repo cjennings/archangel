@@ -6,11 +6,19 @@
 # Path Constants
 #############################
 
+# Mount point for the install chroot's root. Sub-paths compose with
+# $MNTPOINT/etc/... (the host paths the installer writes into during
+# pacstrap and config). Bare $MNTPOINT works since `/` isn't an
+# identifier character; use ${MNTPOINT}${chroot_efi_dir} when the
+# next character would otherwise be parsed as part of the variable
+# name.
+MNTPOINT="/mnt"
+
 # Mount point for the primary EFI partition during install. Sub-paths
 # compose with ${EFI_DIR}/...; secondary EFI partitions in multi-disk
 # layouts use ${EFI_DIR}${i} (no trailing slash, so the index appends
 # cleanly).
-EFI_DIR="/mnt/efi"
+EFI_DIR="$MNTPOINT/efi"
 
 #############################
 # Output Functions

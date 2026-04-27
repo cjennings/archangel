@@ -333,6 +333,10 @@ Boot0001* ZFSBootMenu"
     [ "$EFI_DIR" = "/mnt/efi" ]
 }
 
+@test "MNTPOINT is defined and equals /mnt" {
+    [ "$MNTPOINT" = "/mnt" ]
+}
+
 #############################
 # enable_sshd_root_login
 #############################

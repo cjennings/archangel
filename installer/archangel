@@ -627,7 +627,7 @@ create_zfs_pool() {
             -O relatime=on \
             -O xattr=sa \
             -O mountpoint=none \
-            -R /mnt \
+            -R $MNTPOINT \
             "$POOL_NAME" $pool_config
     else
         echo "$ZFS_PASSPHRASE" | zpool create -f \
@@ -645,7 +645,7 @@ create_zfs_pool() {
             -O keyformat=passphrase \
             -O keylocation=prompt \
             -O mountpoint=none \
-            -R /mnt \
+            -R $MNTPOINT \
             "$POOL_NAME" $pool_config
     fi
 
@@ -691,12 +691,12 @@ create_datasets() {
 
     # /var/tmp - ZFS-backed, persists across reboots, excluded from snapshots
     zfs create -o mountpoint=/var/tmp -o com.sun:auto-snapshot=false "$POOL_NAME/var/tmp"
-    chmod 1777 /mnt/var/tmp
+    chmod 1777 $MNTPOINT/var/tmp
 
     # /tmp - tmpfs via fstab (not ZFS: ZFS statx() returns ENOLINK on
     # systemd PrivateTmp paths, breaking systemd-tmpfiles-clean every boot)
-    mkdir -p /mnt/tmp
-    chmod 1777 /mnt/tmp
+    mkdir -p $MNTPOINT/tmp
+    chmod 1777 $MNTPOINT/tmp
 
     info "Datasets created:"
     zfs list -r "$POOL_NAME" -o name,mountpoint,compression
@@ -741,7 +741,7 @@ EOF
         || error "Unknown filesystem: $FILESYSTEM"
 
     # Use yes to auto-select defaults for provider prompts
-    yes "" | pacstrap -K /mnt "${packages[@]}"
+    yes "" | pacstrap -K $MNTPOINT "${packages[@]}"
 
     info "Base system installed."
 }
@@ -751,30 +751,30 @@ configure_system() {
 
     # fstab (EFI + tmpfs /tmp; /boot is on ZFS root)
     info "Generating fstab..."
-    echo "# /efi - EFI System Partition (ZFSBootMenu binary)" > /mnt/etc/fstab
-    echo "UUID=$(blkid -s UUID -o value "${EFI_PARTS[0]}")  /efi  vfat  defaults,noatime  0 2" >> /mnt/etc/fstab
-    echo "" >> /mnt/etc/fstab
-    echo "# /tmp - tmpfs (avoids ZFS statx ENOLINK on systemd PrivateTmp paths)" >> /mnt/etc/fstab
-    echo "tmpfs  /tmp  tmpfs  defaults,nosuid,nodev,mode=1777  0 0" >> /mnt/etc/fstab
+    echo "# /efi - EFI System Partition (ZFSBootMenu binary)" > $MNTPOINT/etc/fstab
+    echo "UUID=$(blkid -s UUID -o value "${EFI_PARTS[0]}")  /efi  vfat  defaults,noatime  0 2" >> $MNTPOINT/etc/fstab
+    echo "" >> $MNTPOINT/etc/fstab
+    echo "# /tmp - tmpfs (avoids ZFS statx ENOLINK on systemd PrivateTmp paths)" >> $MNTPOINT/etc/fstab
+    echo "tmpfs  /tmp  tmpfs  defaults,nosuid,nodev,mode=1777  0 0" >> $MNTPOINT/etc/fstab
 
     # Timezone
     info "Setting timezone to $TIMEZONE..."
-    arch-chroot /mnt ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
-    arch-chroot /mnt hwclock --systohc
+    arch-chroot $MNTPOINT ln -sf "/usr/share/zoneinfo/$TIMEZONE" /etc/localtime
+    arch-chroot $MNTPOINT hwclock --systohc
 
     # Locale
     info "Configuring locale..."
-    echo "$LOCALE UTF-8" >> /mnt/etc/locale.gen
-    arch-chroot /mnt locale-gen
-    echo "LANG=$LOCALE" > /mnt/etc/locale.conf
+    echo "$LOCALE UTF-8" >> $MNTPOINT/etc/locale.gen
+    arch-chroot $MNTPOINT locale-gen
+    echo "LANG=$LOCALE" > $MNTPOINT/etc/locale.conf
 
     # Keymap
-    echo "KEYMAP=$KEYMAP" > /mnt/etc/vconsole.conf
+    echo "KEYMAP=$KEYMAP" > $MNTPOINT/etc/vconsole.conf
 
     # Hostname
     info "Setting hostname to $HOSTNAME..."
-    echo "$HOSTNAME" > /mnt/etc/hostname
-    cat > /mnt/etc/hosts << EOF
+    echo "$HOSTNAME" > $MNTPOINT/etc/hostname
+    cat > $MNTPOINT/etc/hosts << EOF
 127.0.0.1   localhost
 ::1         localhost
 127.0.1.1   $HOSTNAME.localdomain $HOSTNAME
@@ -782,7 +782,7 @@ EOF
 
     # Add archzfs repo (SigLevel=Never — same rationale as install_base)
     info "Adding archzfs repository..."
-    cat >> /mnt/etc/pacman.conf << 'EOF'
+    cat >> $MNTPOINT/etc/pacman.conf << 'EOF'
 
 [archzfs]
 Server = https://github.com/archzfs/archzfs/releases/download/experimental
@@ -794,21 +794,21 @@ EOF
     # get created in tmpfs then hidden when ZFS mounts over it.
     # Solution: Make journal-flush wait for zfs-mount, and enable persistent storage.
     info "Configuring journald for ZFS..."
-    mkdir -p /mnt/etc/systemd/journald.conf.d
-    cat > /mnt/etc/systemd/journald.conf.d/persistent.conf << 'EOF'
+    mkdir -p $MNTPOINT/etc/systemd/journald.conf.d
+    cat > $MNTPOINT/etc/systemd/journald.conf.d/persistent.conf << 'EOF'
 [Journal]
 Storage=persistent
 EOF
 
-    mkdir -p /mnt/etc/systemd/system/systemd-journal-flush.service.d
-    cat > /mnt/etc/systemd/system/systemd-journal-flush.service.d/zfs.conf << 'EOF'
+    mkdir -p $MNTPOINT/etc/systemd/system/systemd-journal-flush.service.d
+    cat > $MNTPOINT/etc/systemd/system/systemd-journal-flush.service.d/zfs.conf << 'EOF'
 [Unit]
 After=zfs-mount.service
 EOF
 
     # Set root password
     info "Setting root password..."
-    echo "root:$ROOT_PASSWORD" | arch-chroot /mnt chpasswd
+    echo "root:$ROOT_PASSWORD" | arch-chroot $MNTPOINT chpasswd
 }
 
 configure_wifi() {
@@ -817,9 +817,9 @@ configure_wifi() {
 
         # Copy NetworkManager connection from live environment
         if [[ -d /etc/NetworkManager/system-connections ]]; then
-            mkdir -p /mnt/etc/NetworkManager/system-connections
-            cp /etc/NetworkManager/system-connections/* /mnt/etc/NetworkManager/system-connections/ 2>/dev/null || true
-            chmod 600 /mnt/etc/NetworkManager/system-connections/* 2>/dev/null || true
+            mkdir -p $MNTPOINT/etc/NetworkManager/system-connections
+            cp /etc/NetworkManager/system-connections/* $MNTPOINT/etc/NetworkManager/system-connections/ 2>/dev/null || true
+            chmod 600 $MNTPOINT/etc/NetworkManager/system-connections/* 2>/dev/null || true
         fi
 
         info "WiFi configuration copied to installed system."
@@ -830,10 +830,10 @@ configure_ssh() {
     if [[ "$ENABLE_SSH" == "yes" ]]; then
         step "Configuring SSH"
 
-        enable_sshd_root_login /mnt/etc/ssh/sshd_config
+        enable_sshd_root_login $MNTPOINT/etc/ssh/sshd_config
 
         # Enable sshd service
-        arch-chroot /mnt systemctl enable sshd
+        arch-chroot $MNTPOINT systemctl enable sshd
 
         info "SSH enabled with root password login."
         warn "Harden SSH after install (key auth, fail2ban)."
@@ -845,20 +845,20 @@ configure_ssh() {
 configure_initramfs() {
     step "Configuring Initramfs for ZFS"
 
-    cp /mnt/etc/mkinitcpio.conf /mnt/etc/mkinitcpio.conf.bak
+    cp $MNTPOINT/etc/mkinitcpio.conf $MNTPOINT/etc/mkinitcpio.conf.bak
 
     # CRITICAL: Remove archiso drop-in that overrides mkinitcpio.conf HOOKS
     # The archiso.conf contains live ISO-specific hooks that are incompatible with ZFS
     # If not removed, it overrides our HOOKS setting and breaks boot after kernel updates
-    if [[ -f /mnt/etc/mkinitcpio.conf.d/archiso.conf ]]; then
+    if [[ -f $MNTPOINT/etc/mkinitcpio.conf.d/archiso.conf ]]; then
         info "Removing archiso drop-in config..."
-        rm -f /mnt/etc/mkinitcpio.conf.d/archiso.conf
+        rm -f $MNTPOINT/etc/mkinitcpio.conf.d/archiso.conf
     fi
 
     # CRITICAL: Fix linux-lts preset file
     # The preset from archiso uses archiso-specific config that breaks mkinitcpio -P
     info "Creating proper linux-lts preset..."
-    cat > /mnt/etc/mkinitcpio.d/linux-lts.preset << 'PRESET_EOF'
+    cat > $MNTPOINT/etc/mkinitcpio.d/linux-lts.preset << 'PRESET_EOF'
 # mkinitcpio preset file for linux-lts
 
 PRESETS=(default fallback)
@@ -876,13 +876,13 @@ PRESET_EOF
     # The firmware must be in initramfs since amdgpu loads before root is mounted
     if lspci | grep -qi "amd.*display\|amd.*vga\|radeon"; then
         local isp_firmware
-        isp_firmware=$(ls /mnt/usr/lib/firmware/amdgpu/isp_*.bin.zst 2>/dev/null | head -1)
+        isp_firmware=$(ls $MNTPOINT/usr/lib/firmware/amdgpu/isp_*.bin.zst 2>/dev/null | head -1)
         if [[ -n "$isp_firmware" ]]; then
             # Remove /mnt prefix - config is used inside chroot where root is /
-            local chroot_path="${isp_firmware#/mnt}"
+            local chroot_path="${isp_firmware#"$MNTPOINT"}"
             info "AMD APU detected with ISP firmware - adding to initramfs"
-            mkdir -p /mnt/etc/mkinitcpio.conf.d
-            cat > /mnt/etc/mkinitcpio.conf.d/amd-isp.conf << EOF
+            mkdir -p $MNTPOINT/etc/mkinitcpio.conf.d
+            cat > $MNTPOINT/etc/mkinitcpio.conf.d/amd-isp.conf << EOF
 # AMD ISP (Image Signal Processor) firmware for camera support
 # Loaded early so amdgpu can initialize ISP before root is mounted
 FILES+=($chroot_path)
@@ -899,11 +899,11 @@ EOF
     # No sed verification needed: a missing HOOKS= line makes mkinitcpio -P
     # fail loudly downstream, so silent-replace failure can't reach a booted
     # system. (Audited 2026-04-27 against silent-sed pattern.)
-    sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' /mnt/etc/mkinitcpio.conf
+    sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' $MNTPOINT/etc/mkinitcpio.conf
 
     # Get the installed kernel version (not the running kernel)
     local kernel_ver
-    kernel_ver=$(ls /mnt/usr/lib/modules | grep lts | head -1)
+    kernel_ver=$(ls $MNTPOINT/usr/lib/modules | grep lts | head -1)
     if [[ -z "$kernel_ver" ]]; then
         error "Could not find LTS kernel modules"
     fi
@@ -912,16 +912,16 @@ EOF
     # Ensure kernel module dependencies are up to date after DKMS build
     # Must specify kernel version since running kernel differs from installed kernel
     info "Updating module dependencies..."
-    arch-chroot /mnt depmod "$kernel_ver"
+    arch-chroot $MNTPOINT depmod "$kernel_ver"
 
     # Verify ZFS module exists
-    if ! [[ -f "/mnt/usr/lib/modules/$kernel_ver/updates/dkms/zfs.ko.zst" ]]; then
+    if ! [[ -f "$MNTPOINT/usr/lib/modules/$kernel_ver/updates/dkms/zfs.ko.zst" ]]; then
         error "ZFS module not found! DKMS build may have failed."
     fi
     info "ZFS module verified for kernel $kernel_ver"
 
     info "Regenerating initramfs..."
-    arch-chroot /mnt mkinitcpio -P
+    arch-chroot $MNTPOINT mkinitcpio -P
 }
 
 configure_zfsbootmenu() {
@@ -939,7 +939,7 @@ configure_zfsbootmenu() {
     host_id=$(hostid)
 
     # Copy hostid to installed system (ZFS uses this for pool ownership)
-    cp /etc/hostid /mnt/etc/hostid
+    cp /etc/hostid $MNTPOINT/etc/hostid
 
     # Create ZFSBootMenu directory on EFI
     mkdir -p $EFI_DIR/EFI/ZBM
@@ -1021,17 +1021,17 @@ configure_zfsbootmenu() {
 configure_zfs_services() {
     step "Configuring ZFS Services"
 
-    arch-chroot /mnt systemctl enable zfs.target
+    arch-chroot $MNTPOINT systemctl enable zfs.target
 
     # Use zfs-import-scan instead of zfs-import-cache
     # This is the recommended method - it uses blkid to scan for pools
     # and doesn't require a cachefile
     # Note: ZFS package preset enables zfs-import-cache by default, so we must
     # explicitly disable it before enabling zfs-import-scan
-    arch-chroot /mnt systemctl disable zfs-import-cache.service
-    arch-chroot /mnt systemctl enable zfs-import-scan.service
-    arch-chroot /mnt systemctl enable zfs-mount.service
-    arch-chroot /mnt systemctl enable zfs-import.target
+    arch-chroot $MNTPOINT systemctl disable zfs-import-cache.service
+    arch-chroot $MNTPOINT systemctl enable zfs-import-scan.service
+    arch-chroot $MNTPOINT systemctl enable zfs-mount.service
+    arch-chroot $MNTPOINT systemctl enable zfs-import.target
 
     # Note: hostid and bootfs are already set by configure_zfsbootmenu()
 
@@ -1039,12 +1039,12 @@ configure_zfs_services() {
     # Also remove any existing cachefile since zfs-import-scan has a condition
     # that prevents it from running if /etc/zfs/zpool.cache exists
     zpool set cachefile=none "$POOL_NAME"
-    rm -f /mnt/etc/zfs/zpool.cache
+    rm -f $MNTPOINT/etc/zfs/zpool.cache
 
     # Enable other services
-    arch-chroot /mnt systemctl enable NetworkManager
-    arch-chroot /mnt systemctl enable avahi-daemon
-    arch-chroot /mnt systemctl enable sshd
+    arch-chroot $MNTPOINT systemctl enable NetworkManager
+    arch-chroot $MNTPOINT systemctl enable avahi-daemon
+    arch-chroot $MNTPOINT systemctl enable sshd
 
     info "ZFS services configured."
 }
@@ -1052,9 +1052,9 @@ configure_zfs_services() {
 configure_pacman_hook() {
     step "Configuring Pacman Snapshot Hook"
 
-    mkdir -p /mnt/etc/pacman.d/hooks
+    mkdir -p $MNTPOINT/etc/pacman.d/hooks
 
-    cat > /mnt/etc/pacman.d/hooks/zfs-snapshot.hook << EOF
+    cat > $MNTPOINT/etc/pacman.d/hooks/zfs-snapshot.hook << EOF
 [Trigger]
 Operation = Upgrade
 Operation = Install
@@ -1068,7 +1068,7 @@ When = PreTransaction
 Exec = /usr/local/bin/zfs-pre-snapshot
 EOF
 
-    cat > /mnt/usr/local/bin/zfs-pre-snapshot << 'EOF'
+    cat > $MNTPOINT/usr/local/bin/zfs-pre-snapshot << 'EOF'
 #!/bin/bash
 POOL="zroot"
 DATASET="$POOL/ROOT/default"
@@ -1096,7 +1096,7 @@ else
 fi
 EOF
 
-    chmod +x /mnt/usr/local/bin/zfs-pre-snapshot
+    chmod +x $MNTPOINT/usr/local/bin/zfs-pre-snapshot
 
     info "Pacman hook configured."
 }
@@ -1105,10 +1105,10 @@ configure_zfs_tools() {
     step "Installing ZFS Management Tools"
 
     # Copy ZFS management scripts
-    cp /usr/local/bin/zfssnapshot /mnt/usr/local/bin/zfssnapshot
-    cp /usr/local/bin/zfsrollback /mnt/usr/local/bin/zfsrollback
-    chmod +x /mnt/usr/local/bin/zfssnapshot
-    chmod +x /mnt/usr/local/bin/zfsrollback
+    cp /usr/local/bin/zfssnapshot $MNTPOINT/usr/local/bin/zfssnapshot
+    cp /usr/local/bin/zfsrollback $MNTPOINT/usr/local/bin/zfsrollback
+    chmod +x $MNTPOINT/usr/local/bin/zfssnapshot
+    chmod +x $MNTPOINT/usr/local/bin/zfsrollback
 
     info "ZFS management scripts installed: zfssnapshot, zfsrollback"
     info "Tip: Install sanoid for automated snapshot retention."
@@ -1122,7 +1122,7 @@ configure_tmpfiles_private_tmp() {
 
     local svc
     for svc in systemd-tmpfiles-setup systemd-tmpfiles-clean; do
-        install_dropin "$svc" zfs-private-tmp /mnt << 'EOF'
+        install_dropin "$svc" zfs-private-tmp $MNTPOINT << 'EOF'
 # ZFS: statx of sibling services' /var/tmp/systemd-private-*/tmp mounts
 # returns errno 132. Running in own namespace avoids traversing them.
 [Service]
@@ -1174,7 +1174,7 @@ create_genesis_snapshot() {
 
     # Create rollback script in /root
     info "Installing rollback-to-genesis script..."
-    cat > /mnt/root/rollback-to-genesis << 'ROLLBACK_EOF'
+    cat > $MNTPOINT/root/rollback-to-genesis << 'ROLLBACK_EOF'
 #!/bin/bash
 # rollback-to-genesis - Roll back all datasets to the genesis snapshot
 #
@@ -1223,7 +1223,7 @@ echo "Rollback complete!"
 echo "Reboot to complete the process: reboot"
 ROLLBACK_EOF
 
-    chmod +x /mnt/root/rollback-to-genesis
+    chmod +x $MNTPOINT/root/rollback-to-genesis
     info "Genesis snapshot created. Rollback script: /root/rollback-to-genesis"
 }
 
@@ -1264,7 +1264,7 @@ install_failure_cleanup() {
     case "$FILESYSTEM" in
         zfs)
             umount $EFI_DIR 2>/dev/null || true
-            umount -R /mnt 2>/dev/null || true
+            umount -R $MNTPOINT 2>/dev/null || true
             if zpool list "$POOL_NAME" >/dev/null 2>&1; then
                 zpool export "$POOL_NAME" 2>/dev/null \
                     || zpool export -f "$POOL_NAME" 2>/dev/null \
