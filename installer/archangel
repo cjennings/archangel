@@ -729,9 +729,9 @@ mount_efi() {
     step "Mounting EFI Partition"
     # EFI partition mounts at /efi - only holds ZFSBootMenu binary
     # /boot is a directory on ZFS root (kernels live on ZFS for snapshot safety)
-    mkdir -p /mnt/efi
-    mount "${EFI_PARTS[0]}" /mnt/efi
-    info "EFI partition ${EFI_PARTS[0]} mounted at /mnt/efi"
+    mkdir -p $EFI_DIR
+    mount "${EFI_PARTS[0]}" $EFI_DIR
+    info "EFI partition ${EFI_PARTS[0]} mounted at $EFI_DIR"
 }
 
 install_base() {
@@ -964,13 +964,13 @@ configure_zfsbootmenu() {
     cp /etc/hostid /mnt/etc/hostid
 
     # Create ZFSBootMenu directory on EFI
-    mkdir -p /mnt/efi/EFI/ZBM
+    mkdir -p $EFI_DIR/EFI/ZBM
 
     # Download ZFSBootMenu release EFI binary
     # Using the bundled release which includes everything needed
     info "Downloading ZFSBootMenu..."
     local zbm_url="https://get.zfsbootmenu.org/efi"
-    if ! curl -fsSL -o /mnt/efi/EFI/ZBM/zfsbootmenu.efi "$zbm_url"; then
+    if ! curl -fsSL -o $EFI_DIR/EFI/ZBM/zfsbootmenu.efi "$zbm_url"; then
         error "Failed to download ZFSBootMenu"
     fi
     info "ZFSBootMenu binary installed."
@@ -1163,7 +1163,7 @@ sync_efi_partitions() {
 
     step "Syncing EFI Partitions for Redundancy"
 
-    local temp_mount="/mnt/efi_sync"
+    local temp_mount="${EFI_DIR}_sync"
 
     for i in "${!EFI_PARTS[@]}"; do
         if [[ $i -eq 0 ]]; then
@@ -1178,7 +1178,7 @@ sync_efi_partitions() {
 
         # Copy ZFSBootMenu binary to secondary EFI partitions
         mkdir -p "$temp_mount/EFI/ZBM"
-        cp /mnt/efi/EFI/ZBM/zfsbootmenu.efi "$temp_mount/EFI/ZBM/"
+        cp $EFI_DIR/EFI/ZBM/zfsbootmenu.efi "$temp_mount/EFI/ZBM/"
 
         umount "$temp_mount"
     done
@@ -1257,7 +1257,7 @@ cleanup() {
     ZFS_PASSPHRASE=""
 
     info "Unmounting filesystems..."
-    umount /mnt/efi 2>/dev/null || true
+    umount $EFI_DIR 2>/dev/null || true
 
     info "Exporting ZFS pool..."
     zpool export "$POOL_NAME"
@@ -1285,7 +1285,7 @@ install_failure_cleanup() {
 
     case "$FILESYSTEM" in
         zfs)
-            umount /mnt/efi 2>/dev/null || true
+            umount $EFI_DIR 2>/dev/null || true
             umount -R /mnt 2>/dev/null || true
             if zpool list "$POOL_NAME" >/dev/null 2>&1; then
                 zpool export "$POOL_NAME" 2>/dev/null \
@@ -1294,7 +1294,7 @@ install_failure_cleanup() {
             fi
             ;;
         btrfs)
-            umount /mnt/efi 2>/dev/null || true
+            umount $EFI_DIR 2>/dev/null || true
             btrfs_cleanup 2>/dev/null || true
             btrfs_close_encryption 2>/dev/null || true
             ;;
@@ -1461,8 +1461,8 @@ install_btrfs() {
     btrfs_make_filesystem     btrfs_devices
     create_btrfs_subvolumes   "${btrfs_devices[0]}"
     mount_btrfs_subvolumes    "${btrfs_devices[0]}"
-    mkdir -p /mnt/efi
-    mount "${EFI_PARTS[0]}" /mnt/efi
+    mkdir -p $EFI_DIR
+    mount "${EFI_PARTS[0]}" $EFI_DIR
 
     # Base install + system config
     install_base

@@ -3,6 +3,16 @@
 # Source this file: source "$(dirname "$0")/lib/common.sh"
 
 #############################
+# Path Constants
+#############################
+
+# Mount point for the primary EFI partition during install. Sub-paths
+# compose with ${EFI_DIR}/...; secondary EFI partitions in multi-disk
+# layouts use ${EFI_DIR}${i} (no trailing slash, so the index appends
+# cleanly).
+EFI_DIR="/mnt/efi"
+
+#############################
 # Output Functions
 #############################
 

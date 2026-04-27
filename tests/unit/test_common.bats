@@ -324,3 +324,11 @@ Boot0001* ZFSBootMenu"
     [ "$status" -eq 1 ]
     [ -z "$output" ]
 }
+
+#############################
+# Path constants
+#############################
+
+@test "EFI_DIR is defined and equals /mnt/efi" {
+    [ "$EFI_DIR" = "/mnt/efi" ]
+}

@@ -567,8 +567,8 @@ configure_grub() {
     step "Configuring GRUB Bootloader"
 
     # Mount EFI partition
-    mkdir -p /mnt/efi
-    mount "$efi_partition" /mnt/efi
+    mkdir -p $EFI_DIR
+    mount "$efi_partition" $EFI_DIR
 
     # Configure GRUB defaults for btrfs
     info "Setting GRUB configuration..."
@@ -624,7 +624,7 @@ EOF
 
     # Create grub directory on EFI partition
     # GRUB modules on FAT32 EFI partition avoid btrfs subvolume path issues
-    mkdir -p /mnt/efi/grub
+    mkdir -p $EFI_DIR/grub
 
     # Install GRUB with boot-directory on EFI partition
     info "Installing GRUB to EFI partition..."
@@ -665,12 +665,12 @@ install_grub_all_efi() {
     for efi_part in "${efi_partitions[@]}"; do
         # First EFI at /efi (already mounted), subsequent at /efi2, /efi3, etc.
         local chroot_efi_dir="/efi"
-        local mount_point="/mnt/efi"
+        local mount_point="$EFI_DIR"
         local bootloader_id="GRUB"
 
         if [[ $i -gt 1 ]]; then
             chroot_efi_dir="/efi${i}"
-            mount_point="/mnt/efi${i}"
+            mount_point="$EFI_DIR${i}"
             bootloader_id="GRUB-disk${i}"
 
             # Mount secondary EFI partitions
@@ -887,7 +887,7 @@ btrfs_cleanup() {
     sync
 
     # Unmount EFI first
-    umount /mnt/efi 2>/dev/null || true
+    umount $EFI_DIR 2>/dev/null || true
 
     # Unmount all btrfs subvolumes (reverse order)
     for ((i=${#BTRFS_SUBVOLS[@]}-1; i>=0; i--)); do
