@@ -229,33 +229,6 @@ configure_luks_initramfs() {
     info "Added encrypt hook to initramfs."
 }
 
-configure_luks_grub() {
-    local partition="$1"
-
-    step "Configuring GRUB for LUKS"
-
-    local uuid
-    uuid=$(blkid -s UUID -o value "$partition")
-
-    # Enable GRUB cryptodisk support (required for encrypted /boot)
-    echo "GRUB_ENABLE_CRYPTODISK=y" >> $MNTPOINT/etc/default/grub
-
-    # Add cryptdevice to GRUB cmdline
-    # For testing mode, also add cryptkey parameter for automated unlock
-    local cryptkey_param=""
-    if [[ "${TESTING:-}" == "yes" ]]; then
-        # rootfs: prefix tells encrypt hook the keyfile is in the initramfs
-        cryptkey_param="cryptkey=rootfs:$LUKS_KEYFILE "
-        info "Testing mode: adding cryptkey parameter for automated unlock"
-    fi
-
-    prepend_grub_cmdline_linux \
-        "cryptdevice=UUID=$uuid:$LUKS_MAPPER_NAME:allow-discards ${cryptkey_param}" \
-        $MNTPOINT/etc/default/grub
-
-    info "GRUB configured with cryptdevice parameter and cryptodisk enabled."
-}
-
 #############################
 # Btrfs Pre-flight
 #############################
@@ -961,7 +934,6 @@ btrfs_configure_luks_target() {
     [[ "$NO_ENCRYPT" == "yes" ]] && return 0
     setup_luks_testing_keyfile "$LUKS_PASSPHRASE" "${_root_parts[@]}"
     configure_crypttab         "${_root_parts[@]}"
-    configure_luks_grub        "${_root_parts[0]}"
     configure_luks_initramfs
 }
 
