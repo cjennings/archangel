@@ -156,3 +156,52 @@ EOF
     [ "$CONFIG_FILE" = "/tmp/foo.conf" ]
     [ -n "$RED" ]
 }
+
+#############################
+# Default values sourced from config.sh
+#############################
+# config.sh is the single source of truth for installer defaults. The
+# monolith no longer re-applies them in gather_input. These tests pin
+# the values so a regression that drops a default surfaces here, not
+# halfway through an unattended install.
+
+@test "config.sh sets defaults for FILESYSTEM, LOCALE, KEYMAP, ENABLE_SSH, NO_ENCRYPT" {
+    [ "$FILESYSTEM" = "zfs" ]
+    [ "$LOCALE" = "en_US.UTF-8" ]
+    [ "$KEYMAP" = "us" ]
+    [ "$ENABLE_SSH" = "yes" ]
+    [ "$NO_ENCRYPT" = "no" ]
+}
+
+#############################
+# validate_filesystem
+#############################
+# Called from main() between check_config and gather_input. Catches a
+# typo in FILESYSTEM= from a config file before the install starts.
+
+@test "validate_filesystem accepts zfs" {
+    FILESYSTEM=zfs
+    run validate_filesystem
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_filesystem accepts btrfs" {
+    FILESYSTEM=btrfs
+    run validate_filesystem
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_filesystem rejects an unknown filesystem" {
+    FILESYSTEM=ext4
+    run validate_filesystem
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid FILESYSTEM"* ]]
+    [[ "$output" == *"ext4"* ]]
+}
+
+@test "validate_filesystem rejects an empty FILESYSTEM" {
+    FILESYSTEM=""
+    run validate_filesystem
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid FILESYSTEM"* ]]
+}

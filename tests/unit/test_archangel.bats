@@ -70,33 +70,9 @@ setup() {
 #############################
 # Optional-field defaults
 #############################
-
-@test "gather_input unattended defaults FILESYSTEM to zfs when empty" {
-    HOSTNAME=h
-    TIMEZONE=UTC
-    ROOT_PASSWORD=x
-    SELECTED_DISKS=(/dev/sda)
-    FILESYSTEM=""
-    NO_ENCRYPT=yes
-    gather_input >/dev/null
-    [ "$FILESYSTEM" = "zfs" ]
-}
-
-@test "gather_input unattended defaults LOCALE, KEYMAP, ENABLE_SSH when empty" {
-    HOSTNAME=h
-    TIMEZONE=UTC
-    ROOT_PASSWORD=x
-    SELECTED_DISKS=(/dev/sda)
-    FILESYSTEM=zfs
-    NO_ENCRYPT=yes
-    LOCALE=""
-    KEYMAP=""
-    ENABLE_SSH=""
-    gather_input >/dev/null
-    [ "$LOCALE" = "en_US.UTF-8" ]
-    [ "$KEYMAP" = "us" ]
-    [ "$ENABLE_SSH" = "yes" ]
-}
+# Default values themselves are pinned in test_config.bats (config.sh
+# is the single source of truth). The remaining test here covers the
+# adjacent guarantee: gather_input doesn't clobber values the user set.
 
 @test "gather_input unattended preserves explicit non-default values" {
     HOSTNAME=h
@@ -160,18 +136,9 @@ setup() {
 #############################
 # Filesystem validity
 #############################
-
-@test "gather_input unattended errors when FILESYSTEM is neither zfs nor btrfs" {
-    HOSTNAME=h
-    TIMEZONE=UTC
-    ROOT_PASSWORD=x
-    SELECTED_DISKS=(/dev/sda)
-    FILESYSTEM=ext4
-    NO_ENCRYPT=yes
-    run gather_input
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"Invalid FILESYSTEM"* ]]
-}
+# Validation moved to validate_filesystem in lib/config.sh — covered
+# by test_config.bats. main() calls it between check_config and
+# gather_input so a bad FILESYSTEM= never reaches install time.
 
 #############################
 # RAID-level defaulting

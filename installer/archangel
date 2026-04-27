@@ -34,32 +34,20 @@ source "$SCRIPT_DIR/lib/raid.sh"
 #############################
 # Configuration
 #############################
-
-# Filesystem selection (zfs or btrfs)
-FILESYSTEM="zfs"       # Default to ZFS, can be changed interactively or via config
-
-# These will be set interactively
-HOSTNAME=""
-TIMEZONE=""
-LOCALE="en_US.UTF-8"
-KEYMAP="us"
-ROOT_PASSWORD=""
-ZFS_PASSPHRASE=""
-WIFI_SSID=""
-WIFI_PASSWORD=""
+#
+# User-facing config variables (FILESYSTEM, LOCALE, KEYMAP, ENABLE_SSH,
+# NO_ENCRYPT, HOSTNAME, TIMEZONE, SELECTED_DISKS, RAID_LEVEL, WIFI_*,
+# ROOT_PASSWORD, ZFS_PASSPHRASE, LUKS_PASSPHRASE) are declared in
+# lib/config.sh with their defaults. The monolith trusts those values.
 
 # ZFS Configuration
 POOL_NAME="zroot"
 COMPRESSION="zstd"
 ASHIFT="12"  # 4K sectors (use 13 for 8K)
 
-# Multi-disk RAID support
-SELECTED_DISKS=()      # Array of selected disk paths (/dev/sda, /dev/sdb, ...)
-ROOT_PARTS=()          # Array of root partition paths (populated by partition_disks)
-EFI_PARTS=()           # Array of EFI partition paths (populated by partition_disks)
-RAID_LEVEL=""          # "", "mirror", "raidz1", "raidz2", "raidz3"
-ENABLE_SSH="yes"       # Enable SSH with root login (default yes for headless)
-NO_ENCRYPT="no"        # Skip ZFS encryption (for testing only)
+# Partition arrays populated by partition_disks
+ROOT_PARTS=()
+EFI_PARTS=()
 
 # Logging — initialized by init_logging() at install time only. Sourcing
 # this script (e.g. from a bats test) loads the function definitions
@@ -117,12 +105,6 @@ gather_input() {
         if [[ -z "$ROOT_PASSWORD" ]]; then error "Config missing required: ROOT_PASSWORD"; fi
         if [[ ${#SELECTED_DISKS[@]} -eq 0 ]]; then error "Config missing required: DISKS"; fi
 
-        # Set defaults for optional values
-        [[ -z "$FILESYSTEM" ]] && FILESYSTEM="zfs" || true
-        [[ -z "$LOCALE" ]] && LOCALE="en_US.UTF-8" || true
-        [[ -z "$KEYMAP" ]] && KEYMAP="us" || true
-        [[ -z "$ENABLE_SSH" ]] && ENABLE_SSH="yes" || true
-
         # ZFS-specific validation
         if [[ "$FILESYSTEM" == "zfs" ]]; then
             if [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]]; then
@@ -135,11 +117,6 @@ gather_input() {
             if [[ "$NO_ENCRYPT" != "yes" && -z "$LUKS_PASSPHRASE" ]]; then
                 error "Config missing required: LUKS_PASSPHRASE (or set NO_ENCRYPT=yes)"
             fi
-        fi
-
-        # Validate filesystem choice
-        if [[ "$FILESYSTEM" != "zfs" && "$FILESYSTEM" != "btrfs" ]]; then
-            error "Invalid FILESYSTEM: $FILESYSTEM (must be 'zfs' or 'btrfs')"
         fi
 
         # Determine RAID level if not specified
@@ -1384,6 +1361,7 @@ main() {
     parse_args "$@"
     preflight_checks
     check_config
+    validate_filesystem
     gather_input
     filesystem_preflight
 

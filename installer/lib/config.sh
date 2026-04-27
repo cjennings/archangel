@@ -9,12 +9,18 @@
 CONFIG_FILE=""
 UNATTENDED=false
 
-# These get populated by config file or interactive prompts
-FILESYSTEM=""           # "zfs" or "btrfs"
+# These get populated by config file or interactive prompts.
+# Optional fields carry their default value here so config.sh is the
+# single source of truth — gather_input trusts what's loaded.
+FILESYSTEM="zfs"        # "zfs" or "btrfs"
+LOCALE="en_US.UTF-8"
+KEYMAP="us"
+ENABLE_SSH="yes"        # SSH with root login (default yes for headless)
+NO_ENCRYPT="no"         # Skip filesystem encryption (testing only)
+
+# Required fields — installer errors out if any are still empty at install time.
 HOSTNAME=""
 TIMEZONE=""
-LOCALE=""
-KEYMAP=""
 SELECTED_DISKS=()
 RAID_LEVEL=""
 WIFI_SSID=""
@@ -133,4 +139,13 @@ validate_config() {
         error "Config validation failed with $errors error(s)"
     fi
     info "Config validation passed"
+}
+
+# Catches a typo in FILESYSTEM= from a config file before the install
+# starts. Called from main() after check_config so a bad value never
+# reaches gather_input or filesystem_preflight.
+validate_filesystem() {
+    if [[ "$FILESYSTEM" != "zfs" && "$FILESYSTEM" != "btrfs" ]]; then
+        error "Invalid FILESYSTEM: $FILESYSTEM (must be 'zfs' or 'btrfs')"
+    fi
 }
