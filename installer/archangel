@@ -1104,13 +1104,10 @@ EOF
 configure_zfs_tools() {
     step "Installing ZFS Management Tools"
 
-    # Copy ZFS management scripts
     cp /usr/local/bin/zfssnapshot $MNTPOINT/usr/local/bin/zfssnapshot
-    cp /usr/local/bin/zfsrollback $MNTPOINT/usr/local/bin/zfsrollback
     chmod +x $MNTPOINT/usr/local/bin/zfssnapshot
-    chmod +x $MNTPOINT/usr/local/bin/zfsrollback
 
-    info "ZFS management scripts installed: zfssnapshot, zfsrollback"
+    info "ZFS management script installed: zfssnapshot"
     info "Tip: Install sanoid for automated snapshot retention."
 }
 
