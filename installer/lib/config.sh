@@ -25,12 +25,9 @@ SELECTED_DISKS=()
 RAID_LEVEL=""
 WIFI_SSID=""
 WIFI_PASSWORD=""
-ENCRYPTION_ENABLED=false
 ZFS_PASSPHRASE=""
 LUKS_PASSPHRASE=""
 ROOT_PASSWORD=""
-SSH_ENABLED=false
-SSH_KEY=""
 
 #############################
 # Argument Parsing
