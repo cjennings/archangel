@@ -647,6 +647,148 @@ verify_rollback() {
     return 0
 }
 
+# Exercise the consolidated zfssnapshot wrapper end-to-end on the
+# installed system. ZFS-only — Btrfs has no zfssnapshot wrapper.
+#
+# This is the wrapper's only runtime coverage. Bats tests pin the pure
+# helpers and arg parsing; this function pins the destructive paths
+# (cmd_create, cmd_rollback, cmd_delete) that shell out to zfs.
+#
+# Sequence:
+#   1. list — confirm @genesis baseline
+#   2. create runtime-test — recursive snapshot across datasets
+#   3. list — confirm runtime-test on every dataset
+#   4. echo no | delete --name — confirm gate aborts (catches confirmation regressions)
+#   5. echo yes | delete --name — confirm destroy across all datasets, then list confirms gone
+#   6. round-trip rollback: create snapshot, drop sentinel, rollback --name, verify restored
+verify_zfssnapshot_wrapper() {
+    local config="$1"
+    local filesystem
+    filesystem=$(grep "^FILESYSTEM=" "$config" | cut -d= -f2)
+    filesystem="${filesystem:-zfs}"
+
+    [[ "$filesystem" != "zfs" ]] && return 0
+
+    step "Verifying zfssnapshot wrapper end-to-end..."
+
+    # Push the working-tree wrapper to the VM. The ISO ships an older
+    # copy via build.sh; the installer copied that into the system at
+    # install time. Replace it so the test exercises current source.
+    local installed_password
+    installed_password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
+    if ! sshpass -p "$installed_password" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            -P "$SSH_PORT" "$PROJECT_DIR/installer/zfssnapshot" root@localhost:/usr/local/bin/zfssnapshot 2>/dev/null; then
+        error "Failed to push wrapper to VM"
+        return 1
+    fi
+    if ! ssh_cmd "chmod +x /usr/local/bin/zfssnapshot"; then
+        error "Failed to chmod wrapper on VM"
+        return 1
+    fi
+    info "Working-tree zfssnapshot pushed to VM"
+
+    # 1. list — baseline. Genesis snapshot is created during install.
+    if ! ssh_cmd "zfssnapshot list" | grep -q "@genesis"; then
+        error "zfssnapshot list did not show @genesis"
+        return 1
+    fi
+    info "list shows @genesis"
+
+    # 2. create — recursive across all datasets in the pool.
+    if ! ssh_cmd "zfssnapshot create runtime-test 2>&1" >/dev/null; then
+        error "zfssnapshot create failed"
+        return 1
+    fi
+    info "create succeeded"
+
+    # 3. list — confirm landed on multiple datasets.
+    local snap_count
+    snap_count=$(ssh_cmd "zfssnapshot list" | awk '$1 ~ /_runtime-test$/' | wc -l)
+    if [[ "$snap_count" -lt 2 ]]; then
+        error "Expected runtime-test snapshot on multiple datasets; found $snap_count"
+        return 1
+    fi
+    info "runtime-test snapshot present on $snap_count dataset(s)"
+
+    # Capture the actual snapshot name (timestamp prefix is unique per run).
+    local snap_name
+    snap_name=$(ssh_cmd "zfssnapshot list" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_runtime-test" | head -1)
+    if [[ -z "$snap_name" ]]; then
+        error "Could not extract runtime-test snapshot name from list output"
+        return 1
+    fi
+
+    # 4. Confirmation gate — pipe "no" and expect destroy to be skipped.
+    # Catches a confirmation-prompt regression (e.g. -n test instead of
+    # = test on the read input).
+    local cancel_output
+    cancel_output=$(ssh_cmd "echo no | zfssnapshot delete --name '$snap_name' 2>&1")
+    if ! grep -q -i "cancelled" <<< "$cancel_output"; then
+        error "delete --name with 'no' confirmation should have been cancelled"
+        echo "$cancel_output" >&2
+        return 1
+    fi
+    if [[ $(ssh_cmd "zfssnapshot list" | awk '$1 ~ /_runtime-test$/' | wc -l) -lt 2 ]]; then
+        error "Snapshot was destroyed despite 'no' confirmation"
+        return 1
+    fi
+    info "Confirmation gate aborts on 'no' and snapshot survives"
+
+    # 5. Real delete — pipe "yes". Snapshot must vanish from every dataset.
+    if ! ssh_cmd "echo yes | zfssnapshot delete --name '$snap_name' 2>&1" >/dev/null; then
+        error "zfssnapshot delete --name failed"
+        return 1
+    fi
+    if [[ $(ssh_cmd "zfssnapshot list" | awk '$1 ~ /_runtime-test$/' | wc -l) -ne 0 ]]; then
+        error "Snapshot still present after delete"
+        return 1
+    fi
+    info "delete --name removed the snapshot from all datasets"
+
+    # 6. Round-trip rollback via the wrapper. Sentinel lives on
+    # zroot/ROOT/default (same dataset verify_rollback uses).
+    local sentinel="/etc/archangel-wrapper-rollback-test"
+    ssh_cmd "echo wrapper-rollback-marker > '$sentinel'"
+    if ! ssh_cmd "test -f '$sentinel'"; then
+        error "Could not create sentinel file"
+        return 1
+    fi
+
+    if ! ssh_cmd "zfssnapshot create wrapper-rollback 2>&1" >/dev/null; then
+        error "Failed to create rollback test snapshot via wrapper"
+        return 1
+    fi
+    local rb_snap_name
+    rb_snap_name=$(ssh_cmd "zfssnapshot list" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}_wrapper-rollback" | head -1)
+    if [[ -z "$rb_snap_name" ]]; then
+        error "Could not extract wrapper-rollback snapshot name"
+        return 1
+    fi
+
+    # Drop the sentinel so the rollback has something to restore.
+    ssh_cmd "rm -f '$sentinel'"
+    if ssh_cmd "test -f '$sentinel'"; then
+        error "Sentinel removal failed (test setup error)"
+        return 1
+    fi
+
+    if ! ssh_cmd "echo yes | zfssnapshot rollback --name '$rb_snap_name' 2>&1" >/dev/null; then
+        error "zfssnapshot rollback --name failed"
+        return 1
+    fi
+    if ! ssh_cmd "test -f '$sentinel'"; then
+        error "Rollback did not restore sentinel — wrapper rollback path broken"
+        return 1
+    fi
+    info "Round-trip rollback via wrapper restored sentinel"
+
+    # Cleanup: destroy the wrapper-rollback snapshot we left behind so
+    # the VM ends in a clean state matching how verify_rollback leaves it.
+    ssh_cmd "echo yes | zfssnapshot delete --name '$rb_snap_name' 2>&1" >/dev/null || true
+
+    return 0
+}
+
 # Run a single test
 run_test() {
     local config="$1"
@@ -839,6 +981,18 @@ run_test() {
         if ! verify_rollback "$config"; then
             warn "Rollback verification had issues"
             # Don't fail the test for rollback issues - it's a bonus check
+        fi
+
+        # Verify zfssnapshot wrapper end-to-end (ZFS only — no-op for Btrfs).
+        # Unlike verify_rollback, this is the wrapper's only runtime
+        # coverage, so a regression here fails the test outright.
+        if ! verify_zfssnapshot_wrapper "$config"; then
+            error "zfssnapshot wrapper verification failed"
+            stop_vm "$config_name"
+            cleanup_disks "$config_name"
+            TESTS_FAILED=$((TESTS_FAILED + 1))
+            FAILED_TESTS+=("$config_name")
+            return 1
         fi
     fi
 
