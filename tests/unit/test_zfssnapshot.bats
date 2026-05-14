@@ -151,3 +151,136 @@ setup() {
     [[ "$output" == *"not-a-subcommand"* ]]
     [[ "$output" == *"Usage:"* ]]
 }
+
+#############################
+# show_help — flag documentation
+#############################
+
+@test "show_help documents --name for rollback" {
+    run show_help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"rollback"* ]]
+    [[ "$output" == *"--name NAME"* ]]
+}
+
+@test "show_help documents --name for delete" {
+    run show_help
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"delete"* ]]
+    [[ "$output" == *"--name NAME[,NAME...]"* ]]
+}
+
+#############################
+# cmd_rollback --name
+#############################
+# These tests mock require_*, fzf, and zfs to exercise the arg-parse +
+# fzf-bypass path without needing a real ZFS system. The destructive
+# tail (zfs rollback) is exercised in scripts/test-install.sh against a
+# real VM. Confirmation always answered "no" so the test stops at the
+# gate without reaching the rollback step.
+
+@test "cmd_rollback --name bypasses fzf and reaches the confirmation gate" {
+    require_root() { :; }
+    require_zfs() { :; }
+    require_fzf() { echo "FZF REQUIRED" >&2; return 1; }
+    fzf() { echo "FZF INVOKED" >&2; return 1; }
+    zfs() {
+        case "$1" in
+            list) printf 'zroot/ROOT/default@target\nzroot/home@target\n' ;;
+            *) echo "zfs $*" ;;
+        esac
+    }
+
+    run cmd_rollback --name target <<< "no"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FZF REQUIRED"* ]]
+    [[ "$output" != *"FZF INVOKED"* ]]
+    [[ "$output" == *"@target"* ]]
+    [[ "$output" == *"cancelled"* ]]
+}
+
+@test "cmd_rollback --name without a value errors out" {
+    require_root() { :; }
+    require_zfs() { :; }
+    run cmd_rollback --name
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"requires an argument"* ]]
+}
+
+@test "cmd_rollback --name combined with -s errors out" {
+    require_root() { :; }
+    require_zfs() { :; }
+    run cmd_rollback --name foo -s
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"cannot be combined"* ]]
+}
+
+@test "cmd_rollback rejects an unknown flag" {
+    require_root() { :; }
+    require_zfs() { :; }
+    run cmd_rollback --bogus
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Invalid option"* ]]
+}
+
+#############################
+# cmd_delete --name
+#############################
+
+@test "cmd_delete --name bypasses fzf and reaches the confirmation gate" {
+    require_root() { :; }
+    require_zfs() { :; }
+    require_fzf() { echo "FZF REQUIRED" >&2; return 1; }
+    fzf() { echo "FZF INVOKED" >&2; return 1; }
+    zfs() {
+        case "$1" in
+            list) printf 'zroot/ROOT/default@target\nzroot/home@target\n' ;;
+            *) echo "zfs $*" ;;
+        esac
+    }
+
+    run cmd_delete --name target <<< "no"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"FZF REQUIRED"* ]]
+    [[ "$output" != *"FZF INVOKED"* ]]
+    [[ "$output" == *"@target"* ]]
+    [[ "$output" == *"cancelled"* ]]
+}
+
+@test "cmd_delete --name expands comma-separated names to multiple targets" {
+    require_root() { :; }
+    require_zfs() { :; }
+    require_fzf() { :; }
+    zfs() {
+        case "$1" in
+            list) printf 'zroot/ROOT/default@a\nzroot/home@a\nzroot/ROOT/default@b\n' ;;
+            *) echo "zfs $*" ;;
+        esac
+    }
+
+    run cmd_delete --name a,b <<< "no"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"zroot/ROOT/default@a"* ]]
+    [[ "$output" == *"zroot/home@a"* ]]
+    [[ "$output" == *"zroot/ROOT/default@b"* ]]
+    [[ "$output" == *"3 snapshot(s) will be destroyed"* ]]
+}
+
+@test "cmd_delete --name without a value errors out" {
+    require_root() { :; }
+    require_zfs() { :; }
+    run cmd_delete --name
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"requires an argument"* ]]
+}
+
+@test "cmd_delete rejects an unknown flag" {
+    require_root() { :; }
+    require_zfs() { :; }
+    run cmd_delete --bogus
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Invalid option"* ]]
+}

@@ -22,13 +22,19 @@ Subcommands:
                                YYYY-MM-DD_HH-MM-SS_description.
                                Description must be alphanumeric, hyphens,
                                or underscores. Spaces become underscores.
-    rollback [-s]              fzf-select a snapshot, then roll back. By
+    rollback [-s] [--name NAME]
+                               fzf-select a snapshot, then roll back. By
                                default, rolls back ALL datasets that share
                                the selected snapshot name. -s rolls back
-                               only the selected dataset.
-    delete                     fzf multi-select snapshots to destroy. By
+                               only the selected dataset. --name NAME
+                               bypasses fzf for scripted callers (mutually
+                               exclusive with -s).
+    delete [--name NAME[,NAME...]]
+                               fzf multi-select snapshots to destroy. By
                                default, destroys the snapshot across ALL
-                               matching datasets.
+                               matching datasets. --name NAME[,NAME...]
+                               bypasses fzf and destroys the named
+                               snapshots (comma-separated for multi-select).
 
 Common options:
     -h, --help                 Show this help and exit.
@@ -165,16 +171,32 @@ cmd_create() {
 cmd_rollback() {
     require_root
     require_zfs
-    require_fzf
 
     local single_mode=false
-    while getopts ":hs" opt; do
-        case ${opt} in
-            h) show_help; exit 0 ;;
-            s) single_mode=true ;;
-            \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+    local name_arg=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) show_help; exit 0 ;;
+            -s) single_mode=true; shift ;;
+            --name)
+                if [[ -z "${2:-}" || "$2" == -* ]]; then
+                    echo "Error: --name requires an argument" >&2
+                    exit 1
+                fi
+                name_arg="$2"
+                shift 2
+                ;;
+            *) echo "Invalid option: $1" >&2; exit 1 ;;
         esac
     done
+
+    if [[ -n "$name_arg" && "$single_mode" == "true" ]]; then
+        echo "Error: --name and -s cannot be combined" >&2
+        exit 1
+    fi
+
+    # fzf is only required for interactive selection; --name skips it.
+    [[ -z "$name_arg" ]] && require_fzf
 
     local snapshots
     snapshots=$(zfs list -t snapshot -H -o name 2>/dev/null)
@@ -205,17 +227,21 @@ cmd_rollback() {
         # Multi mode: pick a snapshot NAME, roll back every dataset
         # carrying that name. Children rolled back before parents
         # (sort by dataset path length, descending).
-        local unique_snaps
-        unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
+        if [[ -n "$name_arg" ]]; then
+            snap_name="$name_arg"
+        else
+            local unique_snaps
+            unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
 
-        snap_name=$(echo "$unique_snaps" | fzf --height=70% --reverse \
-            --header="Select snapshot name to roll back ALL matching datasets (ESC to cancel)" \
-            --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
-            --preview-window=down:10)
+            snap_name=$(echo "$unique_snaps" | fzf --height=70% --reverse \
+                --header="Select snapshot name to roll back ALL matching datasets (ESC to cancel)" \
+                --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
+                --preview-window=down:10)
 
-        if [ -z "$snap_name" ]; then
-            echo "No snapshot selected, exiting"
-            exit 0
+            if [ -z "$snap_name" ]; then
+                echo "No snapshot selected, exiting"
+                exit 0
+            fi
         fi
 
         mapfile -t targets < <(echo "$snapshots" | grep "@${snap_name}$" \
@@ -305,7 +331,24 @@ cmd_rollback() {
 cmd_delete() {
     require_root
     require_zfs
-    require_fzf
+
+    local name_arg=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) show_help; exit 0 ;;
+            --name)
+                if [[ -z "${2:-}" || "$2" == -* ]]; then
+                    echo "Error: --name requires an argument" >&2
+                    exit 1
+                fi
+                name_arg="$2"
+                shift 2
+                ;;
+            *) echo "Invalid option: $1" >&2; exit 1 ;;
+        esac
+    done
+
+    [[ -z "$name_arg" ]] && require_fzf
 
     local snapshots
     snapshots=$(zfs list -t snapshot -H -o name 2>/dev/null)
@@ -318,18 +361,22 @@ cmd_delete() {
     # Pick snapshot NAMES (not full dataset@name); destroy each across
     # every dataset that carries it. Same shape as rollback's default
     # so the user model is consistent.
-    local unique_snaps
-    unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
-
     local selected_names
-    selected_names=$(echo "$unique_snaps" | fzf --height=70% --reverse --multi \
-        --header="TAB to multi-select snapshots to DESTROY (ESC to cancel)" \
-        --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
-        --preview-window=down:10)
+    if [[ -n "$name_arg" ]]; then
+        selected_names=$(echo "$name_arg" | tr ',' '\n')
+    else
+        local unique_snaps
+        unique_snaps=$(echo "$snapshots" | sed 's/.*@//' | sort -ru)
 
-    if [ -z "$selected_names" ]; then
-        echo "No snapshots selected, exiting"
-        exit 0
+        selected_names=$(echo "$unique_snaps" | fzf --height=70% --reverse --multi \
+            --header="TAB to multi-select snapshots to DESTROY (ESC to cancel)" \
+            --preview="zfs list -t snapshot -o name,creation,used -H | grep '@{}\$' | column -t" \
+            --preview-window=down:10)
+
+        if [ -z "$selected_names" ]; then
+            echo "No snapshots selected, exiting"
+            exit 0
+        fi
     fi
 
     # Expand selected names to full dataset@name targets.
