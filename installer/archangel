@@ -102,18 +102,11 @@ gather_input() {
         # Required-field, disk, and timezone validation runs in main()
         # via validate_config before this function is reached.
 
-        # ZFS-specific validation
+        # Filesystem-specific encryption-passphrase validation
         if [[ "$FILESYSTEM" == "zfs" ]]; then
-            if [[ "$NO_ENCRYPT" != "yes" && -z "$ZFS_PASSPHRASE" ]]; then
-                error "Config missing required: ZFS_PASSPHRASE (or set NO_ENCRYPT=yes)"
-            fi
-        fi
-
-        # Btrfs-specific validation
-        if [[ "$FILESYSTEM" == "btrfs" ]]; then
-            if [[ "$NO_ENCRYPT" != "yes" && -z "$LUKS_PASSPHRASE" ]]; then
-                error "Config missing required: LUKS_PASSPHRASE (or set NO_ENCRYPT=yes)"
-            fi
+            validate_encryption_passphrase ZFS_PASSPHRASE
+        elif [[ "$FILESYSTEM" == "btrfs" ]]; then
+            validate_encryption_passphrase LUKS_PASSPHRASE
         fi
 
         # Determine RAID level if not specified

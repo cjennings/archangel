@@ -146,3 +146,16 @@ validate_filesystem() {
         error "Invalid FILESYSTEM: $FILESYSTEM (must be 'zfs' or 'btrfs')"
     fi
 }
+
+# Ensure an encryption passphrase variable is set when encryption is
+# on. Takes the variable name (ZFS_PASSPHRASE or LUKS_PASSPHRASE) and
+# errors out if NO_ENCRYPT is not "yes" and the named variable is
+# empty. Indirect expansion (${!var_name}) lets one helper handle both
+# ZFS and Btrfs passphrase fields without duplicating the conditional
+# in gather_input's filesystem dispatch.
+validate_encryption_passphrase() {
+    local var_name="$1"
+    if [[ "$NO_ENCRYPT" != "yes" && -z "${!var_name}" ]]; then
+        error "Config missing required: ${var_name} (or set NO_ENCRYPT=yes)"
+    fi
+}

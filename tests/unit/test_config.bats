@@ -205,3 +205,42 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" == *"Invalid FILESYSTEM"* ]]
 }
+
+#############################
+# validate_encryption_passphrase
+#############################
+# Called from gather_input's unattended branch. Errors when encryption
+# is enabled (NO_ENCRYPT != "yes") but the named passphrase variable
+# is empty. Indirect expansion lets one helper cover both ZFS and Btrfs.
+
+@test "validate_encryption_passphrase passes when NO_ENCRYPT=yes regardless of passphrase" {
+    NO_ENCRYPT=yes
+    ZFS_PASSPHRASE=""
+    run validate_encryption_passphrase ZFS_PASSPHRASE
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_encryption_passphrase errors when NO_ENCRYPT=no and passphrase empty" {
+    NO_ENCRYPT=no
+    ZFS_PASSPHRASE=""
+    run validate_encryption_passphrase ZFS_PASSPHRASE
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ZFS_PASSPHRASE"* ]]
+    [[ "$output" == *"NO_ENCRYPT=yes"* ]]
+}
+
+@test "validate_encryption_passphrase passes when NO_ENCRYPT=no and passphrase set" {
+    NO_ENCRYPT=no
+    LUKS_PASSPHRASE="hunter2hunter2"
+    run validate_encryption_passphrase LUKS_PASSPHRASE
+    [ "$status" -eq 0 ]
+}
+
+@test "validate_encryption_passphrase names the offending variable in the error" {
+    NO_ENCRYPT=no
+    LUKS_PASSPHRASE=""
+    run validate_encryption_passphrase LUKS_PASSPHRASE
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"LUKS_PASSPHRASE"* ]]
+    ! [[ "$output" == *"ZFS_PASSPHRASE"* ]]
+}
