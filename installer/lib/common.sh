@@ -328,3 +328,20 @@ prepend_grub_cmdline_linux() {
     grep -qF "GRUB_CMDLINE_LINUX=\"${addition}" "$config_file" \
         || error "GRUB_CMDLINE_LINUX not modified in $config_file (line missing or pattern unmatched)"
 }
+
+#############################
+# Initramfs Configuration
+#############################
+
+# Ensure mkinitcpio.conf's FILES= line lists the given value. Replaces
+# an existing FILES= line, or appends one if absent. Self-healing
+# rather than error-on-miss: FILES= is optional in mkinitcpio.conf, so
+# a missing line means "no extra files," not a broken config.
+ensure_initramfs_files() {
+    local value="$1"
+    local config_file="$2"
+    sed -i "s|^FILES=.*|FILES=(${value})|" "$config_file"
+    if ! grep -q "^FILES=" "$config_file"; then
+        echo "FILES=(${value})" >> "$config_file"
+    fi
+}

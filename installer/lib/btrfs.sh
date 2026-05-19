@@ -212,11 +212,7 @@ configure_luks_initramfs() {
     # Include keyfile in initramfs for testing mode (unattended boot)
     if [[ "${TESTING:-}" == "yes" ]]; then
         info "Testing mode: embedding keyfile in initramfs"
-        sed -i "s|^FILES=.*|FILES=($LUKS_KEYFILE)|" $MNTPOINT/etc/mkinitcpio.conf
-        # If FILES line doesn't exist, add it
-        if ! grep -q "^FILES=" $MNTPOINT/etc/mkinitcpio.conf; then
-            echo "FILES=($LUKS_KEYFILE)" >> $MNTPOINT/etc/mkinitcpio.conf
-        fi
+        ensure_initramfs_files "$LUKS_KEYFILE" "$MNTPOINT/etc/mkinitcpio.conf"
     fi
 
     # Create crypttab.initramfs for sd-encrypt (used by multi-disk LUKS)

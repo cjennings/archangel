@@ -473,3 +473,50 @@ Boot0001* ZFSBootMenu"
     ! grep -q 'cryptdevice' "$f"
     rm -f "$f"
 }
+
+#############################
+# ensure_initramfs_files
+#############################
+# ensure_initramfs_files sets mkinitcpio.conf's FILES= line to the
+# given value, replacing an existing line or appending one if absent.
+# Self-healing rather than error-on-miss: FILES= is optional, so a
+# missing line means "no extra files," not a broken config.
+
+@test "ensure_initramfs_files replaces an empty FILES= line" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'FILES=()' > "$f"
+
+    ensure_initramfs_files "/etc/luks.key" "$f"
+
+    grep -qF 'FILES=(/etc/luks.key)' "$f"
+    rm -f "$f"
+}
+
+@test "ensure_initramfs_files replaces a FILES= line that lists a different value" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' 'FILES=(/etc/old-key)' > "$f"
+
+    ensure_initramfs_files "/etc/luks.key" "$f"
+
+    grep -qF 'FILES=(/etc/luks.key)' "$f"
+    ! grep -qF '/etc/old-key' "$f"
+    rm -f "$f"
+}
+
+@test "ensure_initramfs_files appends FILES= when the line is absent" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        'MODULES=()' \
+        'BINARIES=()' \
+        'HOOKS=(base udev)' > "$f"
+
+    ensure_initramfs_files "/etc/luks.key" "$f"
+
+    grep -qF 'FILES=(/etc/luks.key)' "$f"
+    grep -qF 'MODULES=()' "$f"
+    grep -qF 'HOOKS=(base udev)' "$f"
+    rm -f "$f"
+}
