@@ -430,6 +430,27 @@ run_install() {
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -P "$SSH_PORT" "$config" root@localhost:/root/test.conf 2>/dev/null
 
+    # Route VM pacstrap through the host's pacoloco when one is running
+    # locally. Catches archzfs corruption at the cache layer and speeds
+    # repeated VM test runs (no upstream re-fetch per config). 10.0.2.2
+    # is QEMU's SLIRP host gateway as seen from inside the guest, so
+    # the host's localhost:9129 maps to 10.0.2.2:9129 in there. Touches
+    # only the live system's /etc/pacman.conf; the installed system's
+    # $MNTPOINT/etc/pacman.conf keeps upstream URLs for ongoing use.
+    if (echo > /dev/tcp/localhost/9129) 2>/dev/null; then
+        # Plain echo, not info(): run_install gets invoked from a
+        # bash -c subshell at line 864 that only declares ssh_cmd and
+        # run_install via declare -f, so a bare info call resolves to
+        # /usr/bin/info (the GNU info reader) instead of the function.
+        echo "[INFO] Routing VM pacstrap through host pacoloco at 10.0.2.2:9129"
+        ssh_cmd "sed -i 's|^Include = /etc/pacman.d/mirrorlist|Server = http://10.0.2.2:9129/repo/archlinux/\$repo/os/\$arch|' /etc/pacman.conf"
+        # Preempt archangel's [archzfs] insertion. install_base at
+        # installer/archangel:716 skips adding [archzfs] when the block
+        # is already present, so writing it here with pacoloco URLs
+        # wins over the upstream URL the installer would otherwise use.
+        ssh_cmd "printf '[archzfs]\nServer = http://10.0.2.2:9129/repo/archzfs\nSigLevel = Never\n' >> /etc/pacman.conf"
+    fi
+
     # Run the installer (NO_ENCRYPT is set in the config file, not via flag)
     ssh_cmd "archangel --config-file /root/test.conf" || return 1
 
