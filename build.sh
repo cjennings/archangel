@@ -464,6 +464,16 @@ chmod +x "$PROFILE_DIR/airootfs/usr/local/bin/"*
 # Build the ISO
 info "Building ISO (this will take a while)..."
 
+# Drop cached archzfs packages so pacstrap fetches fresh copies. The
+# upstream archzfs mirror has produced corrupted .pkg.tar.zst files
+# several times now (sessions 04-21, 04-26, 05-19), and pacstrap aborts
+# the whole build with "invalid or corrupted package" when it hits
+# them. Re-downloading costs ~30s on a warm mirror; debugging a
+# corrupted-cache failure after the fact costs much more.
+info "Clearing archzfs packages from host pacman cache..."
+rm -f /var/cache/pacman/pkg/zfs-dkms-*.pkg.tar.zst*
+rm -f /var/cache/pacman/pkg/zfs-utils-*.pkg.tar.zst*
+
 # Pre-create the build log in out/ so it survives work/ cleanup. Owned
 # by SUDO_USER from the start so a failed build leaves a user-readable
 # log; tee writes to it as root, but the file mode stays as set.
