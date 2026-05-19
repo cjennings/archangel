@@ -47,6 +47,22 @@ The build script will report if you're missing any of these in a preflight check
 - ~archiso~ package (~pacman -S archiso~) — auto-installed if missing
 - ~10GB free disk space for build
 
+*Optional: pacoloco caching proxy* — set this up once and ~build.sh~
+detects it automatically. Pacoloco caches Arch core/extra plus the
+archzfs GitHub-releases URL, which mitigates the recurring archzfs
+corruption that bites cold-cache builds. Install + enable:
+
+#+BEGIN_SRC bash
+yay -S pacoloco
+sudo systemctl enable --now pacoloco
+#+END_SRC
+
+The default ~/etc/pacoloco.yaml~ ships an ~archlinux~ repo example;
+add an ~archzfs~ entry pointing at
+=https://github.com/archzfs/archzfs/releases/download/experimental=
+and reload the service. When pacoloco isn't running, ~build.sh~ falls
+back to the upstream URLs.
+
 ** Runtime Dependencies (included in ISO)
 - ZFS kernel modules (via zfs-dkms)
 - Btrfs tools

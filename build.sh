@@ -161,6 +161,25 @@ Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
 
+# Route pacstrap through a local pacoloco caching proxy when one is
+# running on localhost:9129. Pacoloco proxies Arch core/extra and the
+# archzfs GitHub-releases URL, caching successful fetches and serving
+# them on subsequent builds. Catches the recurring archzfs corruption
+# class — pacoloco re-fetches when a hashed file misses, and once a
+# good copy lands it stays good. Falls back to direct upstream when
+# pacoloco isn't listening so builds work on machines without the
+# optional proxy installed. See README "Build Host Requirements" for
+# the install steps.
+if (echo > /dev/tcp/localhost/9129) 2>/dev/null; then
+    info "Routing pacstrap through pacoloco at localhost:9129..."
+    sed -i 's|^Include = /etc/pacman.d/mirrorlist|Server = http://localhost:9129/repo/archlinux/$repo/os/$arch|' \
+        "$PROFILE_DIR/pacman.conf"
+    sed -i 's|^Server = https://github.com/archzfs/archzfs/releases/download/experimental$|Server = http://localhost:9129/repo/archzfs|' \
+        "$PROFILE_DIR/pacman.conf"
+else
+    info "pacoloco not detected — using upstream mirrors directly"
+fi
+
 # Add ZFS and our custom packages
 info "Adding ZFS and custom packages..."
 cat >> "$PROFILE_DIR/packages.x86_64" << 'EOF'
