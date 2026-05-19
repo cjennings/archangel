@@ -99,11 +99,8 @@ filesystem_preflight() {
 
 gather_input() {
     if [[ "$UNATTENDED" == true ]]; then
-        # Validate required config values
-        if [[ -z "$HOSTNAME" ]]; then error "Config missing required: HOSTNAME"; fi
-        if [[ -z "$TIMEZONE" ]]; then error "Config missing required: TIMEZONE"; fi
-        if [[ -z "$ROOT_PASSWORD" ]]; then error "Config missing required: ROOT_PASSWORD"; fi
-        if [[ ${#SELECTED_DISKS[@]} -eq 0 ]]; then error "Config missing required: DISKS"; fi
+        # Required-field, disk, and timezone validation runs in main()
+        # via validate_config before this function is reached.
 
         # ZFS-specific validation
         if [[ "$FILESYSTEM" == "zfs" ]]; then
@@ -1362,6 +1359,7 @@ main() {
     preflight_checks
     check_config
     validate_filesystem
+    [[ "$UNATTENDED" == true ]] && validate_config
     gather_input
     filesystem_preflight
 

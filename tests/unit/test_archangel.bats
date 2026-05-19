@@ -1,12 +1,15 @@
 #!/usr/bin/env bats
 # Unit tests for the installer/archangel monolith.
 #
-# Coverage scope: gather_input() in unattended mode — the validation
-# of required config values, defaulting of optional ones, and the
-# filesystem-specific encryption checks. The interactive branch
-# (everything reachable via `if [[ "$UNATTENDED" != true ]]`) is not
-# unit-tested per the project's testing-strategy.org policy on
-# fzf / arch-chroot / mkfs / cryptsetup wrappers.
+# Coverage scope: gather_input() in unattended mode — defaulting of
+# optional values, preservation of explicit ones, and the
+# filesystem-specific encryption checks. Required-field, disk, and
+# timezone validation moved to validate_config (called from main
+# before gather_input); its coverage lives in test_config.bats.
+# The interactive branch (everything reachable via
+# `if [[ "$UNATTENDED" != true ]]`) is not unit-tested per the
+# project's testing-strategy.org policy on fzf / arch-chroot /
+# mkfs / cryptsetup wrappers.
 #
 # Sourcing archangel relies on the source-guard at the bottom of
 # the script: when sourced, function definitions load but main is
@@ -17,54 +20,6 @@ setup() {
     # shellcheck disable=SC1091
     source "${BATS_TEST_DIRNAME}/../../installer/archangel"
     UNATTENDED=true
-}
-
-#############################
-# Required-field validation
-#############################
-
-@test "gather_input unattended errors when HOSTNAME is missing" {
-    HOSTNAME=""
-    TIMEZONE=UTC
-    ROOT_PASSWORD=secret
-    SELECTED_DISKS=(/dev/sda)
-    NO_ENCRYPT=yes
-    run gather_input
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"HOSTNAME"* ]]
-}
-
-@test "gather_input unattended errors when TIMEZONE is missing" {
-    HOSTNAME=h
-    TIMEZONE=""
-    ROOT_PASSWORD=secret
-    SELECTED_DISKS=(/dev/sda)
-    NO_ENCRYPT=yes
-    run gather_input
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"TIMEZONE"* ]]
-}
-
-@test "gather_input unattended errors when ROOT_PASSWORD is missing" {
-    HOSTNAME=h
-    TIMEZONE=UTC
-    ROOT_PASSWORD=""
-    SELECTED_DISKS=(/dev/sda)
-    NO_ENCRYPT=yes
-    run gather_input
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"ROOT_PASSWORD"* ]]
-}
-
-@test "gather_input unattended errors when SELECTED_DISKS is empty" {
-    HOSTNAME=h
-    TIMEZONE=UTC
-    ROOT_PASSWORD=secret
-    SELECTED_DISKS=()
-    NO_ENCRYPT=yes
-    run gather_input
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"DISKS"* ]]
 }
 
 #############################
