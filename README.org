@@ -75,7 +75,9 @@ The build script will:
 
 - ISO location: ~out/archangel-YYYY-MM-DD-vmlinuz-{version}-lts-x86_64.iso~
 - Example: ~archangel-2026-01-18-vmlinuz-6.12.65-lts-x86_64.iso~
-- Build logs: visible in terminal output (not saved to disk)
+- Build log: ~out/<iso-basename>.log~ on success (matches the ISO name), or
+  ~out/build-YYYY-MM-DD-HHMM.log~ if the build failed before producing an ISO.
+  Logs survive the ~work/~ cleanup and are tee'd from ~mkarchiso~ in real time.
 
 ** Writing to USB
 

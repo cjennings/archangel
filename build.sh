@@ -463,7 +463,18 @@ chmod +x "$PROFILE_DIR/airootfs/usr/local/bin/"*
 
 # Build the ISO
 info "Building ISO (this will take a while)..."
-mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR"
+
+# Pre-create the build log in out/ so it survives work/ cleanup. Owned
+# by SUDO_USER from the start so a failed build leaves a user-readable
+# log; tee writes to it as root, but the file mode stays as set.
+BUILD_LOG="$OUT_DIR/build-$(date +%Y-%m-%d-%H%M).log"
+mkdir -p "$OUT_DIR"
+touch "$BUILD_LOG"
+if [[ -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER:$SUDO_USER" "$BUILD_LOG"
+fi
+
+mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR" 2>&1 | tee "$BUILD_LOG"
 
 # Restore ownership to the user who invoked sudo
 # mkarchiso runs as root and creates root-owned files
@@ -475,10 +486,19 @@ fi
 # Report results
 ISO_FILE=$(ls -t "$OUT_DIR"/*.iso 2>/dev/null | head -1)
 if [[ -f "$ISO_FILE" ]]; then
+    # Rename the build log to match the ISO so they pair on disk. A
+    # failed build keeps the build-YYYY-MM-DD-HHMM.log name and stays
+    # in out/ for inspection.
+    ISO_BASENAME=$(basename "$ISO_FILE" .iso)
+    RENAMED_LOG="$OUT_DIR/${ISO_BASENAME}.log"
+    mv "$BUILD_LOG" "$RENAMED_LOG"
+    BUILD_LOG="$RENAMED_LOG"
+
     echo ""
     info "Build complete!"
     info "ISO location: $ISO_FILE"
     info "ISO size: $(du -h "$ISO_FILE" | cut -f1)"
+    info "Build log: $BUILD_LOG"
     echo ""
     info "To test: ./scripts/test-vm.sh"
     echo ""
