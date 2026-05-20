@@ -289,6 +289,35 @@ wait_for_boot_console() {
     done
 }
 
+# Map a single character to its QEMU `sendkey` key name. Pure: char in,
+# key name out, no side effects. Covers the character set test
+# passphrases use; unknown characters pass through unchanged (QEMU
+# rejects an unmapped name at sendkey time rather than here).
+char_to_qemu_key() {
+    local char="$1"
+    case "$char" in
+        [a-z]) printf '%s' "$char" ;;
+        [A-Z]) printf 'shift-%s' "$(printf '%s' "$char" | tr '[:upper:]' '[:lower:]')" ;;
+        [0-9]) printf '%s' "$char" ;;
+        ' ')   printf 'spc' ;;
+        '-')   printf 'minus' ;;
+        '=')   printf 'equal' ;;
+        '.')   printf 'dot' ;;
+        ',')   printf 'comma' ;;
+        '/')   printf 'slash' ;;
+        '\')   printf 'backslash' ;;
+        ';')   printf 'semicolon' ;;
+        "'")   printf 'apostrophe' ;;
+        '[')   printf 'bracket_left' ;;
+        ']')   printf 'bracket_right' ;;
+        '!')   printf 'shift-1' ;;
+        '@')   printf 'shift-2' ;;
+        '#')   printf 'shift-3' ;;
+        '$')   printf 'shift-4' ;;
+        *)     printf '%s' "$char" ;;
+    esac
+}
+
 # Send a string as QEMU monitor sendkey commands
 # Converts each character to a QEMU key name and sends via monitor socket
 monitor_sendkeys() {
@@ -297,28 +326,8 @@ monitor_sendkeys() {
 
     for ((ci=0; ci<${#text}; ci++)); do
         local char="${text:$ci:1}"
-        local key=""
-        case "$char" in
-            [a-z]) key="$char" ;;
-            [A-Z]) key="shift-$(echo "$char" | tr '[:upper:]' '[:lower:]')" ;;
-            [0-9]) key="$char" ;;
-            ' ')   key="spc" ;;
-            '-')   key="minus" ;;
-            '=')   key="equal" ;;
-            '.')   key="dot" ;;
-            ',')   key="comma" ;;
-            '/')   key="slash" ;;
-            '\\')  key="backslash" ;;
-            ';')   key="semicolon" ;;
-            "'")   key="apostrophe" ;;
-            '[')   key="bracket_left" ;;
-            ']')   key="bracket_right" ;;
-            '!')   key="shift-1" ;;
-            '@')   key="shift-2" ;;
-            '#')   key="shift-3" ;;
-            '$')   key="shift-4" ;;
-            *)     key="$char" ;;
-        esac
+        local key
+        key=$(char_to_qemu_key "$char")
         echo "sendkey $key" | socat - UNIX-CONNECT:"$monitor_sock" >/dev/null 2>&1
         sleep 0.05  # Small delay between keystrokes
     done
@@ -412,6 +421,25 @@ ssh_cmd() {
     local password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
     sshpass -p "$password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -p "$SSH_PORT" root@localhost "$@" 2>/dev/null
+}
+
+# Decide whether a failed install is a transient pacstrap/network flake
+# (worth retrying) or a deterministic regression (fail fast). Returns 0
+# only when the install log shows BOTH pacstrap's own base-install
+# failure marker AND a download/network indicator. Requiring both keeps
+# deterministic pacstrap failures — e.g. "target not found" for a real
+# missing package — from being retried, which is exactly the masking
+# risk the retry loop has to avoid.
+#
+# Usage: is_transient_install_failure "$install_log"
+is_transient_install_failure() {
+    local log="$1"
+    # Scope the match to the base-install step. A blip during some later
+    # pacman call shouldn't be read as a pacstrap flake.
+    grep -q "Failed to install packages to new root" <<<"$log" || return 1
+    grep -Eqi \
+        'failed retrieving file|failed to retrieve|could not resolve host|connection timed out|connection refused|operation too slow|temporary failure in name resolution|failed to synchronize all databases' \
+        <<<"$log"
 }
 
 # Copy config to VM and run install
@@ -863,10 +891,36 @@ run_test() {
     fi
     info "VM is accessible via SSH"
 
-    # Run install
+    # Run install. Retry up to twice on a transient pacstrap/network
+    # flake — first-run downloads (even through pacoloco, during cache
+    # population) can hit a mirror blip that aborts pacstrap with the
+    # same shape as a real install regression. archangel's failure trap
+    # exports the pool and unmounts on abort, so each retry re-partitions
+    # and re-pacstraps from a clean state.
     step "Running installation (timeout: ${INSTALL_TIMEOUT}s)..."
-    if timeout "$INSTALL_TIMEOUT" bash -c "$(declare -f ssh_cmd run_install); run_install '$config'"; then
-        info "Installation completed"
+    local install_ok=0 attempt install_log
+    for attempt in 1 2 3; do
+        if timeout "$INSTALL_TIMEOUT" bash -c "$(declare -f ssh_cmd run_install); run_install '$config'"; then
+            install_ok=1
+            break
+        fi
+        # ssh_cmd swallows stderr, so the in-VM log is the only place
+        # pacstrap's failure text survives. Read just the latest log —
+        # a retry leaves a second timestamped log behind.
+        install_log=$(ssh_cmd "cat \"\$(ls -t /tmp/archangel-*.log 2>/dev/null | head -1)\"" 2>/dev/null) || true
+        if [[ "$attempt" -lt 3 ]] && is_transient_install_failure "$install_log"; then
+            warn "Install attempt $attempt hit a transient pacstrap flake — retrying ($((attempt + 1))/3)"
+            continue
+        fi
+        break
+    done
+
+    if [[ "$install_ok" -eq 1 ]]; then
+        if [[ "$attempt" -gt 1 ]]; then
+            info "Installation completed (passed on attempt $attempt)"
+        else
+            info "Installation completed"
+        fi
     else
         error "Installation failed or timed out"
         stop_vm "$config_name"
@@ -1116,4 +1170,6 @@ main() {
     fi
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi
