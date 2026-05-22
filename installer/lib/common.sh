@@ -102,6 +102,27 @@ pacstrap_packages() {
     printf '%s\n' "${common[@]}" "${fs_specific[@]}"
 }
 
+# Print the external commands the installer needs for the given filesystem,
+# one per line: common partitioning/bootstrap tools first, then
+# filesystem-specific ones. validate_environment loops over these and
+# require_command's each, so a missing tool fails fast on the live ISO
+# instead of mid-install. Returns 1 for unknown filesystem.
+#
+# Usage: mapfile -t cmds < <(required_commands zfs)
+required_commands() {
+    local fs="$1"
+    local common=(
+        sgdisk wipefs partprobe mkfs.fat pacstrap
+    )
+    local fs_specific
+    case "$fs" in
+        zfs)   fs_specific=(zpool zfs) ;;
+        btrfs) fs_specific=(mkfs.btrfs grub-install) ;;
+        *)     return 1 ;;
+    esac
+    printf '%s\n' "${common[@]}" "${fs_specific[@]}"
+}
+
 #############################
 # Password / Passphrase Input
 #############################

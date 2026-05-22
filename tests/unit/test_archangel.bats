@@ -239,3 +239,136 @@ setup() {
     [[ " ${CALLS[*]} " == *" zpool list zroot "* ]]
     [[ " ${CALLS[*]} " != *" zpool export"* ]]
 }
+
+@test "install_failure_cleanup ZFS path falls back to lazy unmount when a mount is busy" {
+    FILESYSTEM=zfs
+    POOL_NAME=zroot
+    CALLS=()
+
+    # A pacstrap-interrupted target can leave busy mounts that a plain
+    # umount can't release; cleanup must retry lazily so the retry sees a
+    # clean disk. Non-lazy umount fails here; the -l fallback succeeds.
+    umount() {
+        CALLS+=("umount $*")
+        [[ "$*" == *"-l"* ]] && return 0
+        return 1
+    }
+    zpool() { CALLS+=("zpool $*"); return 0; }
+    warn() { :; }
+    error() { return 1; }
+
+    install_failure_cleanup || true
+
+    [[ " ${CALLS[*]} " == *" umount -l /mnt/efi "* ]]
+    [[ " ${CALLS[*]} " == *" umount -R -l /mnt "* ]]
+    # The pool still gets exported after the lazy unmount.
+    [[ " ${CALLS[*]} " == *" zpool export zroot "* ]]
+}
+
+@test "install_failure_cleanup Btrfs path falls back to lazy unmount when EFI is busy" {
+    FILESYSTEM=btrfs
+    CALLS=()
+
+    umount() {
+        CALLS+=("umount $*")
+        [[ "$*" == *"-l"* ]] && return 0
+        return 1
+    }
+    btrfs_cleanup() { CALLS+=("btrfs_cleanup"); }
+    btrfs_close_encryption() { CALLS+=("btrfs_close_encryption"); }
+    warn() { :; }
+    error() { return 1; }
+
+    install_failure_cleanup || true
+
+    [[ " ${CALLS[*]} " == *" umount -l /mnt/efi "* ]]
+}
+
+#############################
+# validate_environment
+#############################
+# Boundary wrappers (is_uefi_boot, required_commands) are stubbed so the
+# composition's fail-fast wiring is exercised without depending on the
+# host's firmware mode or installed tools. The real command list lives in
+# test_common.bats; the real UEFI/network probes run in the VM harness.
+
+@test "validate_environment errors when not booted in UEFI mode" {
+    is_uefi_boot() { return 1; }
+    required_commands() { return 0; }
+    FILESYSTEM=zfs
+    run validate_environment
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"UEFI"* ]]
+}
+
+@test "validate_environment errors when a required command is missing" {
+    is_uefi_boot() { return 0; }
+    required_commands() { echo "definitely-not-a-real-cmd-xyz"; }
+    FILESYSTEM=zfs
+    run validate_environment
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"definitely-not-a-real-cmd-xyz"* ]]
+}
+
+@test "validate_environment passes when UEFI present and commands resolve" {
+    is_uefi_boot() { return 0; }
+    required_commands() { echo "bash"; }
+    FILESYSTEM=zfs
+    run validate_environment
+    [ "$status" -eq 0 ]
+}
+
+#############################
+# validate_install_targets
+#############################
+# disk_in_use / disk_size_bytes / network_available are the system-boundary
+# wrappers; stubbing them drives the real composition + real
+# disk_meets_min_size. Live probes run in the VM harness on the happy path.
+
+@test "validate_install_targets errors when a disk is in use" {
+    SELECTED_DISKS=(/dev/sda)
+    disk_in_use() { return 0; }
+    disk_size_bytes() { echo 500107862016; }
+    network_available() { return 0; }
+    run validate_install_targets
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"in use"* ]]
+}
+
+@test "validate_install_targets errors when a disk is too small" {
+    SELECTED_DISKS=(/dev/sda)
+    disk_in_use() { return 1; }
+    disk_size_bytes() { echo 1000000; }
+    network_available() { return 0; }
+    run validate_install_targets
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"too small"* ]]
+}
+
+@test "validate_install_targets errors when disk size is unreadable" {
+    SELECTED_DISKS=(/dev/sda)
+    disk_in_use() { return 1; }
+    disk_size_bytes() { echo ""; }
+    network_available() { return 0; }
+    run validate_install_targets
+    [ "$status" -eq 1 ]
+}
+
+@test "validate_install_targets errors when the network is unreachable" {
+    SELECTED_DISKS=(/dev/sda)
+    disk_in_use() { return 1; }
+    disk_size_bytes() { echo 500107862016; }
+    network_available() { return 1; }
+    run validate_install_targets
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"network"* || "$output" == *"connectivity"* ]]
+}
+
+@test "validate_install_targets passes when disks idle, large enough, network up" {
+    SELECTED_DISKS=(/dev/sda /dev/sdb)
+    disk_in_use() { return 1; }
+    disk_size_bytes() { echo 500107862016; }
+    network_available() { return 0; }
+    run validate_install_targets
+    [ "$status" -eq 0 ]
+}

@@ -93,6 +93,61 @@ filesystem_preflight() {
     fi
 }
 
+# Fail unless booted in UEFI mode. archangel is UEFI-only (EFI partitions,
+# efibootmgr, ZFSBootMenu / GRUB-EFI); a legacy BIOS boot would die late.
+is_uefi_boot() {
+    [[ -d /sys/firmware/efi ]]
+}
+
+# Succeed when an Arch mirror is reachable: DNS resolves and a TCP connection
+# to port 443 opens. Uses bash's /dev/tcp behind a timeout (no curl/nc
+# dependency) and no ICMP, since some networks drop it. Probes archlinux.org
+# as a stable stand-in for "internet + DNS work" before pacstrap runs.
+network_available() {
+    local host="archlinux.org"
+    getent hosts "$host" >/dev/null 2>&1 || return 1
+    timeout 10 bash -c "exec 3<>/dev/tcp/${host}/443" 2>/dev/null
+}
+
+# Environment pre-flight: checks that don't depend on disk selection. Runs
+# early in main() once FILESYSTEM is known, so a doomed install aborts before
+# any disk is touched. Hard-fails via error().
+validate_environment() {
+    step "Validating install environment"
+
+    is_uefi_boot || error "Not booted in UEFI mode (/sys/firmware/efi missing). archangel requires UEFI."
+
+    local cmd
+    while read -r cmd; do
+        require_command "$cmd"
+    done < <(required_commands "$FILESYSTEM")
+
+    info "Environment OK: UEFI mode and required commands present."
+}
+
+# Target pre-flight: checks that need SELECTED_DISKS finalized and the live
+# network up. Runs after gather_input, before the first destructive op.
+# Refuses any disk that's in active use, too small, or whose size can't be
+# read, and aborts if no mirror is reachable. Hard-fails via error().
+validate_install_targets() {
+    step "Validating target disks and connectivity"
+
+    local disk size
+    for disk in "${SELECTED_DISKS[@]}"; do
+        if disk_in_use "$disk"; then
+            error "Disk in use (mounted, swap, or active pool/array): $disk. Refusing to wipe it."
+        fi
+        size=$(disk_size_bytes "$disk")
+        disk_meets_min_size "$size" \
+            || error "Disk too small or unreadable: $disk (${size:-unknown} bytes; need >= ${MIN_DISK_BYTES} = 20 GB)."
+    done
+
+    network_available \
+        || error "No network connectivity (DNS + TCP 443 to archlinux.org failed). pacstrap needs a reachable mirror."
+
+    info "Targets OK: disks idle and large enough; mirror reachable."
+}
+
 #############################
 # Phase 1: Gather All Input
 #############################
@@ -1250,8 +1305,13 @@ install_failure_cleanup() {
 
     case "$FILESYSTEM" in
         zfs)
-            umount $EFI_DIR 2>/dev/null || true
-            umount -R $MNTPOINT 2>/dev/null || true
+            # Lazy fallback (-l): a pacstrap-interrupted target can leave
+            # busy bind mounts (/proc, /sys, /dev) that a plain umount
+            # can't release. Detaching them lazily lets the pool export
+            # below succeed, so a retry / re-run sees a genuinely clean
+            # disk — the state validate_install_targets expects.
+            umount "$EFI_DIR" 2>/dev/null || umount -l "$EFI_DIR" 2>/dev/null || true
+            umount -R "$MNTPOINT" 2>/dev/null || umount -R -l "$MNTPOINT" 2>/dev/null || true
             if zpool list "$POOL_NAME" >/dev/null 2>&1; then
                 zpool export "$POOL_NAME" 2>/dev/null \
                     || zpool export -f "$POOL_NAME" 2>/dev/null \
@@ -1259,7 +1319,7 @@ install_failure_cleanup() {
             fi
             ;;
         btrfs)
-            umount $EFI_DIR 2>/dev/null || true
+            umount "$EFI_DIR" 2>/dev/null || umount -l "$EFI_DIR" 2>/dev/null || true
             btrfs_cleanup 2>/dev/null || true
             btrfs_close_encryption 2>/dev/null || true
             ;;
@@ -1352,8 +1412,10 @@ main() {
     preflight_checks
     check_config
     validate_filesystem
+    validate_environment
     [[ "$UNATTENDED" == true ]] && validate_config
     gather_input
+    validate_install_targets
     filesystem_preflight
 
     # Unattended installation begins

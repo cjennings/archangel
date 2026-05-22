@@ -520,3 +520,51 @@ Boot0001* ZFSBootMenu"
     grep -qF 'HOOKS=(base udev)' "$f"
     rm -f "$f"
 }
+
+#############################
+# required_commands
+#############################
+
+@test "required_commands zfs includes zpool and zfs" {
+    run required_commands zfs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"zpool"* ]]
+    [[ "$output" == *"zfs"* ]]
+}
+
+@test "required_commands btrfs includes mkfs.btrfs and grub-install" {
+    run required_commands btrfs
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"mkfs.btrfs"* ]]
+    [[ "$output" == *"grub-install"* ]]
+}
+
+@test "required_commands zfs excludes Btrfs-specific commands" {
+    run required_commands zfs
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"mkfs.btrfs"* ]]
+    [[ "$output" != *"grub-install"* ]]
+}
+
+@test "required_commands btrfs excludes the zpool command" {
+    run required_commands btrfs
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"zpool"* ]]
+}
+
+@test "required_commands includes partitioning + pacstrap commands for both filesystems" {
+    for fs in zfs btrfs; do
+        run required_commands "$fs"
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"sgdisk"* ]]
+        [[ "$output" == *"wipefs"* ]]
+        [[ "$output" == *"partprobe"* ]]
+        [[ "$output" == *"mkfs.fat"* ]]
+        [[ "$output" == *"pacstrap"* ]]
+    done
+}
+
+@test "required_commands unknown filesystem returns 1" {
+    run required_commands ext4
+    [ "$status" -eq 1 ]
+}

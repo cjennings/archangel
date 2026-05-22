@@ -232,3 +232,46 @@ partition_disks_setup() {
     [[ " ${CALLS[*]} " != *"sgdisk"* ]]
     [[ " ${CALLS[*]} " != *"wipefs"* ]]
 }
+
+#############################
+# disk_meets_min_size / MIN_DISK_BYTES
+#############################
+
+@test "MIN_DISK_BYTES is 20 GB (decimal)" {
+    [ "$MIN_DISK_BYTES" -eq 20000000000 ]
+}
+
+@test "disk_meets_min_size: exactly the minimum passes" {
+    run disk_meets_min_size 20000000000
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_meets_min_size: one byte under the minimum fails" {
+    run disk_meets_min_size 19999999999
+    [ "$status" -eq 1 ]
+}
+
+@test "disk_meets_min_size: a 20 GiB disk image clears the 20 GB floor" {
+    run disk_meets_min_size 21474836480
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_meets_min_size: a large disk passes" {
+    run disk_meets_min_size 500107862016
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_meets_min_size: zero fails" {
+    run disk_meets_min_size 0
+    [ "$status" -eq 1 ]
+}
+
+@test "disk_meets_min_size: non-numeric input fails" {
+    run disk_meets_min_size notanumber
+    [ "$status" -eq 1 ]
+}
+
+@test "disk_meets_min_size: empty input fails" {
+    run disk_meets_min_size ""
+    [ "$status" -eq 1 ]
+}

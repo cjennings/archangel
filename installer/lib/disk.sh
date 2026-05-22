@@ -131,3 +131,62 @@ select_disks() {
     info "Selected disks: ${SELECTED_DISKS[*]}"
 }
 
+#############################
+# Pre-flight: Disk Safety
+#############################
+
+# Minimum usable install disk. Root plus the 50G reservation, packages, and
+# snapshots needs real headroom; below this the install fails partway
+# through. 20 GB is a hard floor (validate_install_targets errors out).
+# Decimal GB (disk-vendor sizing) on purpose: it reads as the natural "20GB"
+# minimum and clears a 20 GiB disk image with headroom rather than sitting
+# exactly on the boundary.
+MIN_DISK_BYTES=20000000000   # 20 * 10^9 (20 GB)
+
+# Pure size predicate: succeed only when <bytes> is a non-negative integer
+# meeting MIN_DISK_BYTES. Non-numeric or empty input fails (treated as an
+# unknown size, which is itself a reason not to proceed).
+disk_meets_min_size() {
+    local bytes="$1"
+    [[ "$bytes" =~ ^[0-9]+$ ]] || return 1
+    (( bytes >= MIN_DISK_BYTES ))
+}
+
+# Size of a block device in bytes (live query). Thin wrapper over blockdev;
+# exercised by the VM integration harness rather than unit tests.
+disk_size_bytes() {
+    blockdev --getsize64 "$1" 2>/dev/null
+}
+
+# Succeed (return 0) when <disk> is in active use and must NOT be wiped:
+# any partition mounted, active swap on it, or membership in an imported
+# zpool or assembled md array. Over-detection errs on the safe side
+# (refuse). Live-state predicate — validated in the VM harness, where the
+# install disks are deliberately idle so the happy path returns 1.
+disk_in_use() {
+    local disk="$1"
+    local base
+    base=$(basename "$disk")
+
+    # Any mountpoint on the disk or its children.
+    if lsblk -nro MOUNTPOINT "$disk" 2>/dev/null | grep -q .; then
+        return 0
+    fi
+    # Active swap on the disk or a partition of it.
+    if swapon --show=NAME --noheadings 2>/dev/null | grep -q "^${disk}"; then
+        return 0
+    fi
+    # Member of an imported zpool. -P prints full device paths (/dev/vda2),
+    # so a fixed-string match on the disk path catches partition members too
+    # — a plain word match on the bare name would miss "vda2".
+    if command_exists zpool && zpool status -LP 2>/dev/null | grep -qF "$disk"; then
+        return 0
+    fi
+    # Member of an assembled md array. /proc/mdstat lists bare partition names
+    # (vda1[0]); substring-match the disk name (over-match errs toward refuse).
+    if grep -qsF "$base" /proc/mdstat 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
