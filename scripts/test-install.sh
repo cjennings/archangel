@@ -22,7 +22,9 @@ VM_DIR="$PROJECT_DIR/vm"
 VM_RAM="4096"
 VM_CPUS="4"
 VM_DISK_SIZE="20G"
-export SSH_PORT="2222"
+# Overridable so a test VM can use a free port when another VM already
+# holds 2222 (e.g. SSH_PORT=2223 scripts/test-install.sh single-disk).
+export SSH_PORT="${SSH_PORT:-2222}"
 export SSH_PASSWORD="archangel"
 SERIAL_LOG="$LOG_DIR/serial.log"
 

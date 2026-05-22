@@ -214,3 +214,24 @@ EOF
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
+
+#############################
+# SSH_PORT override
+#############################
+# The hostfwd port must be overridable so a test VM can coexist with
+# another VM already holding 2222 (re-sourcing applies the top-level
+# assignment with the env value in scope).
+
+@test "SSH_PORT honors a preset value" {
+    SSH_PORT=3333
+    # shellcheck disable=SC1091
+    source "${BATS_TEST_DIRNAME}/../../scripts/test-install.sh"
+    [ "$SSH_PORT" = "3333" ]
+}
+
+@test "SSH_PORT defaults to 2222 when unset" {
+    unset SSH_PORT
+    # shellcheck disable=SC1091
+    source "${BATS_TEST_DIRNAME}/../../scripts/test-install.sh"
+    [ "$SSH_PORT" = "2222" ]
+}
