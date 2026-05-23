@@ -546,18 +546,6 @@ verify_install() {
             else
                 warn "ZFS genesis snapshot not found"
             fi
-
-            # Check ZFS native encryption if configured
-            local zfs_pass
-            zfs_pass=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
-            if [[ -n "$zfs_pass" ]]; then
-                if ssh_cmd "zfs get -H -o value encryption zroot/ROOT" | grep -q "aes-256-gcm"; then
-                    info "ZFS encryption (aes-256-gcm) verified"
-                else
-                    error "ZFS encryption not set on zroot/ROOT"
-                    return 1
-                fi
-            fi
         elif [[ "$filesystem" == "btrfs" ]]; then
             # Btrfs-specific checks
             if ssh_cmd "btrfs subvolume list /mnt" >/dev/null 2>&1; then
@@ -621,6 +609,22 @@ verify_reboot_survival() {
         else
             error "ZFS pool not available after reboot"
             return 1
+        fi
+
+        # ZFS native encryption: on an encrypted config, confirm zroot/ROOT
+        # actually carries aes-256-gcm on the running system. The boot
+        # already required the passphrase, but assert the property
+        # explicitly. verify_install can't check this — the pool is exported
+        # by the time it runs, before reboot.
+        local zfs_pass
+        zfs_pass=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
+        if [[ -n "$zfs_pass" ]]; then
+            if ssh_cmd "zfs get -H -o value encryption zroot/ROOT" | grep -q "aes-256-gcm"; then
+                info "ZFS encryption (aes-256-gcm) verified on running system"
+            else
+                error "ZFS root not encrypted with aes-256-gcm after reboot"
+                return 1
+            fi
         fi
     elif [[ "$filesystem" == "btrfs" ]]; then
         if ssh_cmd "btrfs filesystem show / >/dev/null 2>&1"; then
