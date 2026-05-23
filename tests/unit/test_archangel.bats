@@ -372,3 +372,32 @@ setup() {
     run validate_install_targets
     [ "$status" -eq 0 ]
 }
+
+#############################
+# network_available
+#############################
+# The two probes it composes — DNS via getent and a TCP-443 open via
+# timeout+bash /dev/tcp — are the system boundary; mocking them drives the
+# fail-fast wiring without a live network. The real probe runs in the VM
+# harness. These pin the "network failure before pacstrap" error path that
+# validate_install_targets surfaces.
+
+@test "network_available returns 1 when DNS resolution fails" {
+    getent() { return 1; }
+    run network_available
+    [ "$status" -eq 1 ]
+}
+
+@test "network_available returns 1 when DNS resolves but the TCP connect fails" {
+    getent() { return 0; }
+    timeout() { return 1; }
+    run network_available
+    [ "$status" -eq 1 ]
+}
+
+@test "network_available returns 0 when DNS resolves and the TCP connect opens" {
+    getent() { return 0; }
+    timeout() { return 0; }
+    run network_available
+    [ "$status" -eq 0 ]
+}

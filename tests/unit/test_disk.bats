@@ -275,3 +275,48 @@ partition_disks_setup() {
     run disk_meets_min_size ""
     [ "$status" -eq 1 ]
 }
+
+# disk_in_use
+#
+# The safety gate validate_install_targets leans on to refuse wiping a disk
+# that's already in use. Each branch (mount, swap, imported zpool, idle) is
+# driven by mocking the system-boundary commands it queries — lsblk, swapon,
+# command_exists, zpool. The /proc/mdstat branch's positive case can't be
+# unit-driven without writing to /proc, so it stays VM-harness territory; the
+# idle case below pins the negative for a name guaranteed absent from mdstat.
+# This is the error path for the "installing onto an already-mounted disk"
+# case: in_use returns 0, and the orchestrator turns that into a hard fail.
+
+@test "disk_in_use: returns 0 when a mountpoint is present" {
+    lsblk() { echo "/boot"; }
+    run disk_in_use /dev/sda
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_in_use: returns 0 when active swap sits on the disk" {
+    lsblk() { :; }
+    swapon() { echo "/dev/sda2"; }
+    run disk_in_use /dev/sda
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_in_use: returns 0 when the disk is a member of an imported zpool" {
+    lsblk() { :; }
+    swapon() { :; }
+    command_exists() { return 0; }
+    # -P prints full paths; a partition member (/dev/sda2) must still match
+    # the bare disk path via fixed-string search.
+    zpool() { echo "  /dev/sda2  ONLINE       0     0     0"; }
+    run disk_in_use /dev/sda
+    [ "$status" -eq 0 ]
+}
+
+@test "disk_in_use: returns 1 when the disk is idle" {
+    lsblk() { :; }
+    swapon() { :; }
+    command_exists() { return 1; }
+    # A name that won't appear in the host's /proc/mdstat keeps the final
+    # branch deterministic.
+    run disk_in_use /dev/zzz999
+    [ "$status" -eq 1 ]
+}
