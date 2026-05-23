@@ -142,6 +142,20 @@ cleanup_disks() {
     rm -f "$VM_DIR"/test-"${test_name}"-disk*.qcow2
 }
 
+# Pure predicate: does this `ss -tln` snapshot show <port> already
+# listening? Kept separate from the live ss query (port_in_use) so it's
+# unit-testable with fixture output. The ":<port> " match anchors on the
+# colon and trailing space so 2222 doesn't match 12222 or 22222.
+port_listening_in() {
+    local port="$1" ss_output="$2"
+    grep -q ":${port} " <<<"$ss_output"
+}
+
+# Live check: is <port> currently bound by a listening socket?
+port_in_use() {
+    port_listening_in "$1" "$(ss -tln 2>/dev/null)"
+}
+
 # Start VM and return PID
 start_vm() {
     local test_name="$1"
@@ -862,6 +876,19 @@ run_test() {
 
     step "Creating VM disks..."
     create_disks "$disk_count" "$config_name"
+
+    # Fail clearly if the forward port is taken (another VM?) before launching,
+    # rather than letting qemu fail to bind and report an opaque "Failed to
+    # start VM". Runs here, not inside start_vm — start_vm is command-
+    # substituted (vm_pid=$(...)), where error()'s output would be captured as
+    # the PID instead of failing the run.
+    if port_in_use "$SSH_PORT"; then
+        error "Port $SSH_PORT already in use (another VM?). Set SSH_PORT=<free port> and retry."
+        cleanup_disks "$config_name"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$config_name")
+        return 1
+    fi
 
     step "Starting VM..."
     local vm_pid

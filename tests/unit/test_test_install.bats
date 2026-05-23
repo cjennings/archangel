@@ -235,3 +235,34 @@ EOF
     source "${BATS_TEST_DIRNAME}/../../scripts/test-install.sh"
     [ "$SSH_PORT" = "2222" ]
 }
+
+#############################
+# port_listening_in (pure half of the port-in-use guard)
+#############################
+# The live ss query lives in port_in_use; this pure predicate takes an
+# `ss -tln` snapshot as a string so it's testable with fixtures.
+
+@test "port_listening_in detects a port present in ss output" {
+    run port_listening_in 2222 "LISTEN 0 4096 0.0.0.0:2222 0.0.0.0:*"
+    [ "$status" -eq 0 ]
+}
+
+@test "port_listening_in returns 1 when the port is absent" {
+    run port_listening_in 2222 "LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*"
+    [ "$status" -eq 1 ]
+}
+
+@test "port_listening_in does not match a port that is only a substring" {
+    run port_listening_in 2222 "LISTEN 0 4096 0.0.0.0:12222 0.0.0.0:*"
+    [ "$status" -eq 1 ]
+}
+
+@test "port_listening_in matches an IPv6 listener" {
+    run port_listening_in 2222 "LISTEN 0 4096 [::]:2222 [::]:*"
+    [ "$status" -eq 0 ]
+}
+
+@test "port_listening_in returns 1 on empty ss output" {
+    run port_listening_in 2222 ""
+    [ "$status" -eq 1 ]
+}
