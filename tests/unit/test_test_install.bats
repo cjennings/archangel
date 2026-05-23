@@ -266,3 +266,37 @@ EOF
     run port_listening_in 2222 ""
     [ "$status" -eq 1 ]
 }
+
+#############################
+# is_archzfs_cache_corruption
+#############################
+# Recognizes the stale-archzfs-in-pacoloco failure (not transient — a retry
+# hits the same cached file), so the caller prints a cache-clear hint.
+
+@test "is_archzfs_cache_corruption matches an archzfs checksum corruption" {
+    local log="==> Installing base system
+:: File /mnt/var/cache/pacman/pkg/zfs-utils-2.4.2-2-x86_64.pkg.tar.zst is corrupted (invalid or corrupted package (checksum)).
+error: failed to commit transaction (invalid or corrupted package (checksum))
+==> ERROR: Failed to install packages to new root"
+    run is_archzfs_cache_corruption "$log"
+    [ "$status" -eq 0 ]
+}
+
+@test "is_archzfs_cache_corruption ignores a transient mirror flake" {
+    local log="error: failed retrieving file 'core.db' : Operation too slow
+==> ERROR: Failed to install packages to new root"
+    run is_archzfs_cache_corruption "$log"
+    [ "$status" -eq 1 ]
+}
+
+@test "is_archzfs_cache_corruption ignores corruption of a non-archzfs package" {
+    local log="==> ERROR: Failed to install packages to new root
+:: File /mnt/var/cache/pacman/pkg/glibc-2.43-1-x86_64.pkg.tar.zst is corrupted (invalid or corrupted package (checksum))."
+    run is_archzfs_cache_corruption "$log"
+    [ "$status" -eq 1 ]
+}
+
+@test "is_archzfs_cache_corruption returns 1 on a clean log" {
+    run is_archzfs_cache_corruption ""
+    [ "$status" -eq 1 ]
+}

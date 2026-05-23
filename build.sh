@@ -493,6 +493,15 @@ info "Clearing archzfs packages from host pacman cache..."
 rm -f /var/cache/pacman/pkg/zfs-dkms-*.pkg.tar.zst*
 rm -f /var/cache/pacman/pkg/zfs-utils-*.pkg.tar.zst*
 
+# Same hazard one layer up: pacoloco caches the archzfs GitHub-releases
+# download by filename, so a re-uploaded asset keeps serving a stale
+# package that mismatches the fresh archzfs.db checksum — which also bites
+# the VM test installs that route through this same pacoloco. build.sh
+# runs as root, so clear it here too; rm -f no-ops when pacoloco isn't
+# installed.
+rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-dkms-*.pkg.tar.zst*
+rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-utils-*.pkg.tar.zst*
+
 # Pre-create the build log in out/ so it survives work/ cleanup. Owned
 # by SUDO_USER from the start so a failed build leaves a user-readable
 # log; tee writes to it as root, but the file mode stays as set.

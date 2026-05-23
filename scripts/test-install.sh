@@ -458,6 +458,19 @@ is_transient_install_failure() {
         <<<"$log"
 }
 
+# Recognize the archzfs stale-cache corruption: archzfs re-uploads its
+# GitHub release assets under the same filename, so a zfs-dkms/zfs-utils
+# cached in the host pacoloco can mismatch the fresh archzfs.db checksum
+# and pacstrap aborts with "invalid or corrupted package". Not transient
+# (a retry hits the same cached file), so the caller prints a cache-clear
+# hint rather than retrying.
+is_archzfs_cache_corruption() {
+    local log="$1"
+    grep -q "Failed to install packages to new root" <<<"$log" || return 1
+    grep -Eqi 'invalid or corrupted package|corrupted \(checksum\)' <<<"$log" || return 1
+    grep -Eqi 'zfs-dkms|zfs-utils|archzfs' <<<"$log"
+}
+
 # Copy config to VM and run install
 run_install() {
     local config="$1"
@@ -952,6 +965,10 @@ run_test() {
         fi
     else
         error "Installation failed or timed out"
+        if is_archzfs_cache_corruption "$install_log"; then
+            warn "Stale archzfs package in the host pacoloco cache (archzfs re-uploads same-filename assets)."
+            warn "Rebuild the ISO (build.sh clears it) or run: sudo rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-* — then retry."
+        fi
         stop_vm "$config_name"
 
         # Save logs
