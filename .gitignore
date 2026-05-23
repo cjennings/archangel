@@ -16,3 +16,8 @@ inbox/
 
 # Host-specific installer configs (contain secrets); see *.conf.example templates
 installer/velox-*.conf
+
+# Editor backups / autosave / lockfiles (emacs)
+*~
+\#*\#
+.\#*
