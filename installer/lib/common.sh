@@ -253,14 +253,6 @@ get_disk_model() {
     lsblk -dno MODEL "$disk" 2>/dev/null | tr -d ' ' | head -c 20
 }
 
-# Check if disk is in use (mounted or has holders)
-disk_in_use() {
-    local disk="$1"
-    [[ -n "$(lsblk -no MOUNTPOINT "$disk" 2>/dev/null | grep -v '^$')" ]] && return 0
-    [[ -n "$(ls /sys/block/"$(basename "$disk")"/holders/ 2>/dev/null)" ]] && return 0
-    return 1
-}
-
 # Install a systemd drop-in for $service under $root, reading its body
 # from stdin. Creates $root/etc/systemd/system/$service.service.d/ at
 # mode 755 (idempotent) and writes $dropin_name.conf there. Intended
