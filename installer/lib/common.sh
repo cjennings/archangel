@@ -124,6 +124,67 @@ required_commands() {
 }
 
 #############################
+# AUR Local Repository
+#############################
+# The ISO can bake a local pacman repo of AUR packages at /usr/share/aur-packages
+# (built by build-aur.sh at ISO-build time). These helpers expose it to
+# pacstrap from the LIVE system, list what it holds, and keep the installed
+# target's pacman.conf from referencing a path the target won't have. See
+# docs/aur-local-repo-spec.org.
+
+# True when the baked AUR repo exists at $1 (default /usr/share/aur-packages).
+# repo-add ships aur.db (a symlink) alongside aur.db.tar.gz; the airootfs copy
+# may dereference the symlink to a plain file, so accept either name. A
+# --skip-aur ISO ships no repo, so this gates every AUR install-time step.
+aur_repo_available() {
+    local repo_dir="${1:-/usr/share/aur-packages}"
+    [[ -f "$repo_dir/aur.db" || -f "$repo_dir/aur.db.tar.gz" ]]
+}
+
+# Append an [aur] stanza pointing at $server to the pacman.conf at $1, unless
+# one is already present. Idempotent so a re-run of the installer doesn't stack
+# duplicates. SigLevel = Optional TrustAll mirrors the build-side stanza: the
+# repo is trusted by construction.
+append_aur_repo() {
+    local pacman_conf="$1" server="$2"
+    grep -q '^\[aur\]' "$pacman_conf" && return 0
+    cat >> "$pacman_conf" <<EOF
+
+[aur]
+SigLevel = Optional TrustAll
+Server = $server
+EOF
+}
+
+# Print the package names (first TSV column) from the AUR build manifest at
+# $1, skipping the header. Empty output when the file is absent — the
+# manifest is the single source for what to install, so the installer never
+# hard-codes the baked package list.
+aur_manifest_names() {
+    local manifest="$1"
+    [[ -f "$manifest" ]] || return 0
+    awk -F'\t' 'NR>1 {print $1}' "$manifest"
+}
+
+# Remove the named repo's stanza (its [name] header and the config lines up to
+# the next [section] or EOF) from the pacman.conf at $2. Used to ensure the
+# installed target never references the baked [aur] repo, whose
+# /usr/share/aur-packages path exists only on the live ISO. A no-op when the
+# stanza is absent.
+strip_repo_stanza() {
+    local repo="$1" pacman_conf="$2"
+    local tmp
+    tmp=$(mktemp)
+    awk -v header="[$repo]" '
+        $0 == header { skip = 1; next }
+        skip && /^\[/ { skip = 0 }
+        skip { next }
+        { print }
+    ' "$pacman_conf" > "$tmp"
+    mv "$tmp" "$pacman_conf"
+}
+
+#############################
 # Password / Passphrase Input
 #############################
 

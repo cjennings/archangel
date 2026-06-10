@@ -779,11 +779,27 @@ EOF
         info "ZFS will be built from source via DKMS - this ensures kernel compatibility."
     fi
 
+    # Expose the baked AUR local repo to pacstrap the same way as [archzfs]:
+    # add it to the LIVE /etc/pacman.conf so pacstrap installs the baked
+    # packages into the target offline (pacstrap resolves repos from the live
+    # system, not $MNTPOINT). Only when the ISO actually shipped the repo — a
+    # --skip-aur ISO won't have it. The manifest is the source of which
+    # packages to install, so the list never drifts from what was baked.
+    local aur_repo_dir="/usr/share/aur-packages"
+    local -a aur_packages=()
+    if aur_repo_available "$aur_repo_dir"; then
+        info "Exposing baked AUR repo to pacstrap..."
+        append_aur_repo /etc/pacman.conf "file://$aur_repo_dir"
+        mapfile -t aur_packages < <(aur_manifest_names "$aur_repo_dir/manifest.tsv")
+        info "Baked AUR packages to install: ${aur_packages[*]:-none}"
+    fi
+
     info "Installing base packages (this takes a while)..."
 
     local packages
     mapfile -t packages < <(pacstrap_packages "$FILESYSTEM") \
         || error "Unknown filesystem: $FILESYSTEM"
+    packages+=("${aur_packages[@]}")
 
     # Use yes to auto-select defaults for provider prompts
     yes "" | pacstrap -K $MNTPOINT "${packages[@]}"
@@ -833,6 +849,13 @@ EOF
 Server = https://github.com/archzfs/archzfs/releases/download/experimental
 SigLevel = Never
 EOF
+
+    # The baked [aur] repo is exposed only in the LIVE config for pacstrap.
+    # The installed system must not reference /usr/share/aur-packages — that
+    # path exists only on the live ISO. pacstrap installs a stock target
+    # pacman.conf (no [aur]), so this is defensive, but it guarantees the
+    # invariant regardless of how the target config was produced.
+    strip_repo_stanza aur "$MNTPOINT/etc/pacman.conf"
 
     # Configure journald for ZFS
     # Problem: journald starts before ZFS mounts /var/log, so journal files

@@ -568,3 +568,155 @@ Boot0001* ZFSBootMenu"
     run required_commands ext4
     [ "$status" -eq 1 ]
 }
+
+#############################
+# append_aur_repo
+#############################
+# Appends an [aur] stanza to a pacman.conf for the baked local repo, the
+# same shape as the [archzfs] handling. Idempotent: a second call is a
+# no-op so re-running the installer doesn't stack duplicate stanzas.
+
+@test "append_aur_repo adds the stanza with the given Server" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '[options]' '[core]' > "$f"
+    append_aur_repo "$f" "file:///usr/share/aur-packages"
+    grep -q '^\[aur\]$' "$f"
+    grep -q '^SigLevel = Optional TrustAll$' "$f"
+    grep -q '^Server = file:///usr/share/aur-packages$' "$f"
+    rm -f "$f"
+}
+
+@test "append_aur_repo preserves existing repos" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '[core]' 'Include = /etc/pacman.d/mirrorlist' > "$f"
+    append_aur_repo "$f" "file:///usr/share/aur-packages"
+    grep -q '^\[core\]$' "$f"
+    grep -q '^Include = /etc/pacman.d/mirrorlist$' "$f"
+    rm -f "$f"
+}
+
+@test "append_aur_repo is idempotent — no duplicate [aur] on a second call" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '[core]' > "$f"
+    append_aur_repo "$f" "file:///usr/share/aur-packages"
+    append_aur_repo "$f" "file:///usr/share/aur-packages"
+    [ "$(grep -c '^\[aur\]$' "$f")" -eq 1 ]
+    rm -f "$f"
+}
+
+#############################
+# strip_repo_stanza
+#############################
+# Removes a named repo stanza (header + its config lines up to the next
+# section) so the installed target's pacman.conf never references the baked
+# [aur] repo path, which won't exist on the target.
+
+@test "strip_repo_stanza removes the [aur] stanza and its config lines" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        '[core]' 'Include = /etc/pacman.d/mirrorlist' \
+        '' '[aur]' 'SigLevel = Optional TrustAll' \
+        'Server = file:///usr/share/aur-packages' \
+        '' '[extra]' 'Include = /etc/pacman.d/mirrorlist' > "$f"
+    strip_repo_stanza aur "$f"
+    ! grep -q '^\[aur\]$' "$f"
+    ! grep -q 'aur-packages' "$f"
+    rm -f "$f"
+}
+
+@test "strip_repo_stanza preserves sections before and after [aur]" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        '[core]' 'Include = /etc/pacman.d/mirrorlist' \
+        '[aur]' 'Server = file:///usr/share/aur-packages' \
+        '[extra]' 'Include = /etc/pacman.d/mirrorlist' > "$f"
+    strip_repo_stanza aur "$f"
+    grep -q '^\[core\]$' "$f"
+    grep -q '^\[extra\]$' "$f"
+    rm -f "$f"
+}
+
+@test "strip_repo_stanza handles a stanza at end of file" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' \
+        '[core]' 'Include = /etc/pacman.d/mirrorlist' \
+        '[aur]' 'SigLevel = Optional TrustAll' \
+        'Server = file:///usr/share/aur-packages' > "$f"
+    strip_repo_stanza aur "$f"
+    grep -q '^\[core\]$' "$f"
+    ! grep -q '^\[aur\]$' "$f"
+    ! grep -q 'aur-packages' "$f"
+    rm -f "$f"
+}
+
+@test "strip_repo_stanza is a no-op when the stanza is absent" {
+    local f before after
+    f=$(mktemp)
+    printf '%s\n' '[core]' '[extra]' > "$f"
+    before=$(cat "$f")
+    strip_repo_stanza aur "$f"
+    after=$(cat "$f")
+    [ "$before" = "$after" ]
+    rm -f "$f"
+}
+
+#############################
+# aur_repo_available
+#############################
+
+@test "aur_repo_available is true when aur.db is present" {
+    local d
+    d=$(mktemp -d)
+    touch "$d/aur.db"
+    run aur_repo_available "$d"
+    [ "$status" -eq 0 ]
+    rm -rf "$d"
+}
+
+@test "aur_repo_available is true when only the aur.db.tar.gz is present" {
+    local d
+    d=$(mktemp -d)
+    touch "$d/aur.db.tar.gz"
+    run aur_repo_available "$d"
+    [ "$status" -eq 0 ]
+    rm -rf "$d"
+}
+
+@test "aur_repo_available is false when the repo db is missing" {
+    local d
+    d=$(mktemp -d)
+    run aur_repo_available "$d"
+    [ "$status" -ne 0 ]
+    rm -rf "$d"
+}
+
+#############################
+# aur_manifest_names
+#############################
+
+@test "aur_manifest_names prints package names, skipping the header" {
+    local f
+    f=$(mktemp)
+    printf 'name\tpkgbase\tfilename\n' > "$f"
+    printf 'yay\tyay\tyay-12.0-1-x86_64.pkg.tar.zst\n' >> "$f"
+    printf 'zrepl\tzrepl\tzrepl-0.6-1-x86_64.pkg.tar.zst\n' >> "$f"
+    run aur_manifest_names "$f"
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | wc -l)" -eq 2 ]
+    [[ "$output" == *"yay"* ]]
+    [[ "$output" == *"zrepl"* ]]
+    [[ "$output" != *"name"* ]]
+    rm -f "$f"
+}
+
+@test "aur_manifest_names emits nothing for a missing manifest" {
+    run aur_manifest_names /nonexistent/manifest.tsv
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
