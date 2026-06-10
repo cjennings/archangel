@@ -1,0 +1,343 @@
+#+TITLE: AUR Local Repository — Build Spec
+#+AUTHOR: Craig Jennings
+
+* Metadata
+| Status   | draft — reviews 1-2 incorporated; research prerequisites resolved 2026-06-09; rubric Ready with caveats |
+| Owner    | Craig Jennings                                                          |
+| Reviewer | Codex                                                                  |
+| Date     | 2026-06-09                                                              |
+| Related  | [[file:../todo.org][todo.org — Build AUR packages into ISO]]                          |
+
+Both research prerequisites are resolved (2026-06-09; see [[*Research prerequisites (resolved 2026-06-09)][Research prerequisites]]). The one remaining caveat is a scoped build test proving mkarchiso installs from the local repo (Phase 2). Awaiting the author's Ready confirmation, then the implementation-task breakdown.
+
+* Summary
+
+Build a fixed set of genuine-AUR packages at ISO-build time and bake them into the ISO as a local pacman repo, so AUR tools work in the live environment and install onto the target offline — no AUR round-trip, no makepkg on the target. The build emits an auditable manifest pinning each package's version and AUR commit; the repo is a point-in-time snapshot, not a rebuild-reproducible lockfile.
+
+* Problem / Context
+
+The ISO ships a curated package set, but several genuinely useful tools (AUR helpers, recovery utilities, ZFS replication daemons) live only in the AUR. Pulling them from the AUR at install time means a network round-trip, a build toolchain on the target, and an install that fails when the AUR is unreachable. The installer is meant to run unattended and survive flaky networks, so install-time AUR builds are out.
+
+The fix is to build the chosen AUR packages once, at ISO-build time, and bake them into the ISO as a local pacman repository — so they work in the live environment and install onto the target with no network and no makepkg on the target.
+
+** Background
+
+- =build.sh= runs as root (mkarchiso requires it) and regenerates the archiso profile from =releng= on each run. Anything written into the profile must happen *after* regeneration or it is overwritten. Concrete hook points in the current flow: releng copy at ~lines 103-106, package-list edits at ~183-290, airootfs overlay copy at ~311-481, mkarchiso at ~line 515.
+- =makepkg= refuses to run as root by design. The build host has a =$SUDO_USER= (the invoking user), which is how the build must drop privileges.
+- =installer/archangel= already appends an =[archzfs]= stanza to the *live* system's =/etc/pacman.conf= before =pacstrap= (~lines 766-789). The baked AUR repo follows the same pattern — pacstrap resolves repos from the live environment, not from =$MNTPOINT=.
+- The host already runs pacoloco (see =README.org=) to cache/route pacstrap downloads. That solved *cache corruption and routing*; it does not address AUR packages, which is a separate gap this spec fills.
+- ZFS comes from the =archzfs= repo, not the official repos — so it counts as a resolvable dependency source for the dependency gate below.
+
+* Goals and Non-Goals
+
+** Goals
+- Build a fixed set of genuine-AUR packages during =build.sh= and expose them as a local pacman repo inside the ISO.
+- Make those packages available both in the live environment and to the target install, offline.
+- Emit an auditable manifest so a given ISO's exact AUR package set (version + AUR commit) can be inspected later.
+
+** Non-Goals
+- Live AUR building on the installed system (the user can still install =yay= from this repo and do that themselves).
+- Tracking AUR updates after the ISO is built — the repo is a point-in-time snapshot.
+- Rebuild reproducibility — the AUR is fetched at HEAD; we record an auditable manifest, not a pinned-input lockfile. (Arch Archive pinning is the separate =[#A]= task.)
+- Signing/verifying against upstream AUR maintainer keys. Trust is rooted in "we built it on our host" (see the signing decision).
+
+** Scope tiers
+- *v1:* the audited genuine-AUR set that passes the dependency gate, one AUR helper (=yay=), a staged local repo + manifest baked into the ISO, correct repo visibility for mkarchiso / live / pacstrap, offline install into the target, and stripping the =[aur]= stanza from the installed system. A =--skip-aur= build toggle.
+- *vNext (deferred → todo.org):* helper-driven AUR dependency resolution (unlocks AUR-of-AUR packages); =paru= as a second helper; build caching (=pkgver=/AUR-commit-keyed); a throwaway-container build env (Docker/Podman-builds task); a generated dependency-resolution proof test; GPG-signed local repo; =make aur-audit= / =make aur-build= ergonomics.
+
+* Design
+
+** Overview
+1. A build step audits the package list, then compiles each genuine-AUR package under =$SUDO_USER= into a *staging* repo dir, generating the repo database with =repo-add= and a manifest, and replaces the prior repo dir from the staging dir only on full success (staged replacement, same filesystem — no stale repo is shipped on failure).
+2. Repo visibility is configured per namespace (see the table below) so mkarchiso can install the packages into airootfs at build time and the live system can resolve them after boot.
+3. Official-repo packages and the genuine-AUR package names are added to =packages.x86_64=.
+4. At install time, =installer/archangel= exposes the baked repo through the *live* system's =/etc/pacman.conf= (mirroring the existing =[archzfs]= handling) so pacstrap installs them offline, then ensures the *target* =/etc/pacman.conf= carries no =[aur]= stanza.
+
+** Repo visibility across namespaces
+
+The local repo's =Server=file://…= is read by different pacman invocations in different filesystem namespaces. The airootfs overlay path (=profile/airootfs/usr/share/aur-packages=) is where files *land inside the ISO* — it is not automatically a build-host repo path that mkarchiso's pacman reads while constructing airootfs. Each phase must resolve the repo from a path that exists in *its* namespace:
+
+| Phase | pacman config | namespace where =file://= resolves | repo dir path | retained? |
+|-------+---------------+------------------------------------+---------------+-----------|
+| mkarchiso package install | =profile/pacman.conf= | build host | build-host repo dir (e.g. absolute =file://$PROJECT_DIR/aur-packages=) | n/a (build host) |
+| live ISO after boot | airootfs =/etc/pacman.conf= | live system | =/usr/share/aur-packages= (shipped via airootfs overlay) | yes (in ISO) |
+| pacstrap → target | live system's =/etc/pacman.conf= | live system | =/usr/share/aur-packages= (from the booted ISO) | during install only |
+| installed system | =$MNTPOINT/etc/pacman.conf= | target | — (stanza stripped) | no |
+
+Two consequences the first draft missed:
+- The build-time =[aur]= =Server= must resolve on the *build host*, and the *runtime* =[aur]= =Server= must resolve in the *live system*. Whether one =profile/pacman.conf= can serve both, or whether mkarchiso needs a build-host repo path distinct from the shipped runtime path, is a *research prerequisite* (below).
+- pacstrap needs the repo visible from the *live* system, not copied into =$MNTPOINT=. So the install-time step adds =[aur]= to the live =/etc/pacman.conf= before pacstrap (like =[archzfs]=) rather than writing to the target; the target stanza is then stripped per the disposition decision.
+
+** Build step (=build_aur_packages=)
+
+Prefer a dedicated =build-aur.sh= (sourced by =build.sh=) over growing the already-long, side-effect-heavy =build.sh=; keep source-classification, manifest, package-file collection, and repo-path rendering as small testable helpers. Because =build.sh= is root and =makepkg= can't be, clone+build runs via =sudo -u "$SUDO_USER"=. Build into a staging dir on the same filesystem as the repo dir and replace from it on full success, so a failed build never leaves a half-repo or stale packages:
+
+#+begin_src bash
+# v1 set = audited genuine-AUR packages that pass the dependency gate.
+build_aur_packages() {
+    local aur_packages=(downgrade yay informant zrepl pacman-cleanup-hook \
+                        sanoid zfs-auto-snapshot topgrade ventoy-bin)
+    local repo_dir="$PROJECT_DIR/aur-packages"
+    local staging="${repo_dir}.staging"
+    local build_dir
+    build_dir="$(sudo -u "$SUDO_USER" mktemp -d /tmp/aur-build.XXXXXX)"
+    trap 'rm -rf "$build_dir"' RETURN
+
+    rm -rf "$staging"; mkdir -p "$staging"
+
+    for pkg in "${aur_packages[@]}"; do
+        info "Building AUR package: $pkg"
+        sudo -u "$SUDO_USER" git clone --depth 1 \
+            "https://aur.archlinux.org/${pkg}.git" "$build_dir/${pkg}" \
+            || error "AUR clone failed: $pkg (see $BUILD_LOG)"
+        sudo -u "$SUDO_USER" bash -c \
+            "cd '$build_dir/${pkg}' && makepkg -s --noconfirm --needed" \
+            || error "AUR build failed: $pkg (makepkg; see $BUILD_LOG)"
+        cp "$build_dir/${pkg}"/*.pkg.tar.zst "$staging/" \
+            || error "AUR collect failed: $pkg"
+        aur_manifest_append "$staging" "$build_dir/${pkg}" "$pkg"
+    done
+
+    repo-add "$staging/aur.db.tar.gz" "$staging"/*.pkg.tar.zst \
+        || error "repo-add failed (see $BUILD_LOG)"
+    # Staged replacement: staging is a sibling of repo_dir (same filesystem).
+    # The rm/mv window is not strictly atomic, but a failure anywhere above
+    # ships no repo and a failure here leaves no stale repo — repo_dir is only
+    # touched after every package built, repo-add ran, and the manifest emitted.
+    rm -rf "$repo_dir"; mv -T "$staging" "$repo_dir"
+}
+#+end_src
+
+Preflight (before any build): =$SUDO_USER= set and usable; the user can write the build/home dirs; =git=, =base-devel=, =repo-add= present; sudo usable for makepkg's dependency install. Abort with a named reason if any fails.
+
+Host-mutation note: =makepkg -s= installs build-time dependencies *on the build host* via pacman (needs root, which =$SUDO_USER='s sudo provides). v1 leaves those installed and documents it in the README; a throwaway-container build env is the vNext fix. Build deps never land on the ISO.
+
+No-package behavior: if the audited AUR set is empty, skip repo creation and injection entirely rather than shipping an empty repo.
+
+** Inject into the profile (post-regeneration)
+
+Sequenced against the =build.sh= hook points: build/stage the repo after preflight; add official + genuine-AUR package names to =packages.x86_64= in the existing package-list block (~183-290); perform the path-specific =[aur]= repo config after profile regeneration but before =mkarchiso= (~515). Copy =aur-packages/= → =profile/airootfs/usr/share/aur-packages/= for the runtime path, and configure the build-host =Server= path per the namespace table. The runtime =profile/airootfs/etc/pacman.conf= must be a complete pacman config (normal repos + mirrorlist preserved, =[aur]= appended), not an =[aur]=-only file — see the Repo-namespace-handling decision.
+
+** Install-time availability (=installer/archangel=)
+
+Add an =[aur]= stanza to the *live* system's =/etc/pacman.conf= before =pacstrap= (the same place and shape as the existing =[archzfs]= handling), pointing at =/usr/share/aur-packages=. Install the baked packages offline as part of the normal package set. Then ensure the *target* =/etc/pacman.conf= carries no =[aur]= stanza (strip/omit per the disposition decision) so the installed system doesn't reference a path it won't have.
+
+** Package selection
+
+Audited 2026-06-09 (source: official Arch package search + AUR RPC). Official-repo packages go straight into =packages.x86_64= and are *not* built; only genuine-AUR packages enter the build, and only those that pass the v1 dependency gate.
+
+*** Official =extra= (no build — normal package list)
+=arch-wiki-lite=, =rate-mirrors=, =arch-audit=, =btop=, =duf=, =dust=, =procs=.
+
+*** Genuine AUR (no exact official hit; AUR RPC confirms)
+=downgrade=, =yay=, =paru=, =informant=, =sanoid= (provides =syncoid=), =zrepl=, =topgrade=, =ventoy-bin=, =mkinitcpio-firmware=, =zfs-auto-snapshot=, =pacman-cleanup-hook=.
+
+*** v1 dependency gate
+Each AUR package enters v1 only if its runtime *and* make dependencies all resolve from official / =archzfs= / baked-local repos, with no unresolved AUR dependency. Applying it to the audited set:
+
+| Package | v1? | Reason |
+|---------+-----+--------|
+| downgrade | yes | deps in official repos |
+| yay | yes | the one v1 helper (Go build); deps official |
+| informant | yes | deps official |
+| zrepl | yes | deps official |
+| pacman-cleanup-hook | yes | deps official |
+| sanoid | yes | deps =perl-capture-tiny=, =perl-config-inifiles= (official); provides =syncoid=; rest are opt-deps (AUR RPC 2026-06-09) |
+| zfs-auto-snapshot | yes | deps =systemd= (official) + =zfs= (archzfs, allowed); shell scripts, no make-deps; =zfs= resolves at install from archzfs |
+| topgrade | yes | dep =libgcc= (official), make-dep =cargo= (official); Rust build — adds compile time |
+| ventoy-bin | yes | deps =bash dosfstools util-linux which xz= (official); =-bin=, no build |
+| paru | vNext | second helper; one helper (=yay=) suffices for v1 |
+| mkinitcpio-firmware | vNext | pulls AUR firmware deps (=aic94xx-firmware=, =ast-firmware=, =upd72020x-fw=, =wd719x-firmware=) — fails the gate until helper-driven resolution lands |
+
+All =verify= rows were confirmed via AUR RPC on 2026-06-09 and pass the gate. The v1 build set is =downgrade yay informant zrepl pacman-cleanup-hook sanoid zfs-auto-snapshot topgrade ventoy-bin= (9 packages); =paru= and =mkinitcpio-firmware= are vNext.
+
+* Alternatives Considered
+
+** Build AUR packages at install time (rejected)
+- Bad, because it needs a network round-trip plus a build toolchain on the target and fails when the AUR is unreachable — the installer must run unattended over flaky networks.
+
+** Pre-clone AUR git repos into the ISO (rejected)
+- Bad, because it's larger on disk and still needs =makepkg= on the target. Building to a baked pacman repo is smaller and installs as normal packages.
+
+** Copy the repo into =$MNTPOINT= for the target install (rejected)
+- Bad, because pacstrap resolves repos from the live environment, not the target root; and the v1 disposition strips the repo from the installed system anyway, so copying it into =$MNTPOINT= is wasted. Exposing =[aur]= in the live =/etc/pacman.conf= before pacstrap is the correct path.
+
+* Decisions
+
+** Package-repo audit
+- State: accepted (audited 2026-06-09)
+- Context: several "AUR" packages are now in =extra=; building those wastes build time.
+- Decision: official-repo packages go to =packages.x86_64=; only genuine-AUR packages enter the build. Audit results are in Package selection.
+- Consequences: easier — smaller, faster build; the build array shrank to a handful.
+
+** v1 dependency gate
+- State: accepted
+- Context: some AUR packages depend on other AUR packages, which the hand-ordered v1 build can't resolve.
+- Decision: an AUR package enters v1 only if all runtime + make deps resolve from official / archzfs / baked-local repos. Packages that fail (e.g. =mkinitcpio-firmware=) move to vNext or wait for helper-driven resolution.
+- Consequences: easier — a buildable v1 set with no AUR-of-AUR surprises; harder — a few wanted packages wait for vNext.
+
+** AUR helper in v1
+- State: proposed
+- Owner / by-when: Craig / before implementation
+- Context: shipping two AUR helpers costs build time and surface for no clear v1 benefit.
+- Decision: ship =yay= only in v1; defer =paru= to vNext unless a specific workflow needs both.
+- Consequences: easier — one helper to build/verify; harder — =paru= users wait.
+
+** Repo namespace handling
+- State: accepted (verified 2026-06-09 against the codebase + archiso model)
+- Context: the repo's =file://= path resolves in three namespaces (build host / live / pacstrap); the airootfs overlay path is not automatically a build-host repo path.
+- Decision: two pacman configs, not one. (i) =build.sh= appends =[aur]= with a build-host absolute =Server= (=file://$PROJECT_DIR/aur-packages=) to =profile/pacman.conf=, the same place and shape as the existing =[archzfs]= add (=build.sh:153-162=), so mkarchiso installs the packages into airootfs. (ii) =build.sh= also creates =profile/airootfs/etc/pacman.conf= for live-runtime resolution. This file *replaces* the live system's stock =/etc/pacman.conf= (archangel ships no airootfs pacman.conf overlay today, and releng ships none either), so it must be a *complete* pacman config — all the normal =[core]=/=[extra]= repos and =Include=/=mirrorlist= directives preserved — with the =[aur]= stanza (=Server=file:///usr/share/aur-packages=) *appended*. An =[aur]=-only file would strip the official repos from the live system and break both =pacman -Sl extra= and the installer's pacstrap path. Author it by copying the host/releng default =/etc/pacman.conf= and appending the runtime =[aur]= stanza; do not copy any build-host-only rewrites (e.g. pacoloco URLs from =profile/pacman.conf=) into the shipped runtime config. (iii) For pacstrap, =installer/archangel= appends =[aur]= to the *live* =/etc/pacman.conf= before =pacstrap=, the exact existing =[archzfs]= pattern (=installer/archangel:766-789=), not =pacstrap -C=. The target =/etc/pacman.conf= gets no =[aur]= (unlike =[archzfs]=, which the installer does add to the target at =:828-833=).
+- Consequences: easier — each namespace resolves correctly and every step mirrors a proven =[archzfs]= path; harder — one extra file to author (=airootfs/etc/pacman.conf=). Caveat: prove mkarchiso actually installs from the build-host repo with a scoped build test in Phase 2.
+
+** Reproducibility target
+- State: accepted
+- Context: =git clone --depth 1= fetches the AUR at HEAD, so versions are whatever the AUR serves at build time.
+- Decision: the target is an *auditable point-in-time snapshot*, not a rebuild-reproducible lockfile. The build emits a manifest (=/usr/share/aur-packages/manifest.tsv= in the ISO and =out/<iso-basename>-aur-manifest.tsv= beside it) with package name, pkgbase, built filename, pkgver/pkgrel, AUR git commit, source URL, build timestamp, and SHA256 per =*.pkg.tar.zst=.
+- Consequences: easier — auditable without lockfile machinery; harder — not bit-for-bit reproducible (Arch Archive pinning is the separate task).
+
+** Build staging, cleanup, and failure shape
+- State: accepted
+- Context: =makepkg -s= mutates the host, and a failed build must not leave a half-repo or stale packages.
+- Decision: build into a staging dir and atomically replace the repo only on full success; preflight the build environment; trap-clean the build tree; on failure, =error()= names the package, the phase (clone/build/collect/repo-add), and the log path, and ships no repo.
+- Consequences: easier — clean failure semantics, no stale packages; harder — slightly more build plumbing.
+
+** Profile-regeneration ordering
+- State: proposed
+- Owner / by-when: Craig / before implementation (verify against =build.sh=)
+- Context: =build.sh= regenerates the profile from releng each run; edits before regen are wiped.
+- Decision: stage the repo early, add package names in the existing package-list block, and do repo config/injection after profile regeneration but before =mkarchiso= (named hook points in Background).
+- Consequences: easier — edits survive; harder — confirm the exact ordering against =build.sh=.
+
+** Signing
+- State: accepted
+- Context: a local baked repo can be trusted-by-construction or GPG-signed.
+- Decision: =SigLevel = Optional TrustAll= for v1; trust is rooted in "we built it on our host." GPG-signing is vNext.
+- Consequences: easier — no key plumbing; harder — no tamper detection on the baked repo (acceptable for a self-built ISO).
+
+** Installed-system disposition
+- State: accepted
+- Context: after the target install, the =[aur]= repo can stay or be stripped.
+- Decision: install the packages (as normal packages) and ensure the target =/etc/pacman.conf= has no =[aur]= stanza. README states the baked packages are installed but the repo is not retained.
+- Consequences: easier — clean installed config; harder — the baked packages aren't reinstallable post-boot without re-adding a repo.
+
+** Build caching
+- State: accepted (deferred)
+- Decision: v1 rebuilds every package each ISO build; =pkgver=/commit-keyed caching is vNext.
+- Consequences: easier — simpler v1; harder — slower repeat builds until caching lands.
+
+* Research prerequisites (resolved 2026-06-09)
+
+Both are answered; the spec is now Ready with caveats.
+
+1. *Repo namespace resolution — resolved.* archiso uses two configs: =profile/pacman.conf= (build host, for mkarchiso) and =profile/airootfs/etc/pacman.conf= (live runtime). archangel ships only the former, so the live config is pacman's stock default. Fix (in the Repo-namespace-handling decision): add =[aur]= with a build-host =Server= to =profile/pacman.conf=; create =profile/airootfs/etc/pacman.conf= as a *complete* config (normal repos preserved, =[aur]= → =/usr/share/aur-packages= appended — not an =[aur]=-only file, which would break live pacman and pacstrap); for pacstrap, append =[aur]= to the live =/etc/pacman.conf= mirroring the existing =[archzfs]= handling (=installer/archangel:766-789=), not =pacstrap -C=. *Caveat:* a scoped build test in Phase 2 confirms mkarchiso installs from the build-host repo.
+2. *Per-package dependency-gate classification — resolved.* AUR RPC (2026-06-09): =sanoid=, =zfs-auto-snapshot=, =topgrade=, =ventoy-bin= all pass the gate (deps official, or =zfs= from archzfs). v1 build set finalized to 9 packages; =paru= and =mkinitcpio-firmware= deferred to vNext. See Package selection.
+
+* Implementation phases
+
+** Phase 1 — Audit + build function + manifest
+Classify official vs AUR (done) and finish the dependency-gate verify rows; write =build-aur.sh= helpers (source classification, =build_aur_packages= dropping to =$SUDO_USER=, staging + atomic replace, manifest emission, preflight). Leaves =build.sh= able to produce =aur-packages/= + manifest from the genuine-AUR set; nothing yet injected.
+
+** Phase 2 — Profile injection + live ISO repo
+Add =[aur]= (build-host =Server=) to =profile/pacman.conf= and create =profile/airootfs/etc/pacman.conf= with =[aur]= (=/usr/share/aur-packages=); add official + AUR package names to =packages.x86_64=. A scoped build test confirms mkarchiso installs a baked package into airootfs (the one remaining caveat). Leaves a built ISO whose live environment resolves and installs the baked packages.
+
+** Phase 3 — Install-time availability + target cleanup
+=installer/archangel= exposes =[aur]= via the live =/etc/pacman.conf= before pacstrap, installs the packages offline, and ensures the target =/etc/pacman.conf= has no =[aur]= stanza. Leaves target installs carrying the packages with no network and a clean installed config.
+
+Each phase leaves a working tree (build.sh still builds; the installer still installs) and reaches a clean stopping point.
+
+* Acceptance criteria
+
+- [ ] =sudo ./build.sh= produces an ISO whose =/usr/share/aur-packages/aur.db= exists and lists exactly the audited genuine-AUR set; =--skip-aur= skips the whole AUR path.
+- [ ] A manifest (=/usr/share/aur-packages/manifest.tsv= and =out/<iso-basename>-aur-manifest.tsv=) lists name, pkgbase, filename, pkgver/pkgrel, AUR commit, source URL, timestamp, and SHA256 for every package.
+- [ ] mkarchiso installs at least one baked package into airootfs, and in the live ISO both =pacman -Sl aur= (resolves the baked packages from =/usr/share/aur-packages=) and =pacman -Sl extra= (proves the runtime config kept the official repos) work from the final =/etc/pacman.conf=.
+- [ ] A =scripts/test-install.sh= run installs at least one baked AUR package onto the target offline; it is present on the booted system.
+- [ ] The installed system's =/etc/pacman.conf= has no =[aur]= stanza; normal official packages still install via the existing pacstrap path.
+- [ ] A deliberately invalid AUR package aborts the build naming the package + phase + log path, and ships no repo; stale packages from a prior build never appear in a later repo.
+- [ ] =make lint= and the bats suite stay green (new helpers covered).
+
+* Readiness dimensions
+
+- *Data model & ownership:* the repo dir, db, and manifest are build artifacts (no persistent app state). The manifest is the audit record of what shipped.
+- *Errors, empty states & failure:* staged build + atomic replace; =error()= names package + phase + log path; empty audited set skips injection; =set -o pipefail= already on in build.sh.
+- *Security & privacy:* =SigLevel = Optional TrustAll= baked repo (signing decision); no secrets; build-deps install on the host only (documented).
+- *Observability:* console stage messages ("Auditing sources", "Building AUR package <name>", "Creating local repo", "Injecting repo for mkarchiso/live/pacstrap"); per-package =makepkg= output in =out/build-*.log=; failures named, not raw.
+- *Performance & scale:* the build adds minutes (=yay= is Go; some packages compile); the audit + gate bound the set; v1 rebuilds uncached.
+- *Reuse & lost opportunities:* reuses pacoloco for dep fetches, the existing =[archzfs]=-into-live-pacman.conf pattern for pacstrap, and standard =makepkg=/=repo-add=; official packages skip the build entirely.
+- *Architecture fit:* =build-aur.sh= (not inline in =build.sh=); single source for package-classification data to avoid duplicating names across table/array/=packages.x86_64=/tests; archzfs treated as an explicit dep source. Weak points: repo-namespace resolution and profile-regen ordering (both named, both verified before build).
+- *Config surface:* the audited package array + the =--skip-aur= toggle. A build-config package set is vNext.
+- *Documentation plan:* README "Build Host Requirements" documents host build-dep mutation and the installed-system disposition (packages installed, repo not retained); record the package audit date + source of truth.
+- *Dev tooling:* existing =make lint=/=test=/=build= cover it; new bats for the extracted helpers. =make aur-audit=/=aur-build= are vNext ergonomics.
+- *Rollout, compatibility & rollback:* additive (new repo + packages); rollback = drop the build step + stanza. No persisted-data migration.
+- *External APIs & deps:* AUR git URLs verified; per-package repo membership + the v1 dependency gate confirmed via AUR RPC 2026-06-09 (all resolved). No open external-dependency questions.
+
+* Risks, rabbit holes, and drawbacks
+
+- *Repo namespace mismatch* (rabbit hole) — the airootfs overlay path is not a build-host repo path; getting mkarchiso to install from the local repo needs the build-host =Server= to resolve on the build host. Dodged by the namespace table + the verification prerequisite.
+- *makepkg-as-root* — central constraint; the build drops to =$SUDO_USER=.
+- *AUR-of-AUR dependencies* — the v1 gate excludes packages with AUR deps (e.g. =mkinitcpio-firmware=); helper-driven resolution is the vNext escape.
+- *Host build-dep mutation* — =makepkg -s= installs build deps on the host; documented for v1, containerized in vNext.
+- *Frozen versions* — packages are pinned at build time; the manifest makes the snapshot auditable.
+- *Build time* — compiling AUR packages adds minutes; the audit + gate keep the set small.
+
+* Testing & verification
+
+- *Unit (bats):* package-classification helper (official vs AUR); repo-stanza/path rendering for build-host vs live-runtime contexts; manifest generation fields; staging-dir cleanup/replace between runs.
+- *Build integration:* =sudo ./build.sh= creates the repo db + manifest; mkarchiso installs a baked package into airootfs; the built ISO's runtime =/etc/pacman.conf= resolves both =pacman -Sl aur= (from =/usr/share/aur-packages=) and =pacman -Sl extra= (the official repos survived the full-config requirement).
+- *Install integration:* =scripts/test-install.sh= installs at least one baked package on the target; target =/etc/pacman.conf= has no =[aur]= stanza after the strip; install still succeeds offline for the baked path while official packages use normal pacstrap.
+- *Negative / manual:* one intentionally invalid AUR package aborts the build with a named package + log path; stale packages from a prior build are not included in a later repo.
+
+* References / Appendix
+
+- Task: =[#B] Build AUR packages and include in ISO as local repository= in =todo.org=.
+- Idea origin for adjacent build features: https://github.com/stevleibelt/arch-linux-live-cd-iso-with-zfs
+- Related tasks: =[#B] Add Docker/Podman container support for builds= (throwaway build env), =[#A] Support building against Arch Linux Archive snapshots= (version pinning).
+- Package audit: 2026-06-09, via official Arch package search + AUR RPC (recorded in the 2026-06-09 review).
+- *Size estimate:* most AUR packages are small (<5 MB each); the v1 set is a handful, well under ~50 MB. Smaller than pre-cloning the git repos.
+
+* Review dispositions
+
+Modified or rejected review recommendations only; everything else from the 2026-06-09 Codex review was accepted as written and woven into the body above.
+
+- *Modified — reproducibility (high #5).* The review offered "add a manifest" *or* "narrow the goal wording." Did both: added the manifest artifact *and* reworded the goal to "auditable point-in-time snapshot," since they're complementary, not either/or.
+- *Modified — dependency-resolution proof (high #3).* Accepted the v1 dependency gate and applied it to the table. Deferred the review's "tests/generated manifest that proves every dependency resolves before mkarchiso" to vNext — for a hand-audited handful, the documented gate + the verify rows suffice; an automated resolution-proof is over-engineering for v1.
+- *Modified — dry-run affordance (medium #8).* Accepted =--skip-aur= into v1 (cheap, useful for iterating without the slow AUR build); deferred =make aur-audit=/=aur-build= ergonomics to vNext.
+- *Accepted with a call — helper count (medium #7).* The review said "keep one helper"; resolved it to =yay= for v1, =paru= to vNext.
+
+No recommendation was rejected outright — the review was accurate; the three modifications are scope/sequencing calls, not disagreements.
+
+* Review and iteration history
+
+** 2026-06-09 Tue @ 16:57:45 -0500 — Claude Code (archangel) — author
+- What: initial draft, then reconciled to the spec-create template — added the metadata header, Summary, Scope tiers, State-based mini-ADR decisions, Implementation phases, Acceptance criteria, the Readiness-dimensions menu, and this history stub.
+- Why: AUR-into-ISO is a ~6-hour =[#B]= feature scheduled for 2026-06-09; the spec is written to pass spec-review's readiness gate before implementation.
+- Artifacts: =docs/aur-local-repo-spec.org=; =todo.org= task; spec-create workflow at =.ai/workflows/spec-create.org=.
+
+** 2026-06-09 Tue @ 17:15:28 -0500 — Codex — reviewer
+- What changed or was recommended: Ran =spec-review= and rated the spec =Needs research=. Recommended resolving build/live/install repo path namespaces, finishing the package/dependency audit, defining host mutation cleanup for =makepkg -s=, and adding an auditable AUR manifest.
+- Why: the local repo path is interpreted by different pacman invocations in different namespaces; package classification and dependency policy still materially change implementation.
+- Artifacts: the 2026-06-09 review file (now folded in and deleted); workflow clarification in =.ai/workflows/spec-review.org=; inbox note =2026-06-09-spec-review-workflow-update.md=.
+
+** 2026-06-09 Tue @ 17:46:24 -0500 — Claude Code (archangel) — responder
+- What changed: Processed all five high-priority and three medium findings. Accepted and wove in: the repo-visibility namespace table, the 2026-06-09 package audit (official vs AUR), the v1 dependency gate (excluding =mkinitcpio-firmware= etc.), host preflight/staging/atomic-replace/cleanup + named failure shape, the auditable manifest, the corrected pacstrap path (expose =[aur]= in the live =/etc/pacman.conf=, not =$MNTPOINT=), named =build.sh= hook points, =build-aur.sh= extraction, =--skip-aur=, and expanded acceptance + test criteria. Three scope modifications recorded in Review dispositions; helper count resolved to =yay=. Two research prerequisites remain (repo namespace resolution; dependency-gate verify rows), so the rubric stays =Needs research= — implementation does not start yet, and the Phase-6 task breakdown is not created.
+- Why: fold the review to convergence while keeping honest about the two items that genuinely need verification before code.
+- Artifacts: this spec; consumed + deleted =aur-local-repo-spec-review.org=.
+
+** 2026-06-09 Tue @ 18:11:18 -0500 — Claude Code (archangel) — researcher
+- What changed: Resolved both research prerequisites. (1) Repo namespace: confirmed against the codebase + archiso model that build-time (=profile/pacman.conf=) and live-runtime (=profile/airootfs/etc/pacman.conf=, currently absent → stock default) are separate configs; flipped the Repo-namespace-handling decision to =accepted= with the two-config fix and the pacstrap-mirrors-archzfs path. (2) Dependency gate: AUR RPC confirmed =sanoid=/=zfs-auto-snapshot=/=topgrade=/=ventoy-bin= all pass; finalized the v1 build set to 9 packages. Rubric moved =Needs research= → =Ready with caveats= (one caveat: a Phase-2 build test proving mkarchiso installs from the build-host repo).
+- Why: drive the spec to Ready by answering the two blockers with evidence rather than deferring.
+- Artifacts: =build.sh:153-162= ([archzfs] pattern), =installer/archangel:766-789= (live-pacman.conf pacstrap pattern), AUR RPC info query 2026-06-09.
+
+** 2026-06-09 Tue @ 18:28:33 -0500 — Codex — reviewer
+- *What changed or was recommended:* Re-reviewed the updated spec and rated it =Ready with caveats=. No high-priority blockers remain. Recommended tightening the runtime =profile/airootfs/etc/pacman.conf= wording so it is a complete normal pacman config with =[aur]= appended, adding a live =pacman -Sl extra= check, and clarifying "atomic-ish" staging semantics.
+- *Why:* The first review's blockers were resolved, but the new two-config plan introduces one implementation trap: releng has no airootfs pacman.conf overlay, so a literal AUR-only file would replace normal live pacman repo configuration.
+- *Artifacts:* =aur-local-repo-spec-review.org= (consumed + folded into this spec, then deleted); added missing vNext tracking entries to [[file:../todo.org][todo.org]].
+
+** 2026-06-09 Tue @ 19:54:21 -0500 — Claude Code (archangel) — responder
+- What changed: Folded review 2's three suggested spec edits. (1) The runtime =profile/airootfs/etc/pacman.conf= is now specified as a *complete* config (normal repos + mirrorlist preserved, =[aur]= appended, no build-host pacoloco rewrites copied in) across the Repo-namespace-handling decision, the Inject-into-profile section, and the research-prerequisite note — closing the AUR-only-file trap. (2) Added a live =pacman -Sl extra= check beside =pacman -Sl aur= in the acceptance criteria and the build-integration tests. (3) Reworded "atomically replaces"/"atomic-ish" to honest staged-replacement semantics (same-filesystem sibling staging, =mv -T=, no stale repo on failure) in the Overview, the build-step prose, and the code sketch.
+- Why: converge the spec to the reviewer's tightenings before coding; all three were guardrails, not design changes, so the rubric stays Ready with caveats.
+- Artifacts: this spec; consumed + deleted =aur-local-repo-spec-review.org=.
+
+** 2026-06-09 Tue @ 21:32:21 -0500 — Codex — reviewer
+- *What changed or was recommended:* Re-reviewed after review 2 was folded in. Verdict remains =Ready with caveats=; no high-priority blockers. The prior guardrails are incorporated. Only medium note: two decision blocks still say =State: proposed= despite having settled decisions (=yay= only; profile-regeneration ordering).
+- *Why:* The spec is now implementable, but stale state labels can make future readers think decisions are still open.
+- *Artifacts:* [[file:aur-local-repo-spec-review.org][aur-local-repo-spec-review.org]].
