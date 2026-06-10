@@ -63,6 +63,43 @@ add an ~archzfs~ entry pointing at
 and reload the service. When pacoloco isn't running, ~build.sh~ falls
 back to the upstream URLs.
 
+** Baked AUR Packages
+
+~build.sh~ builds a fixed set of AUR packages at build time and bakes
+them into the ISO as a local pacman repo at ~/usr/share/aur-packages~.
+They work in the live environment (~pacman -Sl aur~) and install onto
+the target offline, so the installer never needs the AUR or a build
+toolchain on the target. The v1 set (audited 2026-06-09):
+~downgrade~, ~yay~, ~informant~, ~zrepl~, ~pacman-cleanup-hook~,
+~sanoid~, ~zfs-auto-snapshot~, ~topgrade~, ~ventoy-bin~.
+
+Building these needs ~base-devel~ and ~git~ on the build host, and the
+build must run under ~sudo~ so it can drop to your user for ~makepkg~
+(makepkg refuses to run as root). Note that ~makepkg -s~ installs each
+package's build dependencies onto the *build host* via pacman; v1
+leaves those installed (a throwaway-container build env is planned).
+Build deps never land on the ISO.
+
+Each build writes a manifest pinning every package's version, AUR
+commit, and SHA256 — at ~/usr/share/aur-packages/manifest.tsv~ in the
+ISO and ~out/<iso-basename>-aur-manifest.tsv~ beside it — so a given
+ISO's exact AUR set is auditable later. The repo is a point-in-time
+snapshot (the AUR is fetched at HEAD), not a rebuild-reproducible
+lockfile.
+
+The baked packages are installed onto the target as normal packages,
+but the ~[aur]~ repo is *not* retained in the installed system's
+~/etc/pacman.conf~ — its ~/usr/share/aur-packages~ path exists only on
+the live ISO. To reinstall a baked package after first boot, re-add a
+repo or rebuild from the AUR.
+
+Pass ~--skip-aur~ to skip the whole AUR path for a faster build when
+you're iterating on something unrelated:
+
+#+BEGIN_SRC bash
+sudo ./build.sh --skip-aur
+#+END_SRC
+
 ** Runtime Dependencies (included in ISO)
 - ZFS kernel modules (via zfs-dkms)
 - Btrfs tools
@@ -84,8 +121,9 @@ The build script will:
 2. Switch to linux-lts kernel
 3. Add the archzfs repository (for ZFS packages)
 4. Add custom packages (ZFS, Btrfs, NetworkManager, fzf, etc.)
-5. Copy the archangel installer script
-6. Build the ISO using mkarchiso
+5. Build the baked AUR local repo (skip with ~--skip-aur~)
+6. Copy the archangel installer script
+7. Build the ISO using mkarchiso
 
 ** Build Output
 
