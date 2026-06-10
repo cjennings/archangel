@@ -13,6 +13,11 @@ WORK_DIR="$SCRIPT_DIR/work"
 OUT_DIR="$SCRIPT_DIR/out"
 INSTALLER_DIR="$SCRIPT_DIR/installer"
 
+# AUR local-repo build helpers (build_aur_packages, stanza/manifest/package
+# helpers). See docs/aur-local-repo-spec.org.
+# shellcheck source=build-aur.sh
+source "$SCRIPT_DIR/build-aur.sh"
+
 # Live ISO root password (for SSH access during testing/emergencies)
 LIVE_ROOT_PASSWORD="archangel"
 
@@ -80,6 +85,17 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT INT TERM
 
+# Argument parsing. --skip-aur skips the whole AUR local-repo path (build,
+# profile injection, live config) so the normal ISO builds fast when the AUR
+# set isn't what's being worked on.
+SKIP_AUR=false
+for arg in "$@"; do
+    case "$arg" in
+        --skip-aur) SKIP_AUR=true ;;
+        *) error "Unknown argument: $arg (supported: --skip-aur)" ;;
+    esac
+done
+
 # Preflight checks
 [[ $EUID -ne 0 ]] && error "This script must be run as root"
 [[ -f /etc/arch-release ]] || error "This script must be run on Arch Linux"
@@ -93,6 +109,17 @@ command -v mkarchiso >/dev/null 2>&1 || {
     info "Installing archiso..."
     pacman -Sy --noconfirm archiso
 }
+
+# Pre-create the build log in out/ so it survives work/ cleanup and captures
+# both the AUR build and mkarchiso. Owned by SUDO_USER from the start so a
+# failed build leaves a user-readable log; tee writes to it as root, but the
+# file mode stays as set.
+BUILD_LOG="$OUT_DIR/build-$(date +%Y-%m-%d-%H%M).log"
+mkdir -p "$OUT_DIR"
+touch "$BUILD_LOG"
+if [[ -n "${SUDO_USER:-}" ]]; then
+    chown "$SUDO_USER:$SUDO_USER" "$BUILD_LOG"
+fi
 
 # Clean previous builds (using safe cleanup to handle any leftover mounts)
 if [[ -d "$WORK_DIR" ]]; then
@@ -178,6 +205,24 @@ if (echo > /dev/tcp/localhost/9129) 2>/dev/null; then
         "$PROFILE_DIR/pacman.conf"
 else
     info "pacoloco not detected — using upstream mirrors directly"
+fi
+
+# Build the AUR local repository and expose it to mkarchiso. build_aur_packages
+# compiles the v1 AUR set under $SUDO_USER into $SCRIPT_DIR/aur-packages with a
+# manifest; the build-host [aur] stanza points pacman at that dir with an
+# absolute file:// path so mkarchiso installs the packages into airootfs. Added
+# after the pacoloco block so the file:// Server isn't rewritten to localhost.
+if [[ "$SKIP_AUR" != true ]]; then
+    info "Building AUR local repository..."
+    build_aur_packages 2>&1 | tee -a "$BUILD_LOG"
+    # Guard on the dir: build_aur_packages skips repo creation for an empty
+    # AUR set, and a stanza pointing at a missing dir would fail mkarchiso.
+    if [[ -d "$SCRIPT_DIR/aur-packages" ]]; then
+        info "Adding build-host [aur] repository for mkarchiso..."
+        aur_repo_stanza "file://$SCRIPT_DIR/aur-packages" >> "$PROFILE_DIR/pacman.conf"
+    fi
+else
+    info "Skipping AUR local repository (--skip-aur)"
 fi
 
 # Add ZFS and our custom packages
@@ -289,6 +334,24 @@ w3m
 
 EOF
 
+# Audited official extra packages (reclassified out of the AUR — installed
+# from the normal repos, not built) plus, unless skipped, the baked
+# genuine-AUR set (resolved from the build-host [aur] repo during mkarchiso).
+# Package names come from build-aur.sh so the build array, this list, and the
+# manifest never drift.
+{
+    echo ""
+    echo "# Audited official extra utilities"
+    aur_official_packages
+    # AUR names only when the repo was actually built — otherwise mkarchiso
+    # would try to install them with no [aur] repo to resolve from.
+    if [[ "$SKIP_AUR" != true ]] && [[ -d "$SCRIPT_DIR/aur-packages" ]]; then
+        echo ""
+        echo "# Baked genuine-AUR packages (local [aur] repo)"
+        aur_v1_packages
+    fi
+} >> "$PROFILE_DIR/packages.x86_64"
+
 # Get kernel version for ISO naming
 info "Querying kernel version..."
 KERNEL_VER=$(pacman -Si linux-lts 2>/dev/null | grep "^Version" | awk '{print $3}' | cut -d- -f1)
@@ -312,6 +375,26 @@ sed -i "s/^iso_label=.*/iso_label=\"ARCHANGEL\"/" "$PROFILE_DIR/profiledef.sh"
 mkdir -p "$PROFILE_DIR/airootfs/usr/local/bin"
 mkdir -p "$PROFILE_DIR/airootfs/code"
 mkdir -p "$PROFILE_DIR/airootfs/etc/systemd/system/multi-user.target.wants"
+
+# Ship the baked AUR repo into the live ISO and give it a complete runtime
+# pacman.conf. archangel ships no airootfs pacman.conf today, so this file
+# REPLACES the live system's stock /etc/pacman.conf — it must keep the normal
+# repos and mirrorlist (copied from the pristine releng config, not the
+# pacoloco-rewritten profile config) and only append [aur]. An [aur]-only file
+# would break live pacman and the installer's pacstrap. The runtime Server
+# resolves /usr/share/aur-packages inside the live system.
+if [[ "$SKIP_AUR" != true ]] && [[ -d "$SCRIPT_DIR/aur-packages" ]]; then
+    info "Shipping AUR repo into the live ISO..."
+    mkdir -p "$PROFILE_DIR/airootfs/usr/share/aur-packages"
+    cp -r "$SCRIPT_DIR/aur-packages/." \
+        "$PROFILE_DIR/airootfs/usr/share/aur-packages/"
+
+    info "Creating live pacman.conf with [aur] (normal repos preserved)..."
+    cp /usr/share/archiso/configs/releng/pacman.conf \
+        "$PROFILE_DIR/airootfs/etc/pacman.conf"
+    aur_repo_stanza "file:///usr/share/aur-packages" \
+        >> "$PROFILE_DIR/airootfs/etc/pacman.conf"
+fi
 
 # Enable SSH on live ISO
 info "Enabling SSH on live ISO..."
@@ -502,17 +585,9 @@ rm -f /var/cache/pacman/pkg/zfs-utils-*.pkg.tar.zst*
 rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-dkms-*.pkg.tar.zst*
 rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-utils-*.pkg.tar.zst*
 
-# Pre-create the build log in out/ so it survives work/ cleanup. Owned
-# by SUDO_USER from the start so a failed build leaves a user-readable
-# log; tee writes to it as root, but the file mode stays as set.
-BUILD_LOG="$OUT_DIR/build-$(date +%Y-%m-%d-%H%M).log"
-mkdir -p "$OUT_DIR"
-touch "$BUILD_LOG"
-if [[ -n "${SUDO_USER:-}" ]]; then
-    chown "$SUDO_USER:$SUDO_USER" "$BUILD_LOG"
-fi
-
-mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR" 2>&1 | tee "$BUILD_LOG"
+# BUILD_LOG was pre-created right after the archiso preflight (above) so the
+# AUR build could append to it; mkarchiso appends here too.
+mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_DIR" 2>&1 | tee -a "$BUILD_LOG"
 
 # Restore ownership to the user who invoked sudo
 # mkarchiso runs as root and creates root-owned files
@@ -531,6 +606,17 @@ if [[ -f "$ISO_FILE" ]]; then
     RENAMED_LOG="$OUT_DIR/${ISO_BASENAME}.log"
     mv "$BUILD_LOG" "$RENAMED_LOG"
     BUILD_LOG="$RENAMED_LOG"
+
+    # Drop the AUR manifest beside the ISO so a given ISO's exact AUR set
+    # (version + commit + SHA256) is auditable without mounting it.
+    if [[ -f "$SCRIPT_DIR/aur-packages/manifest.tsv" ]]; then
+        cp "$SCRIPT_DIR/aur-packages/manifest.tsv" \
+            "$OUT_DIR/${ISO_BASENAME}-aur-manifest.tsv"
+        if [[ -n "${SUDO_USER:-}" ]]; then
+            chown "$SUDO_USER:$SUDO_USER" \
+                "$OUT_DIR/${ISO_BASENAME}-aur-manifest.tsv" 2>/dev/null || true
+        fi
+    fi
 
     echo ""
     info "Build complete!"

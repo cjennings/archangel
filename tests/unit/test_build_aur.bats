@@ -82,6 +82,26 @@ setup() {
     [[ "$output" != *"/usr/share/aur-packages"* ]]
 }
 
+# Guards the reviewer's core concern: the live pacman.conf build.sh ships must
+# be a COMPLETE config (releng base + [aur] appended), not an [aur]-only file
+# that would strip the official repos from the live system. Reproduces the
+# build.sh construction (cp releng config, append the stanza) and asserts the
+# official repos, the mirrorlist Include, and [aur] all survive.
+@test "live pacman.conf base plus [aur] preserves core, extra, and the mirrorlist" {
+    local releng=/usr/share/archiso/configs/releng/pacman.conf
+    [ -f "$releng" ] || skip "releng pacman.conf not installed"
+    local f
+    f=$(mktemp)
+    cp "$releng" "$f"
+    aur_repo_stanza "file:///usr/share/aur-packages" >> "$f"
+    grep -q '^\[core\]' "$f"
+    grep -q '^\[extra\]' "$f"
+    grep -q '^\[aur\]' "$f"
+    grep -q '^Include = /etc/pacman.d/mirrorlist' "$f"
+    grep -q '^Server = file:///usr/share/aur-packages' "$f"
+    rm -f "$f"
+}
+
 #############################
 # aur_manifest_header / aur_manifest_row — TSV manifest formatting
 #############################
