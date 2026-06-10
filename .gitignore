@@ -17,6 +17,7 @@ aur-packages.staging/
 .ai/
 todo.org
 inbox/
+CLAUDE.md
 
 # Host-specific installer configs (contain secrets); see *.conf.example templates
 installer/velox-*.conf
