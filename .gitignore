@@ -9,6 +9,10 @@ vm/
 test-logs/
 reference-repos/
 
+# Baked AUR local repo (built by build-aur.sh each run) and its staging dir
+aur-packages/
+aur-packages.staging/
+
 # Personal session/workflow docs (not project documentation)
 .ai/
 todo.org
