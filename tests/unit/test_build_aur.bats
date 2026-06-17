@@ -15,12 +15,12 @@ setup() {
 # aur_v1_packages — single source of truth for the v1 build set
 #############################
 
-@test "aur_v1_packages lists the nine audited v1 packages" {
+@test "aur_v1_packages lists the eight audited v1 packages" {
     run aur_v1_packages
     [ "$status" -eq 0 ]
-    [ "$(echo "$output" | wc -l)" -eq 9 ]
+    [ "$(echo "$output" | wc -l)" -eq 8 ]
     for pkg in downgrade yay informant zrepl pacman-cleanup-hook \
-               sanoid zfs-auto-snapshot topgrade ventoy-bin; do
+               zfs-auto-snapshot topgrade ventoy-bin; do
         [[ "$output" == *"$pkg"* ]]
     done
 }
@@ -28,9 +28,12 @@ setup() {
 @test "aur_v1_packages excludes the vNext-deferred packages" {
     run aur_v1_packages
     [ "$status" -eq 0 ]
-    # paru (second helper) and mkinitcpio-firmware (AUR-of-AUR deps) are vNext
+    # paru (second helper), mkinitcpio-firmware, and sanoid all pull AUR-of-AUR
+    # deps (sanoid needs perl-config-inifiles, AUR-only) — deferred to the
+    # vNext helper-driven dependency-resolution work.
     [[ "$output" != *"paru"* ]]
     [[ "$output" != *"mkinitcpio-firmware"* ]]
+    [[ "$output" != *"sanoid"* ]]
 }
 
 @test "aur_v1_packages emits one package per line" {

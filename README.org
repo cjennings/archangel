@@ -69,9 +69,9 @@ back to the upstream URLs.
 them into the ISO as a local pacman repo at ~/usr/share/aur-packages~.
 They work in the live environment (~pacman -Sl aur~) and install onto
 the target offline, so the installer never needs the AUR or a build
-toolchain on the target. The v1 set (audited 2026-06-09):
+toolchain on the target. The v1 set (re-audited 2026-06-16):
 ~downgrade~, ~yay~, ~informant~, ~zrepl~, ~pacman-cleanup-hook~,
-~sanoid~, ~zfs-auto-snapshot~, ~topgrade~, ~ventoy-bin~.
+~zfs-auto-snapshot~, ~topgrade~, ~ventoy-bin~.
 
 Building these needs ~base-devel~ and ~git~ on the build host, and the
 build must run under ~sudo~ so it can drop to your user for ~makepkg~

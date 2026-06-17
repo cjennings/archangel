@@ -18,12 +18,14 @@
 #############################
 
 # The v1 genuine-AUR build set: packages with no exact official-repo match
-# whose runtime + make deps all resolve from official / archzfs / the baked
-# local repo (the v1 dependency gate). paru (second helper) and
-# mkinitcpio-firmware (pulls AUR firmware deps) are deferred to vNext.
-# Audited 2026-06-09. This list is the one place the set is named; build.sh
-# reads it for the package-list append, and the manifest records what
-# actually shipped.
+# whose runtime + make deps all resolve from the official repos / archzfs
+# (the v1 dependency gate). paru (second helper), mkinitcpio-firmware, and
+# sanoid are deferred to vNext: each pulls an AUR-of-AUR dependency that
+# makepkg -s can't resolve from the official repos (sanoid needs
+# perl-config-inifiles, which is AUR-only). Re-audited 2026-06-16 against the
+# official sync dbs after a real build caught sanoid's missing dep. This list
+# is the one place the set is named; build.sh reads it for the package-list
+# append, and the manifest records what actually shipped.
 aur_v1_packages() {
     printf '%s\n' \
         downgrade \
@@ -31,7 +33,6 @@ aur_v1_packages() {
         informant \
         zrepl \
         pacman-cleanup-hook \
-        sanoid \
         zfs-auto-snapshot \
         topgrade \
         ventoy-bin
