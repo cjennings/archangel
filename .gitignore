@@ -15,9 +15,11 @@ aur-packages.staging/
 
 # Personal session/workflow docs (not project documentation)
 .ai/
+.claude/
 todo.org
 inbox/
 CLAUDE.md
+AGENTS.md
 
 # Host-specific installer configs (contain secrets); see *.conf.example templates
 installer/velox-*.conf
