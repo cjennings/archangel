@@ -5,6 +5,8 @@ setup() {
     # shellcheck disable=SC1091
     source "${BATS_TEST_DIRNAME}/../../installer/lib/common.sh"
     # shellcheck disable=SC1091
+    source "${BATS_TEST_DIRNAME}/../../installer/lib/raid.sh"
+    # shellcheck disable=SC1091
     source "${BATS_TEST_DIRNAME}/../../installer/lib/config.sh"
 }
 
@@ -91,6 +93,62 @@ EOF
     [[ "$output" == *"No disks selected"* ]]
     [[ "$output" == *"ROOT_PASSWORD not set"* ]]
     [[ "$output" == *"4 error"* ]]
+}
+
+@test "validate_config under set -e reports every error, not just the first" {
+    # Reproduces the monolith's call structure: `set -e` is active and
+    # validate_config is invoked as the final command of an && list. A
+    # post-increment that returns the pre-increment value (0 on the first
+    # error) trips set -e and aborts the function after one warning. This
+    # test runs outside bats' `run` shield (which sets +e) so the real
+    # accumulate-and-report behavior is exercised.
+    run bash -c '
+        set -e
+        source "'"${BATS_TEST_DIRNAME}"'/../../installer/lib/common.sh"
+        source "'"${BATS_TEST_DIRNAME}"'/../../installer/lib/raid.sh"
+        source "'"${BATS_TEST_DIRNAME}"'/../../installer/lib/config.sh"
+        HOSTNAME=""; TIMEZONE=""; SELECTED_DISKS=(); ROOT_PASSWORD=""
+        UNATTENDED=true
+        [[ "$UNATTENDED" == true ]] && validate_config
+    '
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"HOSTNAME not set"* ]]
+    [[ "$output" == *"TIMEZONE not set"* ]]
+    [[ "$output" == *"No disks selected"* ]]
+    [[ "$output" == *"ROOT_PASSWORD not set"* ]]
+    [[ "$output" == *"4 error"* ]]
+}
+
+@test "validate_config rejects a RAID_LEVEL invalid for the disk count" {
+    HOSTNAME=h
+    TIMEZONE=UTC
+    ROOT_PASSWORD=x
+    SELECTED_DISKS=(/dev/sda /dev/sdb)
+    RAID_LEVEL=raidz1
+    run validate_config
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid RAID_LEVEL"* ]]
+    [[ "$output" == *"raidz1"* ]]
+}
+
+@test "validate_config accepts a RAID_LEVEL valid for the disk count" {
+    HOSTNAME=h
+    TIMEZONE=UTC
+    ROOT_PASSWORD=x
+    SELECTED_DISKS=(/dev/sda /dev/sdb /dev/sdc)
+    RAID_LEVEL=raidz1
+    run validate_config
+    [[ "$output" != *"Invalid RAID_LEVEL"* ]]
+}
+
+@test "validate_config accepts an empty RAID_LEVEL for a single disk" {
+    HOSTNAME=h
+    TIMEZONE=UTC
+    ROOT_PASSWORD=x
+    SELECTED_DISKS=(/dev/sda)
+    RAID_LEVEL=""
+    run validate_config
+    [[ "$output" != *"Invalid RAID_LEVEL"* ]]
 }
 
 @test "validate_config rejects an invalid timezone" {

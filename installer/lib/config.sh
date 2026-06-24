@@ -116,20 +116,30 @@ check_config() {
 validate_config() {
     local errors=0
 
-    [[ -z "$HOSTNAME" ]] && { warn "HOSTNAME not set"; ((errors++)); }
-    [[ -z "$TIMEZONE" ]] && { warn "TIMEZONE not set"; ((errors++)); }
-    [[ ${#SELECTED_DISKS[@]} -eq 0 ]] && { warn "No disks selected"; ((errors++)); }
-    [[ -z "$ROOT_PASSWORD" ]] && { warn "ROOT_PASSWORD not set"; ((errors++)); }
+    [[ -z "$HOSTNAME" ]] && { warn "HOSTNAME not set"; ((++errors)); }
+    [[ -z "$TIMEZONE" ]] && { warn "TIMEZONE not set"; ((++errors)); }
+    [[ ${#SELECTED_DISKS[@]} -eq 0 ]] && { warn "No disks selected"; ((++errors)); }
+    [[ -z "$ROOT_PASSWORD" ]] && { warn "ROOT_PASSWORD not set"; ((++errors)); }
 
     # Validate disks exist
     for disk in "${SELECTED_DISKS[@]}"; do
-        [[ -b "$disk" ]] || { warn "Disk not found: $disk"; ((errors++)); }
+        [[ -b "$disk" ]] || { warn "Disk not found: $disk"; ((++errors)); }
     done
 
     # Validate timezone
     if [[ -n "$TIMEZONE" && ! -f "/usr/share/zoneinfo/$TIMEZONE" ]]; then
         warn "Invalid timezone: $TIMEZONE"
-        ((errors++))
+        ((++errors))
+    fi
+
+    # Validate the RAID level against the selected disk count. The
+    # interactive path only offers levels valid for the count, so this
+    # guards the unattended config, where RAID_LEVEL is set by hand and
+    # can name a level the disk count can't support. raid_is_valid treats
+    # an empty level on a single disk (no RAID) as valid.
+    if ! raid_is_valid "$RAID_LEVEL" "${#SELECTED_DISKS[@]}"; then
+        warn "Invalid RAID_LEVEL '$RAID_LEVEL' for ${#SELECTED_DISKS[@]} disk(s)"
+        ((++errors))
     fi
 
     if [[ $errors -gt 0 ]]; then

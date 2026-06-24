@@ -447,33 +447,14 @@ EOF
 info "Setting root password for live ISO..."
 # Generate password hash
 PASS_HASH=$(openssl passwd -6 "$LIVE_ROOT_PASSWORD")
-# Modify the existing shadow file's root entry (don't replace entire file)
-# The releng template has multiple accounts; replacing breaks the file
-if [[ -f "$PROFILE_DIR/airootfs/etc/shadow" ]]; then
-    sed -i "s|^root:[^:]*:|root:${PASS_HASH}:|" "$PROFILE_DIR/airootfs/etc/shadow"
-else
-    # Fallback: create complete shadow file if it doesn't exist
-    cat > "$PROFILE_DIR/airootfs/etc/shadow" << EOF
-root:${PASS_HASH}:19000:0:99999:7:::
-bin:!*:19000::::::
-daemon:!*:19000::::::
-mail:!*:19000::::::
-ftp:!*:19000::::::
-http:!*:19000::::::
-nobody:!*:19000::::::
-dbus:!*:19000::::::
-systemd-coredump:!*:19000::::::
-systemd-network:!*:19000::::::
-systemd-oom:!*:19000::::::
-systemd-journal-remote:!*:19000::::::
-systemd-resolve:!*:19000::::::
-systemd-timesync:!*:19000::::::
-tss:!*:19000::::::
-uuidd:!*:19000::::::
-polkitd:!*:19000::::::
-avahi:!*:19000::::::
-EOF
-fi
+# Modify the existing shadow file's root entry (don't replace the whole
+# file — the releng template ships /etc/shadow with multiple accounts and
+# rewriting it from scratch would drop them). The profile is always copied
+# fresh from releng above, so the file is present; if it's missing, that
+# copy is broken — fail loudly rather than silently rebuilding a stale list.
+[[ -f "$PROFILE_DIR/airootfs/etc/shadow" ]] \
+    || error "Expected shadow file missing: $PROFILE_DIR/airootfs/etc/shadow (releng profile copy broken?)"
+sed -i "s|^root:[^:]*:|root:${PASS_HASH}:|" "$PROFILE_DIR/airootfs/etc/shadow"
 chmod 400 "$PROFILE_DIR/airootfs/etc/shadow"
 
 # Allow root SSH login with password (for testing)
