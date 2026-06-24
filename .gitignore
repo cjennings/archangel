@@ -28,3 +28,17 @@ installer/velox-*.conf
 *~
 \#*\#
 .\#*
+
+# --- elisp ruleset ---
+githooks/
+*.elc
+*.eln
+
+# --- python ruleset ---
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+coverage.json
+htmlcov/
+.pytest_cache/
