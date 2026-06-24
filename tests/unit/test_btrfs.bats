@@ -54,3 +54,38 @@ setup() {
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
+
+#############################
+# parse_btrfs_subvol_opts
+#############################
+# Composes the mount-option string for one subvolume from the shared
+# BTRFS_OPTS plus the per-subvol extra flags. Pure string transform,
+# shared by mount_btrfs_subvolumes and generate_btrfs_fstab. BTRFS_OPTS
+# is set at the top of btrfs.sh (sourced in setup), so these pin behavior
+# against the real default option string.
+
+@test "parse_btrfs_subvol_opts: no extra flags keeps the default opts" {
+    run parse_btrfs_subvol_opts "@home" ""
+    [ "$status" -eq 0 ]
+    [ "$output" = "subvol=@home,noatime,compress=zstd,space_cache=v2,discard=async" ]
+}
+
+@test "parse_btrfs_subvol_opts: compress=no drops compress=zstd" {
+    run parse_btrfs_subvol_opts "@media" "compress=no"
+    [ "$output" = "subvol=@media,noatime,space_cache=v2,discard=async" ]
+}
+
+@test "parse_btrfs_subvol_opts: nodatacow adds nodatacow and drops compress=zstd" {
+    run parse_btrfs_subvol_opts "@vms" "nodatacow"
+    [ "$output" = "subvol=@vms,noatime,space_cache=v2,discard=async,nodatacow" ]
+}
+
+@test "parse_btrfs_subvol_opts: nosuid adds nosuid,nodev and keeps compression" {
+    run parse_btrfs_subvol_opts "@tmp" "nosuid"
+    [ "$output" = "subvol=@tmp,noatime,compress=zstd,space_cache=v2,discard=async,nosuid,nodev" ]
+}
+
+@test "parse_btrfs_subvol_opts: nodatacow and nosuid combine" {
+    run parse_btrfs_subvol_opts "@x" "nodatacow,nosuid"
+    [ "$output" = "subvol=@x,noatime,space_cache=v2,discard=async,nodatacow,nosuid,nodev" ]
+}

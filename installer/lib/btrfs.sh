@@ -340,6 +340,36 @@ create_btrfs_subvolumes() {
 # Btrfs Mount Functions
 #############################
 
+# Compose the mount-option string for a single subvolume: the shared
+# BTRFS_OPTS prefixed with subvol=<name>, then the per-subvol extra
+# flags applied. compress=no and nodatacow both drop the default
+# compress=zstd; nodatacow also appends nodatacow; nosuid appends
+# nosuid,nodev. Pure string transform — no I/O. Shared by
+# mount_btrfs_subvolumes and generate_btrfs_fstab so the two stay in sync.
+# Usage: parse_btrfs_subvol_opts NAME EXTRA
+parse_btrfs_subvol_opts() {
+    local name="$1" extra="$2"
+    local opts="subvol=$name,$BTRFS_OPTS"
+
+    if [[ -n "$extra" ]]; then
+        # compress=no: drop the default compression, don't add anything
+        if [[ "$extra" == *"compress=no"* ]]; then
+            opts=$(echo "$opts" | sed 's/,compress=zstd//')
+        fi
+        # nodatacow implies no compression (incompatible), so drop it too
+        if [[ "$extra" == *"nodatacow"* ]]; then
+            opts="$opts,nodatacow"
+            opts=$(echo "$opts" | sed 's/,compress=zstd//')
+        fi
+        # nosuid,nodev hardening for tmp subvolumes
+        if [[ "$extra" == *"nosuid"* ]]; then
+            opts="$opts,nosuid,nodev"
+        fi
+    fi
+
+    echo "$opts"
+}
+
 mount_btrfs_subvolumes() {
     local partition="$1"
 
@@ -356,25 +386,8 @@ mount_btrfs_subvolumes() {
         # Skip root, already mounted
         [[ "$name" == "@" ]] && continue
 
-        # Build mount options
-        local opts="subvol=$name,$BTRFS_OPTS"
-
-        # Apply extra options (override defaults where specified)
-        if [[ -n "$extra" ]]; then
-            # Handle compress=no by removing compress from opts and not adding it
-            if [[ "$extra" == *"compress=no"* ]]; then
-                opts=$(echo "$opts" | sed 's/,compress=zstd//')
-            fi
-            # Handle nodatacow
-            if [[ "$extra" == *"nodatacow"* ]]; then
-                opts="$opts,nodatacow"
-                opts=$(echo "$opts" | sed 's/,compress=zstd//')
-            fi
-            # Handle nosuid,nodev for tmp
-            if [[ "$extra" == *"nosuid"* ]]; then
-                opts="$opts,nosuid,nodev"
-            fi
-        fi
+        local opts
+        opts=$(parse_btrfs_subvol_opts "$name" "$extra")
 
         info "Mounting $name -> $MNTPOINT$mountpoint"
         mkdir -p "$MNTPOINT$mountpoint"
@@ -412,22 +425,8 @@ EOF
     for subvol_spec in "${BTRFS_SUBVOLS[@]}"; do
         IFS=':' read -r name mountpoint extra <<< "$subvol_spec"
 
-        # Build mount options
-        local opts="subvol=$name,$BTRFS_OPTS"
-
-        # Apply extra options
-        if [[ -n "$extra" ]]; then
-            if [[ "$extra" == *"compress=no"* ]]; then
-                opts=$(echo "$opts" | sed 's/,compress=zstd//')
-            fi
-            if [[ "$extra" == *"nodatacow"* ]]; then
-                opts="$opts,nodatacow"
-                opts=$(echo "$opts" | sed 's/,compress=zstd//')
-            fi
-            if [[ "$extra" == *"nosuid"* ]]; then
-                opts="$opts,nosuid,nodev"
-            fi
-        fi
+        local opts
+        opts=$(parse_btrfs_subvol_opts "$name" "$extra")
 
         echo "UUID=$uuid  $mountpoint  btrfs  $opts  0 0" >> $MNTPOINT/etc/fstab
     done
