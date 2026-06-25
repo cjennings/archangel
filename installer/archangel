@@ -794,6 +794,16 @@ EOF
         info "Baked AUR packages to install: ${aur_packages[*]:-none}"
     fi
 
+    # Force-refresh package databases before pacstrap. The ISO bakes an
+    # archzfs sync db at build time, so as the ISO ages that db pins an older
+    # zfs-dkms while linux-lts is pulled current from the live mirror, and the
+    # DKMS build then fails against the newer kernel. A single -y can be
+    # skipped by pacman's freshness check against the GitHub-served archzfs db
+    # (no reliable timestamps), so -yy forces the refresh. This keeps the
+    # "zfs-dkms always matches the kernel" guarantee true regardless of ISO age.
+    info "Refreshing package databases..."
+    pacman -Syy --noconfirm || error "Failed to refresh package databases"
+
     info "Installing base packages (this takes a while)..."
 
     local packages
