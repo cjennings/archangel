@@ -166,6 +166,38 @@ aur_manifest_names() {
     awk -F'\t' 'NR>1 {print $1}' "$manifest"
 }
 
+# Print the baked AUR packages that are ZFS-only tooling, one per line. The ISO
+# bakes the full AUR set on every build, but these require a ZFS root:
+# zfs-auto-snapshot has a hard `zfs` dependency, and zrepl is ZFS replication.
+# On a non-ZFS install neither dependency exists, so installing them is at best
+# pointless and at worst aborts pacstrap (zfs-auto-snapshot's unmet `zfs` dep
+# fails the whole transaction). Keep in lockstep with build-aur.sh's
+# aur_v1_packages: a new ZFS-only AUR package added there belongs here too.
+aur_zfs_only_packages() {
+    printf '%s\n' \
+        zfs-auto-snapshot \
+        zrepl
+}
+
+# Filter a list of AUR package names for the target filesystem, printing the
+# kept names one per line in input order. On a ZFS target every package passes
+# through. On any other filesystem the ZFS-only tooling (aur_zfs_only_packages)
+# is dropped so it never reaches pacstrap. install_base runs the baked manifest
+# names through this before appending them to the pacstrap set.
+filter_aur_for_fs() {
+    local fs="$1"; shift
+    local -A drop=()
+    if [[ "$fs" != zfs ]]; then
+        local z
+        while IFS= read -r z; do drop["$z"]=1; done < <(aur_zfs_only_packages)
+    fi
+    local pkg
+    for pkg in "$@"; do
+        [[ -n "${drop[$pkg]:-}" ]] && continue
+        printf '%s\n' "$pkg"
+    done
+}
+
 # Remove the named repo's stanza (its [name] header and the config lines up to
 # the next [section] or EOF) from the pacman.conf at $2. Used to ensure the
 # installed target never references the baked [aur] repo, whose
@@ -181,7 +213,14 @@ strip_repo_stanza() {
         skip { next }
         { print }
     ' "$pacman_conf" > "$tmp"
-    mv "$tmp" "$pacman_conf"
+    # Truncate-write in place rather than `mv` the temp over the target: mktemp
+    # creates the temp 0600, and a mv would carry that onto pacman.conf,
+    # clobbering its pristine 0644 and leaving the installed config root-only.
+    # That broke every user-level makepkg/yay ("config file /etc/pacman.conf
+    # could not be read: Permission denied"). Writing through the existing file
+    # keeps its inode and mode.
+    cat "$tmp" > "$pacman_conf"
+    rm -f "$tmp"
 }
 
 #############################

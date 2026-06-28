@@ -666,6 +666,26 @@ Boot0001* ZFSBootMenu"
     rm -f "$f"
 }
 
+@test "strip_repo_stanza preserves the target file mode (no 0600 clobber)" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '[core]' '[aur]' 'Server = file:///usr/share/aur-packages' '[extra]' > "$f"
+    chmod 644 "$f"
+    strip_repo_stanza aur "$f"
+    [ "$(stat -c %a "$f")" = "644" ]
+    rm -f "$f"
+}
+
+@test "strip_repo_stanza preserves a non-default file mode" {
+    local f
+    f=$(mktemp)
+    printf '%s\n' '[core]' '[aur]' 'Server = x' '[extra]' > "$f"
+    chmod 640 "$f"
+    strip_repo_stanza aur "$f"
+    [ "$(stat -c %a "$f")" = "640" ]
+    rm -f "$f"
+}
+
 #############################
 # aur_repo_available
 #############################
@@ -719,4 +739,54 @@ Boot0001* ZFSBootMenu"
     run aur_manifest_names /nonexistent/manifest.tsv
     [ "$status" -eq 0 ]
     [ -z "$output" ]
+}
+
+#############################
+# aur_zfs_only_packages / filter_aur_for_fs
+#############################
+
+@test "aur_zfs_only_packages lists zfs-auto-snapshot and zrepl" {
+    run aur_zfs_only_packages
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"zfs-auto-snapshot"* ]]
+    [[ "$output" == *"zrepl"* ]]
+}
+
+@test "filter_aur_for_fs zfs keeps every package including zfs-only tooling" {
+    run filter_aur_for_fs zfs downgrade yay zrepl zfs-auto-snapshot topgrade
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" == *"zfs-auto-snapshot"* ]]
+    [[ "$output" == *"zrepl"* ]]
+    [[ "$output" == *"yay"* ]]
+}
+
+@test "filter_aur_for_fs btrfs drops zfs-only tooling, keeps the rest" {
+    run filter_aur_for_fs btrfs downgrade yay zrepl zfs-auto-snapshot topgrade
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" != *"zfs-auto-snapshot"* ]]
+    [[ "$output" != *"zrepl"* ]]
+    [[ "$output" == *"downgrade"* ]]
+    [[ "$output" == *"yay"* ]]
+    [[ "$output" == *"topgrade"* ]]
+}
+
+@test "filter_aur_for_fs btrfs with only zfs-only tooling prints nothing" {
+    run filter_aur_for_fs btrfs zfs-auto-snapshot zrepl
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "filter_aur_for_fs with no package arguments prints nothing" {
+    run filter_aur_for_fs btrfs
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "filter_aur_for_fs preserves input order" {
+    run filter_aur_for_fs zfs yay downgrade topgrade
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "yay" ]
+    [ "${lines[2]}" = "topgrade" ]
 }

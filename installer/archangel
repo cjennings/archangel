@@ -791,6 +791,11 @@ EOF
         info "Exposing baked AUR repo to pacstrap..."
         append_aur_repo /etc/pacman.conf "file://$aur_repo_dir"
         mapfile -t aur_packages < <(aur_manifest_names "$aur_repo_dir/manifest.tsv")
+        # Drop ZFS-only AUR tooling on a non-ZFS target. The baked repo carries
+        # the full set on every ISO, but e.g. zfs-auto-snapshot has a hard zfs
+        # dependency that can't resolve on a btrfs install and would abort the
+        # whole pacstrap transaction.
+        mapfile -t aur_packages < <(filter_aur_for_fs "$FILESYSTEM" "${aur_packages[@]}")
         info "Baked AUR packages to install: ${aur_packages[*]:-none}"
     fi
 
