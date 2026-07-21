@@ -27,15 +27,24 @@ The ISO also doubles as a [[#rescue-disk][rescue disk]] with data recovery, boot
 Archangel currently uses linux-lts for stability. Choosing linux and linux-zen kernel varieties coming shortly.
 
 ** Filesystem Comparison
+:PROPERTIES:
+:CUSTOM_ID: filesystem-comparison
+:END:
 
 | Feature          | ZFS                        | Btrfs                |
 |------------------+----------------------------+----------------------|
 | Bootloader       | ZFSBootMenu                | GRUB + grub-btrfs    |
+|------------------+----------------------------+----------------------|
 | Encryption       | Native ZFS encryption      | LUKS2                |
+|------------------+----------------------------+----------------------|
 | Snapshot utility | zfssnapshot                | snapper              |
+|------------------+----------------------------+----------------------|
 | Snapshot boot    | Built into ZFSBootMenu     | grub-btrfs menu      |
+|------------------+----------------------------+----------------------|
 | RAID support     | mirror, raidz1/2/3, stripe | RAID0, RAID1, RAID10 |
+|------------------+----------------------------+----------------------|
 | EFI size         | 512MB                      | 1GB                  |
+|------------------+----------------------------+----------------------|
 
 * Prerequisites
 
@@ -155,6 +164,9 @@ make build
 2. Boot from USB and wait for the live environment to load.
 
 ** SSH Access
+:PROPERTIES:
+:CUSTOM_ID: ssh-access
+:END:
 
 The live environment automatically starts an SSH server, allowing remote access
 for headless installations, rescue operations, or VM testing. Avahi is
@@ -172,6 +184,9 @@ The default root password is set in ~build.sh~ (variable ~LIVE_ROOT_PASSWORD~).
 operations only. Do not expose the live environment to untrusted networks.
 
 ** Rescue Disk
+:PROPERTIES:
+:CUSTOM_ID: rescue-disk
+:END:
 
 The ISO serves as a general-purpose rescue disk with a comprehensive set of
 recovery and diagnostic tools pre-installed:
@@ -231,6 +246,9 @@ After configuration, the installation runs without intervention:
 - Genesis snapshot creation
 
 ** Unattended Installation
+:PROPERTIES:
+:CUSTOM_ID: unattended-installation
+:END:
 
 For automated or headless installations, you can specify a simple plain text config file containing the choices. 
 
@@ -283,19 +301,30 @@ A complete example with all options is available at ~installer/archangel.conf.ex
 
 *** Config File Reference
 
-| Field          | Required | Default     | Description                                |
-|----------------+----------+-------------+--------------------------------------------|
+| Field            | Required | Default     | Description                                |
+|------------------+----------+-------------+--------------------------------------------|
 | ~FILESYSTEM~     | No       | zfs         | Filesystem type (zfs or btrfs)             |
+|------------------+----------+-------------+--------------------------------------------|
 | ~HOSTNAME~       | Yes      | -           | System hostname                            |
+|------------------+----------+-------------+--------------------------------------------|
 | ~TIMEZONE~       | Yes      | -           | Timezone (Region/City format)              |
+|------------------+----------+-------------+--------------------------------------------|
 | ~DISKS~          | Yes      | -           | Comma-separated disk paths                 |
+|------------------+----------+-------------+--------------------------------------------|
 | ~ZFS_PASSPHRASE~ | Yes*     | -           | Encryption passphrase (*if not NO_ENCRYPT) |
+|------------------+----------+-------------+--------------------------------------------|
 | ~ROOT_PASSWORD~  | Yes      | -           | Root user password                         |
+|------------------+----------+-------------+--------------------------------------------|
 | ~LOCALE~         | No       | en_US.UTF-8 | System locale                              |
+|------------------+----------+-------------+--------------------------------------------|
 | ~KEYMAP~         | No       | us          | Console keyboard layout                    |
+|------------------+----------+-------------+--------------------------------------------|
 | ~RAID_LEVEL~     | No       | mirror      | RAID type for multi-disk                   |
+|------------------+----------+-------------+--------------------------------------------|
 | ~ENABLE_SSH~     | No       | yes         | Enable SSH server                          |
+|------------------+----------+-------------+--------------------------------------------|
 | ~NO_ENCRYPT~     | No       | no          | Skip encryption (testing only)             |
+|------------------+----------+-------------+--------------------------------------------|
 
 * Post-Reboot
 
@@ -310,6 +339,9 @@ A complete example with all options is available at ~installer/archangel.conf.ex
 3. Log in as root
 
 * Post-Installation
+:PROPERTIES:
+:CUSTOM_ID: post-installation
+:END:
 
 ** ZFS Snapshot Management
 
@@ -363,6 +395,9 @@ installation and can decline, or set ~ENABLE_SSH=no~ in a config file.
 and consider installing ~fail2ban~.
 
 * Testing
+:PROPERTIES:
+:CUSTOM_ID: testing
+:END:
 
 Two test layers: ~make test~ runs shellcheck + bats unit tests for the pure
 logic in ~installer/lib/*.sh~ (fast, no VMs). ~make test-install~ runs the full
@@ -425,11 +460,15 @@ archangel/
 
 ** Script Descriptions
 
-| Script              | Description                                                                                                  |
-|---------------------+--------------------------------------------------------------------------------------------------------------|
-| ~build.sh~            | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso                      |
-| ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install, bootloader setup |
-| ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                                  |
+| Script                | Description                                                                                  |
+|-----------------------+----------------------------------------------------------------------------------------------|
+| ~build.sh~            | Builds the ISO. Copies releng profile, adds packages, configures kernel, runs mkarchiso      |
+|-----------------------+----------------------------------------------------------------------------------------------|
+| ~installer/archangel~ | Interactive installer. Handles disk partitioning, filesystem creation, base system install,  |
+|                       | bootloader setup                                                                             |
+|-----------------------+----------------------------------------------------------------------------------------------|
+| ~scripts/test-vm.sh~  | Launches QEMU VM for testing. Supports single and multi-disk configurations                  |
+|-----------------------+----------------------------------------------------------------------------------------------|
 
 * Troubleshooting
 
