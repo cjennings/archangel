@@ -42,3 +42,6 @@ __pycache__/
 coverage.json
 htmlcov/
 .pytest_cache/
+
+# Claude Code: task archive (follows todo file privacy)
+/archive/task-archive.org
