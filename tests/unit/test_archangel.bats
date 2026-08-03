@@ -401,3 +401,98 @@ setup() {
     run network_available
     [ "$status" -eq 0 ]
 }
+
+#############################
+# configure_zfs_keyfile
+#############################
+# Encrypted ZFS installs prompt for the same passphrase twice:
+# ZFSBootMenu unlocks the pool to read the kernel and initramfs, then
+# kexecs, and the key doesn't survive kexec — so the booted initramfs
+# re-imports the pool, finds keylocation=prompt, and asks again.
+#
+# configure_zfs_keyfile closes the second prompt the same way the Btrfs
+# path already closes its LUKS equivalent: write the passphrase to a
+# keyfile inside the encrypted root, point the encryption root at it,
+# and bake it into the initramfs via FILES=. ZFSBootMenu can't read a
+# file inside a dataset it hasn't unlocked yet, so it still prompts
+# once — that surviving prompt is the intended behavior, not a bug.
+#
+# zfs is the stubbed system boundary. The keyfile write, its
+# permissions, and the FILES= wiring are exercised for real.
+
+zfs_keyfile_fixture() {
+    TEST_ROOT=$(mktemp -d)
+    MNTPOINT="$TEST_ROOT"
+    ZFS_ARGS_LOG="$TEST_ROOT/zfs-args"
+    mkdir -p "$MNTPOINT/etc"
+    printf '%s\n' 'FILES=()' > "$MNTPOINT/etc/mkinitcpio.conf"
+    zfs() { echo "$*" >> "$ZFS_ARGS_LOG"; return 0; }
+}
+
+@test "configure_zfs_keyfile writes the passphrase with no trailing newline" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile "correct horse" zroot
+    # The keyfile lands mode 000, which locks out the owner too — only root
+    # bypasses that, and these tests don't run as root. Restore read access to
+    # inspect the content; the mode itself is asserted separately below.
+    chmod u+r "$MNTPOINT/etc/zfs/zroot.key"
+    # A trailing newline would become part of the passphrase ZFS reads back,
+    # so the key would never match what's typed at the ZBM prompt. 13 bytes,
+    # not 14: no terminator.
+    [ "$(wc -c < "$MNTPOINT/etc/zfs/zroot.key")" -eq 13 ]
+    [ "$(cat "$MNTPOINT/etc/zfs/zroot.key")" = "correct horse" ]
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile points the encryption root at the keyfile" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile testpass zroot
+    grep -qE '^set +keylocation=file:///etc/zfs/zroot\.key +zroot$' "$ZFS_ARGS_LOG"
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile changes the location without rekeying the pool" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile testpass zroot
+    # keylocation is settable with plain `zfs set` (zfsprops(7)), and
+    # keyformat is already passphrase from pool creation. Reaching for
+    # `zfs change-key` here would rekey the pool and prompt for new key
+    # material mid-install — and losing keyformat=passphrase would leave
+    # ZFSBootMenu with no way to accept a typed passphrase at all.
+    ! grep -qF 'change-key' "$ZFS_ARGS_LOG"
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile bakes the keyfile into the initramfs" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile testpass zroot
+    grep -qF 'FILES=(/etc/zfs/zroot.key)' "$MNTPOINT/etc/mkinitcpio.conf"
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile leaves the keyfile unreadable to other users" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile testpass zroot
+    # Protected at rest by the encrypted dataset, but a stray mode 644
+    # would expose it to any local user on the running system.
+    [ "$(stat -c '%a' "$MNTPOINT/etc/zfs/zroot.key")" -eq 0 ]
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile preserves a passphrase containing shell metacharacters" {
+    zfs_keyfile_fixture
+    configure_zfs_keyfile 'a$b "c" \d*' zroot
+    chmod u+r "$MNTPOINT/etc/zfs/zroot.key"
+    [ "$(cat "$MNTPOINT/etc/zfs/zroot.key")" = 'a$b "c" \d*' ]
+    rm -rf "$TEST_ROOT"
+}
+
+@test "configure_zfs_keyfile aborts when the key change fails" {
+    zfs_keyfile_fixture
+    zfs() { return 1; }
+    run configure_zfs_keyfile testpass zroot
+    # Silently continuing would ship an initramfs whose keyfile doesn't
+    # match the pool, turning one prompt into an unbootable system.
+    [ "$status" -eq 1 ]
+    rm -rf "$TEST_ROOT"
+}

@@ -925,6 +925,47 @@ configure_ssh() {
     fi
 }
 
+# Close the second passphrase prompt on encrypted ZFS boots.
+#
+# ZFSBootMenu unlocks the pool to read this kernel and initramfs, then kexecs
+# into it — and the loaded key does not survive kexec. With no key inside the
+# initramfs, the zfs hook re-imports the pool, finds keylocation=prompt, and
+# asks for the same passphrase a second time.
+#
+# Pointing the encryption root at a keyfile that lives inside the encrypted
+# dataset closes it. ZFSBootMenu cannot read a file in a dataset it has not
+# unlocked, so it overrides the file:// URI and prompts once — documented
+# upstream behavior, not a side effect. The booted initramfs carries the
+# keyfile and loads the key silently.
+#
+# keyformat stays passphrase: it is what lets ZFSBootMenu accept the typed
+# value, and a raw key would leave it no way in at all. keylocation alone is
+# settable with `zfs set` (zfsprops(7)), so this never reaches for `zfs
+# change-key`, which would rekey the pool and prompt for new key material
+# mid-install.
+#
+# Never relocate this keyfile onto the ESP or into a custom ZFSBootMenu image.
+# Both are unencrypted; the protection here comes entirely from the keyfile and
+# the initramfs living inside the encrypted dataset.
+configure_zfs_keyfile() {
+    local passphrase="$1"
+    local pool="$2"
+    local keyfile="/etc/zfs/zroot.key"
+
+    mkdir -p "$MNTPOINT$(dirname "$keyfile")"
+
+    # No trailing newline: ZFS reads the file's bytes as the passphrase, so a
+    # stray newline would not match what the user types at the ZBM prompt.
+    printf '%s' "$passphrase" > "$MNTPOINT$keyfile"
+    chmod 000 "$MNTPOINT$keyfile"
+
+    zfs set keylocation="file://$keyfile" "$pool" \
+        || error "Failed to point $pool at $keyfile"
+
+    ensure_initramfs_files "$keyfile" "$MNTPOINT/etc/mkinitcpio.conf"
+    info "Keyfile embedded in initramfs - one passphrase prompt at boot."
+}
+
 configure_initramfs() {
     step "Configuring Initramfs for ZFS"
 
@@ -983,6 +1024,12 @@ EOF
     # fail loudly downstream, so silent-replace failure can't reach a booted
     # system. (Audited 2026-04-27 against silent-sed pattern.)
     sed -i 's/^HOOKS=.*/HOOKS=(base udev microcode modconf kms keyboard keymap consolefont block zfs filesystems)/' $MNTPOINT/etc/mkinitcpio.conf
+
+    # Embed the pool key so the booted initramfs doesn't re-prompt. Must run
+    # before mkinitcpio -P below, which is what bakes FILES= into the image.
+    if [[ "$NO_ENCRYPT" != "yes" ]]; then
+        configure_zfs_keyfile "$ZFS_PASSPHRASE" "$POOL_NAME"
+    fi
 
     # Get the installed kernel version (not the running kernel)
     local kernel_ver
