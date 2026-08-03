@@ -300,3 +300,53 @@ error: failed to commit transaction (invalid or corrupted package (checksum))
     run is_archzfs_cache_corruption ""
     [ "$status" -eq 1 ]
 }
+
+#############################
+# INSTALLED_PASSWORD scoping
+#############################
+# After the reboot step, run_test switches ssh_cmd over to the installed
+# system's root password. That value must not outlive the test. When it leaks
+# into the next scenario, ssh_cmd presents the installed password to the *live
+# ISO* — whose password is different — so every SSH call fails instantly and
+# the install dies with no output and no package requests.
+#
+# That is exactly what happened on 2026-08-01: the reset was a single `unset`
+# on the success path, three failure paths returned early past it, and one
+# flaky check cascaded into six silent ZFS install failures. The fix declares
+# it `local` in run_test so bash clears it on every return path.
+
+@test "ssh_cmd picks up a caller-scoped INSTALLED_PASSWORD" {
+    # Proves local-instead-of-export still reaches ssh_cmd: bash's dynamic
+    # scoping exposes a caller's local to the functions it calls.
+    sshpass() { echo "$2"; }
+    ssh() { :; }
+    caller_with_local() {
+        local INSTALLED_PASSWORD="installed-secret"
+        ssh_cmd true
+    }
+    run caller_with_local
+    [[ "$output" == *"installed-secret"* ]]
+}
+
+@test "a caller-scoped INSTALLED_PASSWORD does not leak past a failed return" {
+    sshpass() { echo "$2"; }
+    ssh() { :; }
+    SSH_PASSWORD="live-iso-password"
+    failing_caller() {
+        local INSTALLED_PASSWORD="installed-secret"
+        return 1
+    }
+    failing_caller || true
+    run ssh_cmd true
+    [[ "$output" == *"live-iso-password"* ]]
+    [[ "$output" != *"installed-secret"* ]]
+}
+
+@test "run_test declares INSTALLED_PASSWORD local and never exports it" {
+    # Structural guard: run_test itself drives qemu and ssh, so this file
+    # can't exercise it directly. An export here would silently restore the
+    # cascade, so pin the shape that prevents it.
+    local src="${BATS_TEST_DIRNAME}/../../scripts/test-install.sh"
+    grep -qE '^[[:space:]]*local INSTALLED_PASSWORD=' "$src"
+    ! grep -qE '^[[:space:]]*export INSTALLED_PASSWORD' "$src"
+}

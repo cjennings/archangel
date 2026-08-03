@@ -477,11 +477,21 @@ run_install() {
     local config_name
     config_name=$(basename "$config" .conf)
 
-    # Copy latest archangel script and lib/ to VM (in case ISO is outdated)
-    sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -P "$SSH_PORT" "$PROJECT_DIR/installer/archangel" root@localhost:/usr/local/bin/archangel 2>/dev/null
-    sshpass -p "$SSH_PASSWORD" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-        -P "$SSH_PORT" "$PROJECT_DIR/installer/lib" root@localhost:/usr/local/bin/ 2>/dev/null
+    # Copy latest archangel script and lib/ to VM (in case ISO is outdated).
+    # Both pushes are checked: an unreported failure here leaves the guest
+    # without a usable installer, and the run then dies at `archangel
+    # --config-file` with exit 127 and no output at all — indistinguishable
+    # from a real install regression. Say which push failed instead.
+    if ! sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -P "$SSH_PORT" "$PROJECT_DIR/installer/archangel" root@localhost:/usr/local/bin/archangel 2>/dev/null; then
+        echo "[ERROR] Failed to push installer/archangel to the VM"
+        return 1
+    fi
+    if ! sshpass -p "$SSH_PASSWORD" scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+        -P "$SSH_PORT" "$PROJECT_DIR/installer/lib" root@localhost:/usr/local/bin/ 2>/dev/null; then
+        echo "[ERROR] Failed to push installer/lib to the VM"
+        return 1
+    fi
 
     # Copy config file to VM
     sshpass -p "$SSH_PASSWORD" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -877,6 +887,25 @@ run_test() {
     local config_name
     config_name=$(basename "$config" .conf)
 
+    # Scope the installed-system password to this one test. It used to be
+    # exported and cleared by a single `unset` on the success path, so any
+    # failure after the reboot step returned early and leaked the *installed*
+    # system's password into the next scenario — where ssh_cmd then presented
+    # it to the *live ISO* and every SSH call failed instantly, with no output
+    # and no package requests. That turned one flaky check into six silent
+    # install failures on 2026-08-01. Declaring it local makes bash clear it on
+    # every return path, so the class of bug can't come back.
+    #
+    # Safe as a local rather than an export: bash's dynamic scoping makes it
+    # visible to ssh_cmd and every verify_* helper called from here. The one
+    # child process in this flow — the `bash -c` install in the retry loop
+    # below — runs before this is ever assigned, and an unexported local
+    # reaches it as empty rather than as any value, which ssh_cmd's
+    # ${INSTALLED_PASSWORD:-$SSH_PASSWORD} treats the same as unset. That also
+    # shadows a stray INSTALLED_PASSWORD inherited from the caller's
+    # environment, which the old export did not.
+    local INSTALLED_PASSWORD=""
+
     TESTS_RUN=$((TESTS_RUN + 1))
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -973,12 +1002,17 @@ run_test() {
             warn "Stale archzfs package in the host pacoloco cache (archzfs re-uploads same-filename assets)."
             warn "Rebuild the ISO (build.sh clears it) or run: sudo rm -f /var/cache/pacoloco/pkgs/archzfs/zfs-* — then retry."
         fi
-        stop_vm "$config_name"
-
-        # Save logs
-        ssh_cmd "cat /tmp/archangel-*.log" > "$LOG_DIR/${config_name}-install.log" 2>/dev/null || true
+        # Save logs BEFORE stopping the VM. The retry loop above already
+        # fetched the in-VM install log into $install_log while the guest was
+        # still up, so write that rather than re-asking a guest that may be
+        # gone. The previous order ran stop_vm first and then tried to ssh
+        # into the corpse, so every *-install.log this harness ever wrote was
+        # 0 bytes — which is why the April 2026 `mirror` failure went 96 days
+        # without a diagnosis.
+        printf '%s\n' "$install_log" > "$LOG_DIR/${config_name}-install.log"
         cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-serial.log" 2>/dev/null || true
 
+        stop_vm "$config_name"
         cleanup_disks "$config_name"
         TESTS_FAILED=$((TESTS_FAILED + 1))
         FAILED_TESTS+=("$config_name")
@@ -1089,8 +1123,10 @@ run_test() {
             return 1
         fi
 
-        # Use installed system's password for subsequent SSH commands
-        export INSTALLED_PASSWORD="$installed_password"
+        # Use installed system's password for subsequent SSH commands.
+        # Plain assignment to the local declared at the top of run_test — see
+        # the note there for why this must not be exported.
+        INSTALLED_PASSWORD="$installed_password"
 
         # Verify reboot survival
         if ! verify_reboot_survival "$config"; then
@@ -1102,15 +1138,22 @@ run_test() {
             return 1
         fi
 
-        # Verify rollback functionality
-        if ! verify_rollback "$config"; then
-            warn "Rollback verification had issues"
-            # Don't fail the test for rollback issues - it's a bonus check
-        fi
-
-        # Verify zfssnapshot wrapper end-to-end (ZFS only — no-op for Btrfs).
-        # Unlike verify_rollback, this is the wrapper's only runtime
-        # coverage, so a regression here fails the test outright.
+        # Order matters here, and it is the opposite of what reads naturally.
+        #
+        # On ZFS, verify_rollback rolls back zroot/ROOT/default while it is
+        # mounted and running. That reverts the live root underneath the OS —
+        # open file handles, cached inodes and sshd's own state stop matching
+        # what is on disk — so SSH work afterwards fails intermittently. When
+        # the wrapper check ran second it inherited that damage and failed on
+        # the scp or the chmod at random, which is what took out the ZFS half
+        # of the 2026-08-01 suite. Btrfs never showed it because snapper's
+        # rollback does not take effect until reboot.
+        #
+        # So the fatal check runs first, on a clean freshly-booted guest, and
+        # the destabilising one runs last where it can only warn. Both still
+        # run. The real fix is to reboot the guest between them; that needs
+        # the encrypted-pool passphrase re-sent via monitor sendkey, so it is
+        # filed rather than done here.
         if ! verify_zfssnapshot_wrapper "$config"; then
             error "zfssnapshot wrapper verification failed"
             stop_vm "$config_name"
@@ -1119,11 +1162,17 @@ run_test() {
             FAILED_TESTS+=("$config_name")
             return 1
         fi
+
+        # Non-fatal by design: this is a bonus check, and it is also the step
+        # that leaves the guest inconsistent, so nothing depends on it after.
+        if ! verify_rollback "$config"; then
+            warn "Rollback verification had issues"
+        fi
     fi
 
-    # Cleanup
+    # Cleanup. INSTALLED_PASSWORD needs no reset here — it's a local, so bash
+    # clears it on every return path including the failure ones.
     step "Cleaning up..."
-    unset INSTALLED_PASSWORD  # Reset for next test
     stop_vm "$config_name"
     cleanup_disks "$config_name"
 
