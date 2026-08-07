@@ -433,3 +433,72 @@ mkcfg() {
     SSH_CMD_TIMEOUT=1800 run ssh_cmd true
     [[ "$output" == "bound=1800" ]]
 }
+
+#############################
+# clear_archzfs_cache
+#############################
+# Exercised against an injected directory, never the real one. An earlier
+# version of this block hardcoded the system path, so running the unit suite
+# invoked `sudo rm -rf /var/cache/pacoloco/pkgs/archzfs` on the live machine.
+# A unit test must not reach outside its sandbox.
+
+@test "clear_archzfs_cache is a no-op when the cache directory is absent" {
+    ARCHZFS_CACHE_DIR="$BATS_TEST_TMPDIR/absent" run clear_archzfs_cache
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "clear_archzfs_cache removes an existing cache directory" {
+    local dir="$BATS_TEST_TMPDIR/archzfs"
+    mkdir -p "$dir"
+    touch "$dir/archzfs.db" "$dir/zfs-dkms-1-1-x86_64.pkg.tar.zst"
+    # Stub sudo so the test needs no privilege and stays in its sandbox.
+    sudo() { shift; "$@"; }
+    ARCHZFS_CACHE_DIR="$dir" run clear_archzfs_cache
+    [ "$status" -eq 0 ]
+    [ ! -d "$dir" ]
+}
+
+@test "clear_archzfs_cache clears the db too, not just the package bodies" {
+    # Removing bodies while leaving a stale archzfs.db trades a checksum error
+    # for "Maximum file size exceeded" — same cause, new message.
+    local dir="$BATS_TEST_TMPDIR/db/archzfs"
+    mkdir -p "$dir"
+    touch "$dir/archzfs.db"
+    sudo() { shift; "$@"; }
+    ARCHZFS_CACHE_DIR="$dir" run clear_archzfs_cache
+    [ ! -e "$dir/archzfs.db" ]
+}
+
+@test "clear_archzfs_cache warns and succeeds when removal is denied" {
+    local dir="$BATS_TEST_TMPDIR/denied/archzfs"
+    mkdir -p "$dir"
+    sudo() { return 1; }
+    ARCHZFS_CACHE_DIR="$dir" run clear_archzfs_cache
+    # Non-fatal: a run without root is still worth having, but must say so.
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"needs root"* ]]
+    [ -d "$dir" ]
+}
+
+@test "clear_archzfs_cache refuses a path that isn't shaped like the cache" {
+    # The removal runs `rm -rf` under sudo, so a mistyped override must cost a
+    # warning rather than the machine.
+    local dir="$BATS_TEST_TMPDIR/not-the-cache"
+    mkdir -p "$dir"
+    sudo() { echo "SUDO RAN"; }
+    ARCHZFS_CACHE_DIR="$dir" run clear_archzfs_cache
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Refusing"* ]]
+    [[ "$output" != *"SUDO RAN"* ]]
+    [ -d "$dir" ]
+}
+
+@test "clear_archzfs_cache refuses a top-level directory" {
+    sudo() { echo "SUDO RAN"; }
+    ARCHZFS_CACHE_DIR="/archzfs" run clear_archzfs_cache
+    # /archzfs won't exist, so this exits on the -d guard; the point is that
+    # neither guard lets a root-level path reach the removal.
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"SUDO RAN"* ]]
+}

@@ -100,6 +100,49 @@ list_configs() {
     done
 }
 
+# Drop the cached archzfs repo before the first scenario.
+#
+# archzfs re-uploads its GitHub Releases assets under the same filenames, so
+# pacoloco ends up holding package bodies that no longer match what its
+# archzfs.db advertises. Every ZFS scenario then dies at pacstrap with
+# "invalid or corrupted package" or "Maximum file size exceeded", which reads
+# exactly like an installer regression and isn't one. It went stale twice on
+# 2026-08-06, the second time *during* a run: fresh at scenario one, rotten by
+# scenario six, and the whole ZFS half was lost.
+#
+# Clear the directory, not the zfs-dkms/zfs-utils globs build.sh uses. Removing
+# the bodies while leaving a stale db just trades a checksum error for a size
+# error, which is how the second failure disguised itself as a new bug.
+#
+# Best-effort by design. The cache is pacoloco-owned so removal needs root, and
+# a run without root is still worth having — it just carries the risk this
+# exists to remove, so say so rather than failing silently.
+#
+# The path is injectable so tests can exercise this against a temp directory.
+# Without that it hardcoded a system path, and merely sourcing the file and
+# calling the function ran `sudo rm -rf` on the real cache — which is what
+# happened the first time this was written.
+clear_archzfs_cache() {
+    local dir="${ARCHZFS_CACHE_DIR:-/var/cache/pacoloco/pkgs/archzfs}"
+    [[ -d "$dir" ]] || return 0
+
+    # This is `rm -rf` under sudo on an overridable path, so validate the shape
+    # before running it. A mistyped override should cost a warning, not the
+    # machine.
+    if [[ "$(basename "$dir")" != archzfs || "$(dirname "$dir")" == / ]]; then
+        warn "Refusing to clear implausible archzfs cache path: $dir"
+        return 0
+    fi
+
+    if sudo -n rm -rf "$dir" 2>/dev/null; then
+        info "Cleared cached archzfs repo (pacoloco refetches on first use)"
+    else
+        warn "Could not clear $dir — needs root."
+        warn "A stale archzfs cache fails every ZFS scenario at pacstrap; clear it by hand if that happens."
+    fi
+    return 0
+}
+
 find_iso() {
     ISO_FILE=$(ls -t "$PROJECT_DIR/out/"*.iso 2>/dev/null | head -1)
     if [[ -z "$ISO_FILE" ]]; then
@@ -1307,6 +1350,10 @@ main() {
 
     # Find ISO
     find_iso
+
+    # Before the first scenario, so a stale upstream re-upload can't fail every
+    # ZFS install with an error that looks like a regression.
+    clear_archzfs_cache
 
     # Determine which configs to run
     if [[ ${#configs[@]} -eq 0 ]]; then
