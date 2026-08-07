@@ -318,6 +318,10 @@ error: failed to commit transaction (invalid or corrupted package (checksum))
 @test "ssh_cmd picks up a caller-scoped INSTALLED_PASSWORD" {
     # Proves local-instead-of-export still reaches ssh_cmd: bash's dynamic
     # scoping exposes a caller's local to the functions it calls.
+    #
+    # timeout is stubbed as a pass-through because the real one is an external
+    # binary: it would exec the real sshpass and never see these stubs.
+    timeout() { shift; "$@"; }
     sshpass() { echo "$2"; }
     ssh() { :; }
     caller_with_local() {
@@ -329,6 +333,7 @@ error: failed to commit transaction (invalid or corrupted package (checksum))
 }
 
 @test "a caller-scoped INSTALLED_PASSWORD does not leak past a failed return" {
+    timeout() { shift; "$@"; }
     sshpass() { echo "$2"; }
     ssh() { :; }
     SSH_PASSWORD="live-iso-password"
@@ -349,4 +354,82 @@ error: failed to commit transaction (invalid or corrupted package (checksum))
     local src="${BATS_TEST_DIRNAME}/../../scripts/test-install.sh"
     grep -qE '^[[:space:]]*local INSTALLED_PASSWORD=' "$src"
     ! grep -qE '^[[:space:]]*export INSTALLED_PASSWORD' "$src"
+}
+
+#############################
+# config_encrypt_flag
+#############################
+# Decides which passphrase-entry path a reboot needs. It's the one pure piece
+# of the boot-from-disk sequence, which is otherwise qemu orchestration, so it
+# carries the precedence rules the rest of that sequence depends on.
+
+mkcfg() {
+    local f
+    f=$(mktemp)
+    printf '%s\n' "$@" > "$f"
+    echo "$f"
+}
+
+@test "config_encrypt_flag reports luks for a LUKS config" {
+    local f; f=$(mkcfg 'LUKS_PASSPHRASE=secret' 'DISKS=/dev/vda')
+    [ "$(config_encrypt_flag "$f")" = "luks" ]
+    rm -f "$f"
+}
+
+@test "config_encrypt_flag reports zfs for a ZFS-passphrase config" {
+    local f; f=$(mkcfg 'ZFS_PASSPHRASE=secret' 'DISKS=/dev/vda')
+    [ "$(config_encrypt_flag "$f")" = "zfs" ]
+    rm -f "$f"
+}
+
+@test "config_encrypt_flag prefers luks when a config carries both" {
+    # Preserves the precedence the inline block had: LUKS is checked first,
+    # and a config with both is a misconfiguration rather than a real mode.
+    local f; f=$(mkcfg 'LUKS_PASSPHRASE=a' 'ZFS_PASSPHRASE=b')
+    [ "$(config_encrypt_flag "$f")" = "luks" ]
+    rm -f "$f"
+}
+
+@test "config_encrypt_flag reports nothing when NO_ENCRYPT overrides a passphrase" {
+    # The test configs set a passphrase *and* NO_ENCRYPT=yes; sending a
+    # passphrase to an unencrypted boot would type it at a login prompt.
+    #
+    # Asserted through `run` on purpose. A bare [ -z "$(...)" ] also passes
+    # when the function doesn't exist, so it can't fail for the reason the
+    # test exists — checking status too makes absence register as 127.
+    local f; f=$(mkcfg 'ZFS_PASSPHRASE=testpass' 'NO_ENCRYPT=yes')
+    run config_encrypt_flag "$f"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    rm -f "$f"
+}
+
+@test "config_encrypt_flag reports nothing for an unencrypted config" {
+    local f; f=$(mkcfg 'DISKS=/dev/vda' 'HOSTNAME=x')
+    run config_encrypt_flag "$f"
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+    rm -f "$f"
+}
+
+#############################
+# ssh_cmd timeout bound
+#############################
+# ConnectTimeout bounds the connection, not execution. On 2026-08-03 a remote
+# `zfs destroy` blocked behind an uninterruptible txg_quiesce with the
+# connection healthy, and the suite sat dead for 40 minutes. A wedged guest
+# should cost one scenario, not the run.
+
+@test "ssh_cmd bounds the remote command with the default timeout" {
+    timeout() { echo "bound=$1"; }
+    run ssh_cmd true
+    [[ "$output" == "bound=$SSH_CMD_TIMEOUT" ]]
+}
+
+@test "ssh_cmd honors a per-call timeout override" {
+    # run_install's installer call legitimately runs for many minutes and
+    # raises this; every other call keeps the short default.
+    timeout() { echo "bound=$1"; }
+    SSH_CMD_TIMEOUT=1800 run ssh_cmd true
+    [[ "$output" == "bound=1800" ]]
 }

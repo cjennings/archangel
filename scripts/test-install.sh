@@ -26,6 +26,17 @@ VM_DISK_SIZE="20G"
 # holds 2222 (e.g. SSH_PORT=2223 scripts/test-install.sh single-disk).
 export SSH_PORT="${SSH_PORT:-2222}"
 export SSH_PASSWORD="archangel"
+
+# Wall-clock bound on a single remote command. ConnectTimeout only bounds the
+# connection, so a guest that accepts SSH and then blocks in the kernel hangs
+# the run: on 2026-08-03 a `zfs destroy` stuck behind an uninterruptible
+# txg_quiesce sat for 40 minutes on a healthy connection and produced no
+# results at all. Bounded, a wedged guest costs one scenario.
+#
+# The installer invocation in run_install is the sole legitimate long runner
+# and raises this to INSTALL_TIMEOUT for its own call. Exported because
+# run_install executes in a `bash -c` child that inherits only exported vars.
+export SSH_CMD_TIMEOUT="${SSH_CMD_TIMEOUT:-120}"
 SERIAL_LOG="$LOG_DIR/serial.log"
 
 # Timeouts (seconds)
@@ -33,7 +44,7 @@ BOOT_TIMEOUT=120
 # INSTALL_TIMEOUT: 30 min. DKMS zfs compile + depmod on kernel 6.18+ in
 # a VM can exceed 10 min under host load. 600 was tight for 6.12; 1800
 # gives headroom without masking real hangs.
-INSTALL_TIMEOUT=1800
+export INSTALL_TIMEOUT=1800
 SSH_TIMEOUT=30
 VERIFY_TIMEOUT=60
 
@@ -391,11 +402,21 @@ send_luks_passphrase() {
     return 0
 }
 
-# Send ZFS passphrase via QEMU monitor sendkey
-# Two passphrase prompts occur (both on VGA framebuffer, not serial):
-#   1. ZFSBootMenu prompts to unlock the pool and show boot environments
-#   2. mkinitcpio's zfs hook prompts again when the selected kernel boots
-# We detect the UEFI firmware log to time the first, then wait for the second.
+# Send ZFS passphrase via QEMU monitor sendkey.
+#
+# One prompt, not two. ZFSBootMenu asks in order to read the kernel and
+# initramfs; the booted initramfs then loads the key from the keyfile
+# configure_zfs_keyfile bakes into the image, silently. Before that fix the
+# key did not survive kexec and the initramfs asked a second time, so this
+# used to send twice on fixed sleeps.
+#
+# Sending a second time now would type the passphrase into whatever is on
+# screen once the system is up, which is a login prompt.
+#
+# Both prompts render on the VGA framebuffer, never the serial console, so
+# there is nothing to match on: the UEFI firmware's ZFSBootMenu handoff is
+# the last thing serial shows, and the wait after it is necessarily a fixed
+# sleep rather than a poll.
 send_zfs_passphrase() {
     local test_name="$1"
     local passphrase="$2"
@@ -415,27 +436,111 @@ send_zfs_passphrase() {
     done
     info "ZFSBootMenu loading detected after ${waited}s"
 
-    # Prompt 1: ZFSBootMenu passphrase (unlocks pool to show boot menu)
+    # The only prompt: ZFSBootMenu unlocking the pool.
     step "Waiting for ZFSBootMenu passphrase prompt (15s)..."
     sleep 15
-    step "Sending ZFS passphrase (1/2: ZFSBootMenu)..."
+    step "Sending ZFS passphrase..."
     monitor_sendkeys "$monitor_sock" "$passphrase"
-    info "ZFSBootMenu passphrase sent"
+    info "ZFS passphrase sent"
 
-    # Prompt 2: mkinitcpio zfs hook passphrase (re-imports pool during kernel boot)
-    step "Waiting for initramfs passphrase prompt (30s)..."
-    sleep 30
-    step "Sending ZFS passphrase (2/2: initramfs)..."
-    monitor_sendkeys "$monitor_sock" "$passphrase"
-    info "Initramfs passphrase sent"
+    return 0
+}
 
+# Which passphrase-entry path a boot from disk needs: "luks", "zfs", or empty.
+# NO_ENCRYPT wins over a passphrase being present, because the test configs set
+# both — sending a passphrase to an unencrypted boot would type it at a login
+# prompt. LUKS is checked first, preserving the precedence the inline block had.
+config_encrypt_flag() {
+    local config="$1"
+    local luks_pass zfs_pass no_encrypt
+    luks_pass=$(grep '^LUKS_PASSPHRASE=' "$config" | cut -d= -f2)
+    zfs_pass=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
+    no_encrypt=$(grep '^NO_ENCRYPT=' "$config" | cut -d= -f2)
+
+    [[ "$no_encrypt" == "yes" ]] && return 0
+    if [[ -n "$luks_pass" ]]; then
+        echo "luks"
+    elif [[ -n "$zfs_pass" ]]; then
+        echo "zfs"
+    fi
+    return 0
+}
+
+# Start the guest from its installed disk and get it past any passphrase
+# prompt. Returns 0 once the VM is running and unlocked, 1 otherwise. Callers
+# own their own failure bookkeeping, which is why this doesn't touch
+# TESTS_FAILED or cleanup_disks.
+boot_from_disk() {
+    local config="$1"
+    local config_name disk_count encrypt_flag vm_pid
+    config_name=$(basename "$config" .conf)
+    disk_count=$(get_disk_count "$config")
+    encrypt_flag=$(config_encrypt_flag "$config")
+
+    vm_pid=$(start_vm_from_disk "$config_name" "$disk_count" "$encrypt_flag")
+    if [[ -z "$vm_pid" ]]; then
+        error "Failed to start VM from disk"
+        return 1
+    fi
+    info "VM started from disk (PID: $vm_pid)"
+
+    case "$encrypt_flag" in
+        luks)
+            if ! send_luks_passphrase "$config_name" \
+                    "$(grep '^LUKS_PASSPHRASE=' "$config" | cut -d= -f2)" "$disk_count"; then
+                error "Failed to send LUKS passphrase"
+                return 1
+            fi
+            ;;
+        zfs)
+            if ! send_zfs_passphrase "$config_name" \
+                    "$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)"; then
+                error "Failed to send ZFS passphrase"
+                return 1
+            fi
+            ;;
+    esac
+    return 0
+}
+
+# Restart the guest and wait for SSH to come back.
+#
+# Needed after a live-root `zfs rollback`. Rolling back a mounted root leaves
+# the running system inconsistent with its own filesystem, and the pool in a
+# state where the next ZFS command can wedge: on 2026-08-03 the cleanup
+# `zfs destroy` blocked in cv_wait_common behind an uninterruptible
+# txg_quiesce, and the suite sat dead for 40 minutes. A reboot exports and
+# reimports the pool, which clears that, and it is also the only honest way to
+# observe rolled-back contents — the page and dentry caches otherwise keep
+# serving the pre-rollback view.
+#
+# Assumes SSH is enabled, which holds because every caller sits inside
+# run_test's SSH branch.
+reboot_guest() {
+    local config="$1"
+    local config_name installed_password
+    config_name=$(basename "$config" .conf)
+    installed_password=$(grep '^ROOT_PASSWORD=' "$config" | cut -d= -f2)
+
+    step "Rebooting guest..."
+    stop_vm "$config_name" true
+    : > "$SERIAL_LOG"
+
+    boot_from_disk "$config" || return 1
+
+    if ! wait_for_ssh "$BOOT_TIMEOUT" "$installed_password"; then
+        error "Guest did not return on SSH after reboot"
+        return 1
+    fi
+    info "Guest back up after reboot"
     return 0
 }
 
 # Run SSH command (uses SSH_PASSWORD by default, or INSTALLED_PASSWORD if set)
 ssh_cmd() {
     local password="${INSTALLED_PASSWORD:-$SSH_PASSWORD}"
-    sshpass -p "$password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    timeout "$SSH_CMD_TIMEOUT" \
+        sshpass -p "$password" ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         -p "$SSH_PORT" root@localhost "$@" 2>/dev/null
 }
 
@@ -519,7 +624,10 @@ run_install() {
     fi
 
     # Run the installer (NO_ENCRYPT is set in the config file, not via flag)
-    ssh_cmd "archangel --config-file /root/test.conf" || return 1
+    # The one call that legitimately runs for many minutes. Raise the
+    # per-command bound to match the outer timeout wrapping run_install, so
+    # the short default can't kill a healthy install mid-pacstrap.
+    SSH_CMD_TIMEOUT="$INSTALL_TIMEOUT" ssh_cmd "archangel --config-file /root/test.conf" || return 1
 
     return 0
 }
@@ -868,14 +976,39 @@ verify_zfssnapshot_wrapper() {
         error "zfssnapshot rollback --name failed"
         return 1
     fi
+    # Reboot before looking, and before touching ZFS again.
+    #
+    # That rollback just reverted the mounted root underneath the running OS.
+    # Two things follow. The running system can't be trusted to report what is
+    # on disk, because the page and dentry caches keep serving the pre-rollback
+    # view — that's what made this check fail on four scenarios and pass on two
+    # identical ones. And the pool is left fragile: the next ZFS command can
+    # wedge it, which is exactly what the cleanup destroy below did on
+    # 2026-08-03, blocking in cv_wait_common behind an uninterruptible
+    # txg_quiesce until the run was killed 40 minutes later.
+    #
+    # A reboot exports and reimports the pool, which resolves both.
+    if ! reboot_guest "$config"; then
+        error "Guest did not come back after the rollback reboot"
+        return 1
+    fi
+
     if ! ssh_cmd "test -f '$sentinel'"; then
         error "Rollback did not restore sentinel — wrapper rollback path broken"
+        # Distinguish the two failures for whoever reads this next: a rollback
+        # that never happened leaves the snapshot and no file; one that
+        # happened leaves a consistent dataset. Post-reboot both answers are
+        # trustworthy, which they were not before.
+        error "  ls: $(ssh_cmd "ls -la '$sentinel' 2>&1" | head -1)"
+        error "  rollback snapshot still listed: $(ssh_cmd "zfs list -t snapshot -H -o name 2>&1 | grep -c wrapper-rollback")"
         return 1
     fi
     info "Round-trip rollback via wrapper restored sentinel"
 
     # Cleanup: destroy the wrapper-rollback snapshot we left behind so
     # the VM ends in a clean state matching how verify_rollback leaves it.
+    # Safe here and not before the reboot, because the pool has been
+    # reimported since the rollback.
     ssh_cmd "echo yes | zfssnapshot delete --name '$rb_snap_name' 2>&1" >/dev/null || true
 
     return 0
@@ -1035,53 +1168,16 @@ run_test() {
     step "Booting from installed disk..."
     : > "$SERIAL_LOG"  # Clear serial log
 
-    # Determine encryption mode (needs monitor socket for passphrase entry via sendkey)
-    local luks_passphrase
-    luks_passphrase=$(grep '^LUKS_PASSPHRASE=' "$config" | cut -d= -f2)
-    local zfs_passphrase
-    zfs_passphrase=$(grep '^ZFS_PASSPHRASE=' "$config" | cut -d= -f2)
-    local no_encrypt
-    no_encrypt=$(grep '^NO_ENCRYPT=' "$config" | cut -d= -f2)
-    local encrypt_flag=""
-    if [[ -n "$luks_passphrase" && "$no_encrypt" != "yes" ]]; then
-        encrypt_flag="luks"
-    elif [[ -n "$zfs_passphrase" && "$no_encrypt" != "yes" ]]; then
-        encrypt_flag="zfs"
-    fi
-
-    local vm_pid2
-    vm_pid2=$(start_vm_from_disk "$config_name" "$disk_count" "$encrypt_flag")
-
-    if [[ -z "$vm_pid2" ]]; then
-        error "Failed to start VM from disk"
+    # boot_from_disk owns the encryption-mode decision and the monitor sendkey
+    # passphrase entry. Same sequence reboot_guest uses mid-test, so the two
+    # paths can't drift.
+    if ! boot_from_disk "$config"; then
+        stop_vm "$config_name"
+        cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
         cleanup_disks "$config_name"
         TESTS_FAILED=$((TESTS_FAILED + 1))
         FAILED_TESTS+=("$config_name")
         return 1
-    fi
-    info "VM started from disk (PID: $vm_pid2)"
-
-    # If encryption is enabled, send passphrase via monitor sendkey
-    if [[ "$encrypt_flag" == "luks" ]]; then
-        if ! send_luks_passphrase "$config_name" "$luks_passphrase" "$disk_count"; then
-            error "Failed to send LUKS passphrase"
-            stop_vm "$config_name"
-            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
-            cleanup_disks "$config_name"
-            TESTS_FAILED=$((TESTS_FAILED + 1))
-            FAILED_TESTS+=("$config_name")
-            return 1
-        fi
-    elif [[ "$encrypt_flag" == "zfs" ]]; then
-        if ! send_zfs_passphrase "$config_name" "$zfs_passphrase"; then
-            error "Failed to send ZFS passphrase"
-            stop_vm "$config_name"
-            cp "$SERIAL_LOG" "$LOG_DIR/${config_name}-reboot-serial.log" 2>/dev/null || true
-            cleanup_disks "$config_name"
-            TESTS_FAILED=$((TESTS_FAILED + 1))
-            FAILED_TESTS+=("$config_name")
-            return 1
-        fi
     fi
 
     # Check if SSH is enabled in the config
